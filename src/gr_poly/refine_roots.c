@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2023 Fredrik Johansson
+    Copyright (C) 2024 Fredrik Johansson
 
     This file is part of FLINT.
 
@@ -10,6 +10,8 @@
 */
 
 #include "ulong_extras.h"
+#include "thread_pool.h"
+#include "thread_support.h"
 #include "gr_vec.h"
 #include "gr_poly.h"
 
@@ -53,22 +55,157 @@ _gr_poly_evaluate_rectangular_precomp(gr_ptr res, gr_srcptr poly, slong len, gr_
     return status;
 }
 
+typedef struct
+{
+    gr_srcptr f;
+    gr_srcptr f_prime;
+    gr_ptr w;
+    gr_srcptr z;
+    slong deg;
+    gr_ctx_struct * ctx;
+    slong m;
+    slong a;
+    slong b;
+    int status;
+}
+work_chunk_t;
+
+static void
+aberth_worker(void * wwork)
+{
+    work_chunk_t * work = wwork;
+
+    gr_ctx_struct * ctx = work->ctx;
+    slong a = work->a;
+    slong b = work->b;
+    slong m = work->m;
+    slong deg = work->deg;
+    gr_srcptr z = work->z;
+    gr_ptr w = work->w;
+    gr_srcptr f = work->f;
+    gr_srcptr f_prime = work->f_prime;
+
+    slong sz = ctx->sizeof_elem;
+    int status = GR_SUCCESS;
+    gr_ptr u, T, U, P, Q;
+    gr_srcptr zk, zj;
+    gr_ptr wk;
+    gr_ptr zkpow;
+    slong j, k;
+
+    GR_TMP_INIT5(u, T, U, P, Q, ctx);
+    GR_TMP_INIT_VEC(zkpow, m + 1, ctx);
+
+    for (k = a; k < b; k++)
+    {
+        zk = GR_ENTRY(z, k, sz);
+        wk = GR_ENTRY(w, k, sz);
+
+        status |= gr_zero(P, ctx);
+        status |= gr_one(Q, ctx);
+
+        for (j = 0; j < deg; j++)
+        {
+            if (j != k)
+            {
+                zj = GR_ENTRY(z, j, sz);
+                status |= gr_sub(u, zk, zj, ctx);
+                status |= gr_mul(P, P, u, ctx);
+                status |= gr_add(P, P, Q, ctx);
+                status |= gr_mul(Q, Q, u, ctx);
+            }
+        }
+
+        status |= _gr_vec_set_powers(zkpow, zk, m + 1, ctx);
+        status |= _gr_poly_evaluate_rectangular_precomp(T, f, deg + 1, zkpow, m, ctx);
+        status |= _gr_poly_evaluate_rectangular_precomp(U, f_prime, deg, zkpow, m, ctx);
+
+        status |= gr_mul(wk, T, Q, ctx);
+        status |= gr_mul(u, Q, U, ctx);
+        status |= gr_submul(u, T, P, ctx);
+        status |= gr_div(wk, wk, u, ctx);
+        if (status != GR_SUCCESS)
+            status = gr_zero(wk, ctx);
+    }
+
+    GR_TMP_CLEAR5(u, T, U, P, Q, ctx);
+    GR_TMP_CLEAR_VEC(zkpow, m + 1, ctx);
+
+    work->status = status;
+}
+
+int
+_gr_poly_refine_roots_aberth_threaded(gr_ptr w, gr_srcptr f, gr_srcptr f_prime, slong deg, gr_srcptr z, slong thread_limit, gr_ctx_t ctx)
+{
+    slong i, num_threads, num_workers;
+    thread_pool_handle * handles;
+    slong chunk_size;
+    work_chunk_t * work;
+    slong m;
+    int status = GR_SUCCESS;
+    TMP_INIT;
+    TMP_START;
+
+    m = n_sqrt(deg);
+    m = FLINT_MAX(m, 1);
+
+    num_workers = flint_request_threads(&handles, thread_limit);
+    num_threads = num_workers + 1;
+
+    work = TMP_ALLOC(num_threads * sizeof(work_chunk_t));
+
+    chunk_size = (deg + num_threads - 1) / num_threads;
+
+    for (i = 0; i < num_threads; i++)
+    {
+        work[i].f = f;
+        work[i].f_prime = f_prime;
+        work[i].w = w;
+        work[i].z = z;
+        work[i].deg = deg;
+        work[i].ctx = ctx;
+        work[i].m = m;
+        work[i].a = i * chunk_size;
+        work[i].b = FLINT_MIN((i + 1) * chunk_size, deg);
+    }
+
+    for (i = 0; i < num_workers; i++)
+        thread_pool_wake(global_thread_pool, handles[i], 0, aberth_worker, &work[i]);
+
+    aberth_worker(&work[num_workers]);
+
+    for (i = 0; i < num_workers; i++)
+        thread_pool_wait(global_thread_pool, handles[i]);
+
+    for (i = 0; i < num_workers; i++)
+        status |= work[i].status;
+
+    flint_give_back_threads(handles, num_workers);
+
+    TMP_END;
+    return status;
+}
+
 int
 _gr_poly_refine_roots_aberth(gr_ptr w, gr_srcptr f, gr_srcptr f_prime, slong deg, gr_srcptr z, int progressive, gr_ctx_t ctx)
 {
     slong sz = ctx->sizeof_elem;
     int status = GR_SUCCESS;
-    gr_ptr t, u, T, U, P, Q;
+    gr_ptr u, T, U, P, Q;
     gr_srcptr zk, zj;
     gr_ptr wk;
     gr_ptr zkpow;
     gr_ptr zprog = NULL;
     slong j, k, m;
 
+    if (progressive == 2)
+    {
+        return _gr_poly_refine_roots_aberth_threaded(w, f, f_prime, deg, z, flint_get_num_available_threads(), ctx);
+    }
+
     m = n_sqrt(deg);
     m = FLINT_MAX(m, 1);
 
-    GR_TMP_INIT_VEC(t, deg, ctx);
     GR_TMP_INIT5(u, T, U, P, Q, ctx);
     GR_TMP_INIT_VEC(zkpow, m + 1, ctx);
 
@@ -121,7 +258,6 @@ _gr_poly_refine_roots_aberth(gr_ptr w, gr_srcptr f, gr_srcptr f_prime, slong deg
             status |= gr_sub(GR_ENTRY(zprog, k, sz), GR_ENTRY(zprog, k, sz), wk, ctx);
     }
 
-    GR_TMP_CLEAR_VEC(t, deg, ctx);
     GR_TMP_CLEAR5(u, T, U, P, Q, ctx);
     GR_TMP_CLEAR_VEC(zkpow, m + 1, ctx);
 
@@ -136,7 +272,7 @@ _gr_poly_refine_roots_wdk(gr_ptr w, gr_srcptr f, slong deg, gr_srcptr z, int pro
 {
     slong sz = ctx->sizeof_elem;
     int status = GR_SUCCESS;
-    gr_ptr t, u, T, Q;
+    gr_ptr u, T, Q;
     gr_srcptr zk, zj;
     gr_ptr wk;
     gr_ptr zkpow, zprog = NULL;
@@ -146,7 +282,6 @@ _gr_poly_refine_roots_wdk(gr_ptr w, gr_srcptr f, slong deg, gr_srcptr z, int pro
     m = n_sqrt(deg);
     m = FLINT_MAX(m, 1);
 
-    GR_TMP_INIT_VEC(t, deg, ctx);
     GR_TMP_INIT3(u, T, Q, ctx);
     GR_TMP_INIT_VEC(zkpow, m + 1, ctx);
 
@@ -195,7 +330,6 @@ _gr_poly_refine_roots_wdk(gr_ptr w, gr_srcptr f, slong deg, gr_srcptr z, int pro
             status |= gr_sub(GR_ENTRY(zprog, k, sz), GR_ENTRY(zprog, k, sz), wk, ctx);
     }
 
-    GR_TMP_CLEAR_VEC(t, deg, ctx);
     GR_TMP_CLEAR3(u, T, Q, ctx);
     GR_TMP_CLEAR_VEC(zkpow, m + 1, ctx);
 

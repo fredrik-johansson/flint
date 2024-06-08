@@ -177,7 +177,7 @@ _acb_poly_find_roots_iter(gr_ptr w, gr_ptr z, gr_srcptr f, gr_srcptr f_prime, sl
         }
 
 #if USE_ABERTH
-            status |= _gr_poly_refine_roots_aberth(w, f, fprime, deg, z, 1, fp_ctx);
+            status |= _gr_poly_refine_roots_aberth(w, f, f_prime, deg, z, 2, fp_ctx);
 #else
             status |= _gr_poly_refine_roots_wdk(w, f, deg, z, 1, fp_ctx);
 #endif

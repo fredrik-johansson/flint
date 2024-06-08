@@ -69,6 +69,11 @@ int main(int argc, char *argv[])
             compd = atol(argv[i+1]);
             i++;
         }
+        else if (!strcmp(argv[i], "-threads"))
+        {
+            flint_set_num_threads(atol(argv[i+1]));
+            i++;
+        }
         else if (!strcmp(argv[i], "-print"))
         {
             printd = atol(argv[i+1]);
