@@ -195,10 +195,13 @@ _nfloat_vec_dot_addmul(ulong * s, slong sexp, nfloat_srcptr xi, nfloat_srcptr yi
 
     if (delta < FLINT_BITS)
     {
-        t[0] = flint_mpn_mulhigh_n(t + 1, NFLOAT_D(xi), NFLOAT_D(yi), nlimbs);
+        nn_srcptr x = NFLOAT_D(xi);
+        nn_srcptr y = NFLOAT_D(yi);
 
         if (nlimbs == 3)
         {
+            t[0] = flint_mpn_mulhigh_n(t + 1, x, y, nlimbs);
+
             if (xsgnbit)
                 sub_ddddmmmmssss(s[3], s[2], s[1], s[0], s[3], s[2], s[1], s[0],
                     t[3] >> delta,
@@ -214,6 +217,8 @@ _nfloat_vec_dot_addmul(ulong * s, slong sexp, nfloat_srcptr xi, nfloat_srcptr yi
         }
         else if (nlimbs == 4)
         {
+            t[0] = flint_mpn_mulhigh_n(t + 1, x, y, nlimbs);
+
             if (xsgnbit)
                 sub_dddddmmmmmsssss(s[4], s[3], s[2], s[1], s[0], s[4], s[3], s[2], s[1], s[0],
                     t[4] >> delta,
@@ -231,6 +236,23 @@ _nfloat_vec_dot_addmul(ulong * s, slong sexp, nfloat_srcptr xi, nfloat_srcptr yi
         }
         else
         {
+            /* Detect small coefficients. TODO: generalize to handling arbitrary
+               size combinations efficiently, also elsewhere; maybe in
+               flint_mpn_mulhigh_n itself? */
+            if (x[0] == 0 || y[0] == 0)
+            {
+                if (flint_mpn_zero_p(y, nlimbs - 1))
+                    t[nlimbs] = mpn_mul_1(t, x, nlimbs, y[nlimbs - 1]);
+                else if (flint_mpn_zero_p(x, nlimbs - 1))
+                    t[nlimbs] = mpn_mul_1(t, y, nlimbs, x[nlimbs - 1]);
+                else
+                    t[0] = flint_mpn_mulhigh_n(t + 1, x, y, nlimbs);
+            }
+            else
+            {
+                t[0] = flint_mpn_mulhigh_n(t + 1, x, y, nlimbs);
+            }
+
             mpn_rshift(t, t, nlimbs + 1, delta);
 
             if (xsgnbit)
