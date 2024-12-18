@@ -12,6 +12,20 @@
 
 #include "mpn_extras.h"
 
+mp_limb_t
+flint_mpn_mul_noinline(mp_ptr r, mp_srcptr x, mp_size_t xn, mp_srcptr y, mp_size_t yn)
+{
+    FLINT_ASSERT(xn >= yn);
+    FLINT_ASSERT(yn >= 1);
+    FLINT_ASSERT(r != x);
+    FLINT_ASSERT(r != y);
+
+    if (FLINT_MUL_USE_FUNC_TAB && FLINT_HAVE_MUL_FUNC(xn, yn))
+        return FLINT_MPN_MUL_HARD(r, x, xn, y, yn);
+    else
+        return _flint_mpn_mul(r, x, xn, y, yn);
+}
+
 #if FLINT_HAVE_ASSEMBLY_x86_64_adx
 
 mp_limb_t flint_mpn_mul_1_1(mp_ptr, mp_srcptr, mp_srcptr);
@@ -211,36 +225,17 @@ mp_limb_t flint_mpn_mul_14_11(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _fl
 mp_limb_t flint_mpn_mul_15_11(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_11(res, u, v, 15); }
 mp_limb_t flint_mpn_mul_16_11(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_11(res, u, v, 16); }
 
-mp_limb_t flint_mpn_mul_12_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 12); }
 mp_limb_t flint_mpn_mul_13_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 13); }
 mp_limb_t flint_mpn_mul_14_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 14); }
 mp_limb_t flint_mpn_mul_15_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 15); }
 mp_limb_t flint_mpn_mul_16_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 16); }
 
-mp_limb_t flint_mpn_mul_13_13(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_13(res, u, v, 13); }
 mp_limb_t flint_mpn_mul_14_13(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_13(res, u, v, 14); }
 mp_limb_t flint_mpn_mul_15_13(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_13(res, u, v, 15); }
 mp_limb_t flint_mpn_mul_16_13(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_13(res, u, v, 16); }
 
-mp_limb_t flint_mpn_mul_14_14(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_14(res, u, v, 14); }
 mp_limb_t flint_mpn_mul_15_14(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_14(res, u, v, 15); }
 mp_limb_t flint_mpn_mul_16_14(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_14(res, u, v, 16); }
-
-
-mp_limb_t flint_mpn_mul_15_15(mp_ptr res, mp_srcptr u, mp_srcptr v)
-{
-#if 1
-    mp_limb_t tmp[22], cy;
-    flint_mpn_mul_15_8(res, u, v);
-    flint_mpn_mul_15_7(tmp, u, v + 8);
-    cy = mpn_add_n(res + 8, res + 8, tmp, 15);
-    mpn_add_1(res + 23, tmp + 15, 7, cy);
-#else
-    mp_limb_t tmp[31];
-    flint_mpn_mul_toom22(res, u, 15, v, 15, tmp);
-#endif
-    return res[29];
-}
 
 mp_limb_t flint_mpn_mul_16_15(mp_ptr res, mp_srcptr u, mp_srcptr v)
 {
@@ -257,6 +252,30 @@ mp_limb_t flint_mpn_mul_16_15(mp_ptr res, mp_srcptr u, mp_srcptr v)
     return res[30];
 }
 
+
+#define HARDCODED_KARATSUBA 1
+
+#if !HARDCODED_KARATSUBA
+h
+mp_limb_t flint_mpn_mul_12_12(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_12(res, u, v, 12); }
+mp_limb_t flint_mpn_mul_13_13(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_13(res, u, v, 13); }
+mp_limb_t flint_mpn_mul_14_14(mp_ptr res, mp_srcptr u, mp_srcptr v) { return _flint_mpn_mul_n_14(res, u, v, 14); }
+
+mp_limb_t flint_mpn_mul_15_15(mp_ptr res, mp_srcptr u, mp_srcptr v)
+{
+#if 1
+    mp_limb_t tmp[22], cy;
+    flint_mpn_mul_15_8(res, u, v);
+    flint_mpn_mul_15_7(tmp, u, v + 8);
+    cy = mpn_add_n(res + 8, res + 8, tmp, 15);
+    mpn_add_1(res + 23, tmp + 15, 7, cy);
+#else
+    mp_limb_t tmp[31];
+    flint_mpn_mul_toom22(res, u, 15, v, 15, tmp);
+#endif
+    return res[29];
+}
+
 mp_limb_t flint_mpn_mul_16_16(mp_ptr res, mp_srcptr u, mp_srcptr v)
 {
 #if 0
@@ -271,6 +290,434 @@ mp_limb_t flint_mpn_mul_16_16(mp_ptr res, mp_srcptr u, mp_srcptr v)
 #endif
     return res[31];
 }
+
+#else
+
+#define NN_ADD2 add_ssaaaa
+#define NN_ADD3 add_sssaaaaaa
+#define NN_ADD4 add_ssssaaaaaaaa
+#define NN_ADD5 add_sssssaaaaaaaaaa
+#define NN_ADD6 add_ssssssaaaaaaaaaaaa
+#define NN_ADD7 add_sssssssaaaaaaaaaaaaaa
+#define NN_ADD8 add_ssssssssaaaaaaaaaaaaaaaa
+
+#define NN_SUB2 sub_ddmmss
+#define NN_SUB3 sub_dddmmmsss
+#define NN_SUB4 sub_ddddmmmmssss
+#define NN_SUB5 sub_dddddmmmmmsssss
+#define NN_SUB6 sub_ddddddmmmmmmssssss
+#define NN_SUB7 sub_dddddddmmmmmmmsssssss
+#define NN_SUB8 sub_ddddddddmmmmmmmmssssssss
+
+#define NN_ADD_2P1(r2, r, u2, u, v2, v) NN_ADD3(r2, (r)[1], (r)[0], u2, (u)[1], (u)[0], v2, (v)[1], (v)[0])
+#define NN_ADD_3P1(r3, r, u3, u, v3, v) NN_ADD4(r3, (r)[2], (r)[1], (r)[0], u3, (u)[2], (u)[1], (u)[0], v3, (v)[2], (v)[1], (v)[0])
+#define NN_ADD_4P1(r4, r, u4, u, v4, v) NN_ADD5(r4, (r)[3], (r)[2], (r)[1], (r)[0], u4, (u)[3], (u)[2], (u)[1], (u)[0], v4, (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_ADD_5P1(r5, r, u5, u, v5, v) NN_ADD6(r5, (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u5, (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v5, (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_ADD_6P1(r6, r, u6, u, v6, v) NN_ADD7(r6, (r)[5], (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u6, (u)[5], (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v6, (v)[5], (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_ADD_7P1(r7, r, u7, u, v7, v) NN_ADD8(r7, (r)[6], (r)[5], (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u7, (u)[6], (u)[5], (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v7, (v)[6], (v)[5], (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+
+#define NN_SUB_2P1(r2, r, u2, u, v2, v) NN_SUB3(r2, (r)[1], (r)[0], u2, (u)[1], (u)[0], v2, (v)[1], (v)[0])
+#define NN_SUB_3P1(r3, r, u3, u, v3, v) NN_SUB4(r3, (r)[2], (r)[1], (r)[0], u3, (u)[2], (u)[1], (u)[0], v3, (v)[2], (v)[1], (v)[0])
+#define NN_SUB_4P1(r4, r, u4, u, v4, v) NN_SUB5(r4, (r)[3], (r)[2], (r)[1], (r)[0], u4, (u)[3], (u)[2], (u)[1], (u)[0], v4, (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_SUB_5P1(r5, r, u5, u, v5, v) NN_SUB6(r5, (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u5, (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v5, (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_SUB_6P1(r6, r, u6, u, v6, v) NN_SUB7(r6, (r)[5], (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u6, (u)[5], (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v6, (v)[5], (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+#define NN_SUB_7P1(r7, r, u7, u, v7, v) NN_SUB8(r7, (r)[6], (r)[5], (r)[4], (r)[3], (r)[2], (r)[1], (r)[0], u7, (u)[6], (u)[5], (u)[4], (u)[3], (u)[2], (u)[1], (u)[0], v7, (v)[6], (v)[5], (v)[4], (v)[3], (v)[2], (v)[1], (v)[0])
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_add_5(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_ADD_5P1(cy, r, 0, x, 0, y);
+    return cy;
+}
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_sub_5(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_SUB_5P1(cy, r, 0, x, 0, y);
+    return cy != 0;
+}
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_add_6(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_ADD_6P1(cy, r, 0, x, 0, y);
+    return cy;
+}
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_sub_6(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_SUB_6P1(cy, r, 0, x, 0, y);
+    return cy != 0;
+}
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_add_7(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_ADD_7P1(cy, r, 0, x, 0, y);
+    return cy;
+}
+
+FLINT_FORCE_INLINE
+mp_limb_t flint_mpn_sub_7(mp_ptr r, mp_srcptr x, mp_srcptr y)
+{
+    mp_limb_t cy;
+    NN_SUB_7P1(cy, r, 0, x, 0, y);
+    return cy != 0;
+}
+
+mp_limb_t flint_mpn_add_8(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_add_12(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_add_14(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_add_16(mp_ptr, mp_srcptr, mp_srcptr);
+
+mp_limb_t flint_mpn_sub_8(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_sub_12(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_sub_14(mp_ptr, mp_srcptr, mp_srcptr);
+mp_limb_t flint_mpn_sub_16(mp_ptr, mp_srcptr, mp_srcptr);
+
+
+mp_limb_t
+flint_mpn_mul_12_12(mp_ptr pp,
+        mp_srcptr ap,
+        mp_srcptr bp)
+{
+    mp_size_t n, s, t;
+    int vm1_neg;
+    mp_limb_t cy, cy2;
+    mp_ptr asm1;
+    mp_ptr bsm1;
+    mp_limb_t scratch[24];
+
+    mp_size_t an = 12;
+    mp_size_t bn = 12;
+
+#define a0  ap
+#define a1  (ap + n)
+#define b0  bp
+#define b1  (bp + n)
+
+    s = an >> 1;
+    n = an - s;
+    t = bn - n;
+
+    FLINT_ASSERT(an >= bn);
+    FLINT_ASSERT(0 < s && s <= n && (n - s) == (an & 1));
+    FLINT_ASSERT(0 < t && t <= s);
+
+    asm1 = pp;
+    bsm1 = pp + n;
+
+    vm1_neg = 0;
+
+    /* Compute asm1.  */
+    if (mpn_cmp(a0, a1, n) < 0)
+    {
+        NN_SUB_6(asm1, a1, a0);
+        vm1_neg = 1;
+    }
+    else
+    {
+        NN_SUB_6(asm1, a0, a1);
+    }
+
+    /* Compute bsm1.  */
+    if (mpn_cmp(b0, b1, n) < 0)
+    {
+        NN_SUB_6(bsm1, b1, b0);
+        vm1_neg ^= 1;
+    }
+    else
+    {
+        NN_SUB_6(bsm1, b0, b1);
+    }
+
+#define v0              pp                /* 2n */
+#define vinf           (pp + 2 * n)       /* s+t */
+#define vm1            scratch            /* 2n */
+
+    flint_mpn_mul_6_6(vm1, asm1, bsm1);
+    flint_mpn_mul_6_6(vinf, a1, b1);
+    flint_mpn_mul_6_6(v0, ap, bp);
+
+    NN_ADD_6P1(cy, pp + 2 * n, 0, v0 + n, 0, vinf);
+    NN_ADD_6P1(cy2, pp + n, cy, pp + 2 * n, 0, v0);
+    NN_ADD_6P1(cy, pp + 2 * n, cy, pp + 2 * n, 0, vinf + n);
+
+    if (vm1_neg)
+    {
+        cy += flint_mpn_add_12(pp + n, pp + n, vm1);
+    }
+    else
+    {
+        cy -= flint_mpn_sub_12(pp + n, pp + n, vm1);
+
+        if (FLINT_UNLIKELY(cy + 1 == 0)) /* cy is negative */
+        {
+            /* The total contribution of v0+vinf-vm1 can not be negative. */
+#if FLINT_WANT_ASSERT
+            /* The borrow in cy stops the propagation of the carry cy2, */
+            FLINT_ASSERT(cy2 == 1);
+            cy += mpn_add_1(pp + 2 * n, pp + 2 * n, n, cy2);
+            FLINT_ASSERT (cy == 0);
+#else
+            /* we simply fill the area with zeros. */
+            flint_mpn_zero(pp + 2 * n, n);
+            FLINT_ASSERT(s + t == n || flint_mpn_zero_p(pp + 3 * n, s + t - n));
+#endif
+            goto cleanup;
+        }
+    }
+
+#undef v0
+#undef vinf
+#undef vm1
+
+    FLINT_ASSERT(cy  <= 2);
+    FLINT_ASSERT(cy2 <= 2);
+    MPN_INCR_U(pp + 2 * n, s + t, cy2);
+    MPN_INCR_U(pp + 3 * n, s + t - n, cy);
+
+cleanup:
+
+    return pp[23];
+}
+
+mp_limb_t
+flint_mpn_mul_14_14(mp_ptr pp,
+        mp_srcptr ap,
+        mp_srcptr bp)
+{
+    mp_size_t n, s, t;
+    int vm1_neg;
+    mp_limb_t cy, cy2;
+    mp_ptr asm1;
+    mp_ptr bsm1;
+    mp_limb_t scratch[28];
+
+    mp_size_t an = 14;
+    mp_size_t bn = 14;
+
+#define a0  ap
+#define a1  (ap + n)
+#define b0  bp
+#define b1  (bp + n)
+
+    s = an >> 1;
+    n = an - s;
+    t = bn - n;
+
+    FLINT_ASSERT(an >= bn);
+    FLINT_ASSERT(0 < s && s <= n && (n - s) == (an & 1));
+    FLINT_ASSERT(0 < t && t <= s);
+
+    asm1 = pp;
+    bsm1 = pp + n;
+
+    vm1_neg = 0;
+
+    /* Compute asm1.  */
+    if (mpn_cmp(a0, a1, n) < 0)
+    {
+        NN_SUB_7(asm1, a1, a0);
+        vm1_neg = 1;
+    }
+    else
+    {
+        NN_SUB_7(asm1, a0, a1);
+    }
+
+    /* Compute bsm1.  */
+    if (mpn_cmp(b0, b1, n) < 0)
+    {
+        NN_SUB_7(bsm1, b1, b0);
+        vm1_neg ^= 1;
+    }
+    else
+    {
+        NN_SUB_7(bsm1, b0, b1);
+    }
+
+#define v0              pp                /* 2n */
+#define vinf           (pp + 2 * n)       /* s+t */
+#define vm1            scratch            /* 2n */
+
+    flint_mpn_mul_7_7(vm1, asm1, bsm1);
+    flint_mpn_mul_7_7(vinf, a1, b1);
+    flint_mpn_mul_7_7(v0, ap, bp);
+    cy = flint_mpn_add_7(pp + 2 * n, v0 + n, vinf);
+    cy2 = cy + flint_mpn_add_7(pp + n, pp + 2 * n, v0);
+    cy += flint_mpn_add_7(pp + 2 * n, pp + 2 * n, vinf + n);
+
+    if (vm1_neg)
+    {
+        cy += flint_mpn_add_14(pp + n, pp + n, vm1);
+    }
+    else
+    {
+        cy -= flint_mpn_sub_14(pp + n, pp + n, vm1);
+
+        if (FLINT_UNLIKELY(cy + 1 == 0)) /* cy is negative */
+        {
+            /* The total contribution of v0+vinf-vm1 can not be negative. */
+#if FLINT_WANT_ASSERT
+            /* The borrow in cy stops the propagation of the carry cy2, */
+            FLINT_ASSERT(cy2 == 1);
+            cy += mpn_add_1(pp + 2 * n, pp + 2 * n, n, cy2);
+            FLINT_ASSERT (cy == 0);
+#else
+            /* we simply fill the area with zeros. */
+            flint_mpn_zero(pp + 2 * n, n);
+            FLINT_ASSERT(s + t == n || flint_mpn_zero_p(pp + 3 * n, s + t - n));
+#endif
+            goto cleanup;
+        }
+    }
+
+#undef v0
+#undef vinf
+#undef vm1
+#undef scratch_out
+
+    FLINT_ASSERT(cy  <= 2);
+    FLINT_ASSERT(cy2 <= 2);
+    MPN_INCR_U(pp + 2 * n, s + t, cy2);
+    MPN_INCR_U(pp + 3 * n, s + t - n, cy);
+
+cleanup:
+
+    return pp[27];
+}
+
+mp_limb_t flint_mpn_mul_16_16(mp_ptr pp, mp_srcptr ap, mp_srcptr bp)
+{
+    mp_size_t n, s, t;
+    int vm1_neg;
+    mp_limb_t cy, cy2;
+    mp_ptr asm1;
+    mp_ptr bsm1;
+    mp_limb_t scratch[32];
+
+    mp_size_t an = 16;
+    mp_size_t bn = 16;
+
+#define a0  ap
+#define a1  (ap + n)
+#define b0  bp
+#define b1  (bp + n)
+
+    s = an >> 1;
+    n = an - s;
+    t = bn - n;
+
+    FLINT_ASSERT(an >= bn);
+    FLINT_ASSERT(0 < s && s <= n && (n - s) == (an & 1));
+    FLINT_ASSERT(0 < t && t <= s);
+
+    asm1 = pp;
+    bsm1 = pp + n;
+
+    vm1_neg = 0;
+
+    /* Compute asm1.  */
+    if (mpn_cmp(a0, a1, n) < 0)
+    {
+        flint_mpn_sub_8(asm1, a1, a0);
+        vm1_neg = 1;
+    }
+    else
+    {
+        flint_mpn_sub_8(asm1, a0, a1);
+    }
+
+    /* Compute bsm1.  */
+    if (mpn_cmp(b0, b1, n) < 0)
+    {
+        flint_mpn_sub_8(bsm1, b1, b0);
+        vm1_neg ^= 1;
+    }
+    else
+    {
+        flint_mpn_sub_8(bsm1, b0, b1);
+    }
+
+#define v0              pp                /* 2n */
+#define vinf           (pp + 2 * n)       /* s+t */
+#define vm1            scratch            /* 2n */
+
+    flint_mpn_mul_8_8(vm1, asm1, bsm1);
+    flint_mpn_mul_8_8(vinf, a1, b1);
+    flint_mpn_mul_8_8(v0, ap, bp);
+    cy = flint_mpn_add_8(pp + 2 * n, v0 + n, vinf);
+    cy2 = cy + flint_mpn_add_8(pp + n, pp + 2 * n, v0);
+    cy += flint_mpn_add_8(pp + 2 * n, pp + 2 * n, vinf + n);
+
+    if (vm1_neg)
+    {
+        cy += flint_mpn_add_16(pp + n, pp + n, vm1);
+    }
+    else
+    {
+        cy -= flint_mpn_sub_16(pp + n, pp + n, vm1);
+
+        if (FLINT_UNLIKELY(cy + 1 == 0)) /* cy is negative */
+        {
+            /* The total contribution of v0+vinf-vm1 can not be negative. */
+#if FLINT_WANT_ASSERT
+            /* The borrow in cy stops the propagation of the carry cy2, */
+            FLINT_ASSERT(cy2 == 1);
+            cy += mpn_add_1(pp + 2 * n, pp + 2 * n, n, cy2);
+            FLINT_ASSERT (cy == 0);
+#else
+            /* we simply fill the area with zeros. */
+            flint_mpn_zero(pp + 2 * n, n);
+            FLINT_ASSERT(s + t == n || flint_mpn_zero_p(pp + 3 * n, s + t - n));
+#endif
+            goto cleanup;
+        }
+    }
+
+    FLINT_ASSERT(cy  <= 2);
+    FLINT_ASSERT(cy2 <= 2);
+    MPN_INCR_U(pp + 2 * n, s + t, cy2);
+    MPN_INCR_U(pp + 3 * n, s + t - n, cy);
+
+#undef v0
+#undef vinf
+#undef vm1
+
+cleanup:
+
+    return pp[31];
+}
+
+mp_limb_t flint_mpn_mul_13_13(mp_ptr res, mp_srcptr u, mp_srcptr v)
+{
+    flint_mpn_mul_12_12(res, u, v);
+    res[24] = mpn_addmul_1(res + 12, u, 12, v[12]);
+    res[25] = mpn_addmul_1(res + 12, v, 13, u[12]);
+    return res[25];
+}
+
+mp_limb_t flint_mpn_mul_15_15(mp_ptr res, mp_srcptr u, mp_srcptr v)
+{
+    flint_mpn_mul_14_14(res, u, v);
+    res[28] = mpn_addmul_1(res + 14, u, 14, v[14]);
+    res[29] = mpn_addmul_1(res + 14, v, 15, u[14]);
+    return res[29];
+}
+
+void flint_dummy_function(void)
+{
+}
+
+#endif
+
 
 #elif FLINT_HAVE_ASSEMBLY_armv8
 mp_limb_t flint_mpn_mul_1n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
