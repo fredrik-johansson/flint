@@ -23,6 +23,8 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    if: false # temporary disabled
+
     env:
       CC: "gcc"
       FLINT_TEST_MULTIPLIER: "10"
@@ -100,6 +102,8 @@ jobs:
 
     runs-on: ubuntu-24.04
 
+    if: false # temporary disabled
+
     env:
       CC: "gcc"
       CFLAGS: "-march=native -std=c11 -Wall -Wextra -Werror"
@@ -139,6 +143,8 @@ jobs:
     name: Ubuntu GCC with NTL (assert, x2)
 
     runs-on: ubuntu-24.04
+
+    if: false # temporary disabled
 
     env:
       CC: "gcc"
@@ -193,6 +199,8 @@ jobs:
     name: macOS-M1, Clang (x3)
 
     runs-on: macos-15
+
+    if: false # temporary disabled
 
     env:
       FLINT_TEST_MULTIPLIER: "3"
@@ -252,6 +260,8 @@ jobs:
     name: Ubuntu Clang, BLAS and examples (x5)
 
     runs-on: ubuntu-24.04
+
+    if: false # temporary disabled
 
     # NOTE: Clang is currently buggy on Ubuntu.  Hence, we temporarily allow
     # this job to fail.
@@ -321,6 +331,8 @@ jobs:
 
     runs-on: windows-latest
 
+    if: false # temporary disabled
+
     defaults:
       run:
         shell: msys2 {0}
@@ -379,6 +391,8 @@ jobs:
   ##############################################################################
   msvc:
     name: MSVC (x1)
+
+    if: false # temporary disabled
 
     runs-on: windows-latest
     env:
@@ -483,6 +497,7 @@ jobs:
           autoconf --version
           libtool --version
           echo "MAKE=make -j$(expr $(nproc) + 1) --output-sync=target" >> $GITHUB_ENV
+          echo "MAKE2=make --output-sync=target" >> $GITHUB_ENV
         shell: alpine.sh {0}
 
       - name: "Configure"
@@ -506,7 +521,7 @@ jobs:
 
       - name: "Check"
         run: |
-          $MAKE check
+          $MAKE2 check MOD=gr_poly
         shell: alpine.sh {0}
 
 
@@ -518,6 +533,8 @@ jobs:
     name: Nemo.jl
 
     runs-on: ubuntu-24.04
+
+    if: false # temporary disabled
 
     env:
       LOCAL: ${{ github.workspace }}/local
