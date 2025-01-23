@@ -70,6 +70,9 @@ TEST_FUNCTION_START(gr_poly_resultant_hgcd, state)
             cutoff2 = n_randint(state, 6);
         }
 
+        gr_ctx_println(ctx);
+        flint_printf("%wd %wd %wd\n", n, cutoff1, cutoff2);
+
         gr_poly_init(f, ctx);
         gr_poly_init(g, ctx);
         x = gr_heap_init(ctx);
@@ -174,6 +177,9 @@ TEST_FUNCTION_START(gr_poly_resultant_hgcd, state)
             cutoff1 = n_randint(state, 6);
             cutoff2 = n_randint(state, 6);
         }
+
+        gr_ctx_println(ctx);
+        flint_printf("%wd %wd %wd\n", n, cutoff1, cutoff2);
 
         gr_poly_init(f, ctx);
         gr_poly_init(fh, ctx);
