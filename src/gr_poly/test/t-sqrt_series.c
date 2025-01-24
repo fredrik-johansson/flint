@@ -105,6 +105,7 @@ TEST_FUNCTION_START(gr_poly_sqrt_series, state)
 
     for (iter = 0; iter < 1000; iter++)
     {
+        flint_printf("sqrt_series %wd\n", iter);
         test_sqrt_series(state, n_randint(state, 8));
     }
 

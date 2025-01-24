@@ -40,6 +40,10 @@ TEST_FUNCTION_START(gr_poly_xgcd, state)
         else
             n = 6;
 
+        flint_printf("\nxgcd %wd\n", i);
+        gr_ctx_println(ctx);
+
+
         gr_poly_init(a, ctx);
         gr_poly_init(b, ctx);
         gr_poly_init(d, ctx);

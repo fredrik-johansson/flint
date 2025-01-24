@@ -109,6 +109,7 @@ TEST_FUNCTION_START(gr_poly_rsqrt_series, state)
 
     for (iter = 0; iter < 1000; iter++)
     {
+        flint_printf("rsqrt_series %wd\n", iter);
         test_rsqrt_series(state, n_randint(state, 8));
     }
 

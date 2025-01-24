@@ -37,6 +37,9 @@ TEST_FUNCTION_START(gr_poly_squarefree_part, state)
             gr_ctx_init_random(ctx, state);
         }
 
+        flint_printf("\nsqf %wd\n", iter);
+        gr_ctx_println(ctx);
+
         gr_ctx_init_gr_poly(poly_ctx, ctx);
         gr_ctx_init_fmpz(fmpz_ctx);
 

@@ -27,6 +27,10 @@ TEST_FUNCTION_START(gr_poly_taylor_shift_convolution, state)
         /* check F(x+c)(x+d) = F(x+c+d) */
         gr_ctx_init_random(ctx, state);
 
+        flint_printf("\ntaylor2 %wd\n", iter);
+        gr_ctx_println(ctx);
+
+
         gr_poly_init(F, ctx);
         gr_poly_init(Fc, ctx);
         gr_poly_init(Fcd1, ctx);
