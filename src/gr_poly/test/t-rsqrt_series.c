@@ -136,11 +136,21 @@ test_rsqrt_series(flint_rand_t state, int which)
     }
 
     fflush(stdout);
-    flint_printf("Clear ABC\n");
+    flint_printf("Clear ABC  %wd %wd  %wd %wd  %wd %wd\n", A->length, A->alloc, B->length, B->alloc, C->length, C->alloc);
     fflush(stdout);
 
     gr_poly_clear(A, ctx);
+
+    fflush(stdout);
+    flint_printf("Clear 2\n");
+    fflush(stdout);
+
     gr_poly_clear(B, ctx);
+
+    fflush(stdout);
+    flint_printf("Clear 3\n");
+    fflush(stdout);
+
     gr_poly_clear(C, ctx);
 
     fflush(stdout);
