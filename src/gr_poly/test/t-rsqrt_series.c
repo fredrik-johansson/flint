@@ -113,6 +113,7 @@ test_rsqrt_series(flint_rand_t state, int which)
         status |= gr_poly_truncate(A, A, n, ctx);
 
         flint_printf("AA = "); gr_poly_print(A, ctx); flint_printf("\n");
+        fflush(stdout);
 
         if (status == GR_SUCCESS && gr_poly_equal(C, A, ctx) == T_FALSE)
         {
@@ -123,6 +124,9 @@ test_rsqrt_series(flint_rand_t state, int which)
             flint_printf("C = "); gr_poly_print(C, ctx); flint_printf("\n");
             flint_abort();
         }
+
+        flint_printf("...\n");
+        fflush(stdout);
     }
 
     gr_poly_clear(A, ctx);
