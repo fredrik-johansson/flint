@@ -23,9 +23,12 @@ test_rsqrt_series(flint_rand_t state, int which)
     gr_poly_t A, B, C;
     int status = GR_SUCCESS;
 
+    flint_printf("context...\n");
     gr_ctx_init_random(ctx, state);
 
+    fflush(stdout);
     gr_ctx_println(ctx);
+    fflush(stdout);
 
     gr_poly_init(A, ctx);
     gr_poly_init(B, ctx);
