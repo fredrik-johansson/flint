@@ -23,7 +23,9 @@ test_rsqrt_series(flint_rand_t state, int which)
     gr_poly_t A, B, C;
     int status = GR_SUCCESS;
 
+    fflush(stdout);
     flint_printf("context...\n");
+    fflush(stdout);
     gr_ctx_init_random(ctx, state);
 
     fflush(stdout);
@@ -128,15 +130,28 @@ test_rsqrt_series(flint_rand_t state, int which)
             flint_abort();
         }
 
+        fflush(stdout);
         flint_printf("...\n");
         fflush(stdout);
     }
+
+    fflush(stdout);
+    flint_printf("Clear ABC\n");
+    fflush(stdout);
 
     gr_poly_clear(A, ctx);
     gr_poly_clear(B, ctx);
     gr_poly_clear(C, ctx);
 
+    fflush(stdout);
+    flint_printf("Clear context\n");
+    fflush(stdout);
+
     gr_ctx_clear(ctx);
+
+    fflush(stdout);
+    flint_printf("Done\n");
+    fflush(stdout);
 
     return status;
 }
