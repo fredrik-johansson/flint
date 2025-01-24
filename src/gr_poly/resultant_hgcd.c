@@ -160,6 +160,8 @@ int gr_poly_resultant_hgcd(gr_ptr r, const gr_poly_t f,
     int status = GR_SUCCESS;
     slong sz = ctx->sizeof_elem;
 
+    flint_printf("%wd %wd %wd %wd\n", len1, len2, inner_cutoff, cutoff);
+
     if (len1 == 0 || len2 == 0)
     {
         return gr_zero(r, ctx);

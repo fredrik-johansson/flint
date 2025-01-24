@@ -190,17 +190,18 @@ TEST_FUNCTION_START(gr_poly_resultant_hgcd, state)
         gr_poly_init(fh, ctx);
         gr_poly_init(g, ctx);
         gr_poly_init(h, ctx);
+
         x = gr_heap_init(ctx);
         y = gr_heap_init(ctx);
         z = gr_heap_init(ctx);
         yz = gr_heap_init(ctx);
 
         status |= gr_poly_randtest(f, state, n, ctx);
-        printf("f = "); gr_poly_print(f, ctx), flint_printf("\n\n");
+        printf("f = "); gr_poly_print(f, ctx); flint_printf("\n\n");
         status |= gr_poly_randtest(g, state, n, ctx);
-        printf("g = "); gr_poly_print(g, ctx), flint_printf("\n\n");
+        printf("g = "); gr_poly_print(g, ctx); flint_printf("\n\n");
         status |= gr_poly_randtest(h, state, n, ctx);
-        printf("h = "); gr_poly_print(h, ctx), flint_printf("\n\n");
+        printf("h = "); gr_poly_print(h, ctx); flint_printf("\n\n");
         status |= gr_poly_resultant_hgcd(y, f, g, cutoff1, cutoff2, ctx);
         printf("y = "); gr_println(y, ctx);
         status |= gr_poly_resultant_hgcd(z, h, g, cutoff1, cutoff2, ctx);
@@ -208,7 +209,7 @@ TEST_FUNCTION_START(gr_poly_resultant_hgcd, state)
         status |= gr_mul(yz, y, z, ctx);
 
         status |= gr_poly_mul(fh, f, h, ctx);
-        printf("fh = "); gr_poly_print(fh, ctx), flint_printf("\n\n");
+        printf("fh = "); gr_poly_print(fh, ctx); flint_printf("\n\n");
         status |= gr_poly_resultant_hgcd(x, fh, g, cutoff1, cutoff2, ctx);
         printf("x = "); gr_println(x, ctx);
 
@@ -244,6 +245,7 @@ TEST_FUNCTION_START(gr_poly_resultant_hgcd, state)
         gr_poly_clear(fh, ctx);
         gr_poly_clear(g, ctx);
         gr_poly_clear(h, ctx);
+
         gr_heap_clear(x, ctx);
         gr_heap_clear(y, ctx);
         gr_heap_clear(z, ctx);
