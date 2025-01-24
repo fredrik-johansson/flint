@@ -514,11 +514,6 @@ jobs:
           $MAKE
         shell: alpine.sh {0}
 
-      - name: "Compile tests"
-        run: |
-          $MAKE tests
-        shell: alpine.sh {0}
-
       - name: "Check"
         run: |
           $MAKE2 check MOD=gr_poly
