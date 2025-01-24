@@ -38,15 +38,21 @@ TEST_FUNCTION_START(gr_poly_resultant_sylvester, state)
         else
             n = n_randint(state, 6);
 
+        gr_ctx_println(ctx);
+
         gr_poly_init(f, ctx);
         gr_poly_init(g, ctx);
         x = gr_heap_init(ctx);
         y = gr_heap_init(ctx);
 
         status |= gr_poly_randtest(f, state, n, ctx);
+        gr_poly_print(f, ctx), flint_printf("\n\n");
         status |= gr_poly_randtest(g, state, n, ctx);
+        gr_poly_print(g, ctx), flint_printf("\n\n");
         status |= gr_poly_resultant_sylvester(x, f, g, ctx);
+        printf("x = "); gr_println(x, ctx);
         status |= gr_poly_resultant_sylvester(y, g, f, ctx);
+        printf("y = "); gr_println(y, ctx);
 
         if (((f->length - 1) * (g->length - 1)) % 2)
            status |= gr_neg(y, y, ctx);
@@ -111,6 +117,8 @@ TEST_FUNCTION_START(gr_poly_resultant_sylvester, state)
         else
             n = n_randint(state, 6);
 
+        gr_ctx_println(ctx);
+
         gr_poly_init(f, ctx);
         gr_poly_init(fh, ctx);
         gr_poly_init(g, ctx);
@@ -121,14 +129,22 @@ TEST_FUNCTION_START(gr_poly_resultant_sylvester, state)
         yz = gr_heap_init(ctx);
 
         status |= gr_poly_randtest(f, state, n, ctx);
+        printf("f = "); gr_poly_print(f, ctx), flint_printf("\n\n");
         status |= gr_poly_randtest(g, state, n, ctx);
+        printf("g = "); gr_poly_print(g, ctx), flint_printf("\n\n");
         status |= gr_poly_randtest(h, state, n, ctx);
+        printf("h = "); gr_poly_print(h, ctx), flint_printf("\n\n");
         status |= gr_poly_resultant_sylvester(y, f, g, ctx);
+        printf("y = "); gr_println(y, ctx);
         status |= gr_poly_resultant_sylvester(z, h, g, ctx);
+        printf("z = "); gr_println(z, ctx);
         status |= gr_mul(yz, y, z, ctx);
+        printf("yz = "); gr_println(yz, ctx);
 
         status |= gr_poly_mul(fh, f, h, ctx);
+        printf("fh = "); gr_poly_print(fh, ctx), flint_printf("\n\n");
         status |= gr_poly_resultant_sylvester(x, fh, g, ctx);
+        printf("x = "); gr_println(x, ctx);
 
         if (status == GR_SUCCESS && gr_ctx_is_field(ctx) == T_TRUE && gr_equal(x, yz, ctx) == T_FALSE)
         {
