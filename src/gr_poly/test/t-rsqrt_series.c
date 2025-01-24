@@ -36,6 +36,8 @@ test_rsqrt_series(flint_rand_t state, int which)
     else
         n = n_randint(state, 20);
 
+    flint_printf("n = %wd\n", n);
+
     GR_MUST_SUCCEED(gr_poly_randtest(A, state, 20, ctx));
     GR_MUST_SUCCEED(gr_poly_randtest(B, state, 20, ctx));
 
@@ -99,7 +101,15 @@ test_rsqrt_series(flint_rand_t state, int which)
         fflush(stdout);
 
         status |= gr_poly_mullow(C, B, B, n, ctx);
+
+        flint_printf("C = "); gr_poly_print(C, ctx); flint_printf("\n");
+        fflush(stdout);
+
         status |= gr_poly_inv_series(C, C, n, ctx);
+
+        flint_printf("C = "); gr_poly_print(C, ctx); flint_printf("\n");
+        fflush(stdout);
+
         status |= gr_poly_truncate(A, A, n, ctx);
 
         flint_printf("AA = "); gr_poly_print(A, ctx); flint_printf("\n");
