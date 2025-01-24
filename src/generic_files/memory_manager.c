@@ -140,20 +140,28 @@ FLINT_WARN_UNUSED void * flint_calloc(size_t num, size_t size)
 
 #include <stdio.h>
 
+FLINT_DLL int debug_free = 0;
+
+
 void _flint_free(void * ptr)
 {
+if (debug_free)
+{
     fflush(stdout);
-    flint_printf("CALL FREE\n");
+    printf("CALL FREE\n");
     fflush(stdout);
+}
 
 #if !FLINT_USES_GC
     free(ptr);
 #endif
 
+if (debug_free)
+{
     fflush(stdout);
-    flint_printf("CALLED FREE\n");
+    printf("CALLED FREE\n");
     fflush(stdout);
-
+}
 }
 
 void flint_free(void * ptr)

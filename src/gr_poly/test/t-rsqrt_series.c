@@ -166,12 +166,17 @@ test_rsqrt_series(flint_rand_t state, int which)
     return status;
 }
 
+FLINT_DLL extern int debug_free;
+
 TEST_FUNCTION_START(gr_poly_rsqrt_series, state)
 {
     slong iter;
 
     for (iter = 0; iter < 1000; iter++)
     {
+        if (iter == 500)
+            debug_free = 1;
+
         fflush(stdout);
         flint_printf("rsqrt_series %wd\n", iter);
         fflush(stdout);
