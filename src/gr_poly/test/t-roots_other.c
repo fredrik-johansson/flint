@@ -34,6 +34,10 @@ TEST_FUNCTION_START(gr_poly_roots_other, state)
         else
             gr_ctx_init_random(ctx_other, state);
 
+        flint_printf("\n%wd\n", iter);
+        gr_ctx_println(ctx);
+        gr_ctx_println(ctx_other);
+
         gr_ctx_init_fmpz(ZZ);
 
         gr_poly_init(f, ctx);
