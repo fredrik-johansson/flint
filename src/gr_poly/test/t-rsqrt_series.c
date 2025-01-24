@@ -97,7 +97,7 @@ test_rsqrt_series(flint_rand_t state, int which)
     }
 
     fflush(stdout);
-    flint_printf("B = "); gr_poly_print(B, ctx); flint_printf("\n");
+    flint_printf("B = "); gr_poly_print(B, ctx); flint_printf("     %wd %wd %p  \n", B->length, B->alloc, B->coeffs);
     fflush(stdout);
 
     if (status == GR_SUCCESS)
@@ -136,7 +136,7 @@ test_rsqrt_series(flint_rand_t state, int which)
     }
 
     fflush(stdout);
-    flint_printf("Clear ABC  %wd %wd  %wd %wd  %wd %wd\n", A->length, A->alloc, B->length, B->alloc, C->length, C->alloc);
+    flint_printf("Clear ABC  %wd %wd %p  %wd %wd %p  %wd %wd %p\n", A->length, A->alloc, A->coeffs, B->length, B->alloc, B->coeffs, C->length, C->alloc, C->coeffs);
     fflush(stdout);
 
     gr_poly_clear(A, ctx);
