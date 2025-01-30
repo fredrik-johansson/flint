@@ -116,17 +116,14 @@ _mag1_is_valid(const mag1_t x)
 #if FLINT_WANT_ASSERT
 #define NRB_ASSERT_VALID(res, ctx) \
     do { \
-        if () \
-        { \
-            int mid_ok = (NRB_EXP(res) == NFLOAT_EXP_ZERO || \
-                     (NFLOAT_MIN_EXP <= NRB_EXP(res) && NRB_EXP(res) <= NFLOAT_MAX_EXP && \
-                        (LIMB_MSB_IS_SET(NRB_D(res)[NFLOAT_CTX_NLIMBS(ctx) - 1])))); \
-            int rad_ok = _mag1_is_valid(NRB_RAD(res)); \
-            if (!mid_ok || !rad_ok) \
-                nrb_print_debug(res, ctx); \
-            FLINT_ASSERT(mid_ok); \
-            FLINT_ASSERT(rad_ok); \
-        } \
+        int mid_ok = (NRB_EXP(res) == NFLOAT_EXP_ZERO || \
+                 (NFLOAT_MIN_EXP <= NRB_EXP(res) && NRB_EXP(res) <= NFLOAT_MAX_EXP && \
+                    (LIMB_MSB_IS_SET(NRB_D(res)[NFLOAT_CTX_NLIMBS(ctx) - 1])))); \
+        int rad_ok = _mag1_is_valid(NRB_RAD(res)); \
+        if (!mid_ok || !rad_ok) \
+            nrb_print_debug(res, ctx); \
+        FLINT_ASSERT(mid_ok); \
+        FLINT_ASSERT(rad_ok); \
     } while (0)
 #else
 #define NRB_ASSERT_VALID(res, ctx)
