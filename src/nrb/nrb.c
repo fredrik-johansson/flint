@@ -14,7 +14,6 @@
 #include <stdio.h>
 #include "gr.h"
 
-
 #include "fmpz.h"
 #include "arf.h"
 #include "arb.h"
@@ -193,7 +192,7 @@ int nrb_set_fmpz(nrb_ptr res, const fmpz_t x, gr_ctx_t ctx)
             NRB_RAD_D(res) = MAG1_ONE_HALF;
         }
 
-        NRB_ASSERT_VALID(res);
+        NRB_ASSERT_VALID(res, ctx);
 
         return GR_SUCCESS;
     }
@@ -202,7 +201,7 @@ int nrb_set_fmpz(nrb_ptr res, const fmpz_t x, gr_ctx_t ctx)
 int
 nrb_zero_pm_inf(nrb_ptr res, gr_ctx_t ctx)
 {
-    NRB_RAD_EXP(res) = NFLOAT_EXP_POS_INF;
+    MAG1_INF(NRB_RAD(res));
     NRB_ZERO_MID(res);
     return GR_SUCCESS;
 }
@@ -218,7 +217,7 @@ nrb_zero_pm_2exp_si(nrb_ptr res, slong exp, gr_ctx_t ctx)
     NRB_RAD_D(res) = MAG_ONE_HALF;
     NRB_ZERO_MID(res);
 
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
 
     return GR_SUCCESS;
 }
@@ -240,7 +239,7 @@ nrb_zero_to_2exp_si_sgnbit(nrb_ptr res, slong exp, int sgnbit, gr_ctx_t ctx)
     flint_mpn_zero(NRB_D(res), NFLOAT_CTX_NLIMBS(ctx) - 1);
     NRB_D(res)[NFLOAT_CTX_NLIMBS(ctx) - 1] = UWORD(1) << (FLINT_BITS - 1);
 
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
 
     return GR_SUCCESS;
 }
@@ -388,7 +387,7 @@ nrb_set_arf(nrb_ptr res, const arf_t x, gr_ctx_t ctx)
         NRB_RAD_D(res) = MAG_ONE_HALF;
     }
 
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
 
     return GR_SUCCESS;
 }
@@ -402,24 +401,22 @@ nrb_rad_add_mag(nrb_ptr res, const mag_t x, gr_ctx_t ctx)
     if (mag_is_inf(x) || fmpz_cmp_si(MAG_EXPREF(x), NFLOAT_MAX_EXP) > 0)
         return nrb_zero_pm_inf(res, ctx);  /* deliberately modifies midpoint too */
 
-    slong exp;
-    ulong man;
+    mag1_t x1;
 
     if (fmpz_cmp_si(MAG_EXPREF(x), NFLOAT_MIN_EXP) < 0)
     {
-        exp = NFLOAT_MIN_EXP + 1;
-        man = MAG_ONE_HALF;
+        MAG1_EXP(x1) = NFLOAT_MIN_EXP + 1;
+        MAG1_MAN(x1) = MAG_ONE_HALF;
     }
     else
     {
-        exp = MAG_EXP(x);
-        man = MAG_MAN(x);
-        _mag1_add(&NRB_RAD_EXP(res), &NRB_RAD_D(res),
-                NRB_RAD_EXP(res), NRB_RAD_D(res),
-                exp, man);
+        MAG1_EXP(x1) = MAG_EXP(x);
+        MAG1_MAN(x1) = MAG_MAN(x);
     }
 
-    NRB_ASSERT_VALID(res);
+    mag1_add(NRB_RAD(res), NRB_RAD(res), x1);
+
+    NRB_ASSERT_VALID(res, ctx);
 
     return GR_SUCCESS;
 }
@@ -432,7 +429,7 @@ nrb_set_arb(nrb_ptr res, const arb_t x, gr_ctx_t ctx)
     status = nrb_set_arf(res, arb_midref(x), ctx);
     status |= nrb_rad_add_mag(res, arb_radref(x), ctx);
 
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
 
     return status;
 }
@@ -440,40 +437,29 @@ nrb_set_arb(nrb_ptr res, const arb_t x, gr_ctx_t ctx)
 int
 nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {
-    slong rad_exp;
-    ulong rad_man;
+    mag1_t rad;
 
-    _mag1_add(&rad_exp, &rad_man, NRB_RAD_EXP(x), NRB_RAD_D(x), NRB_RAD_EXP(y), NRB_RAD_D(y));
+    mag1_add(rad, NRB_RAD(x), NRB_RAD(y));
 
-    if (rad_exp == NFLOAT_EXP_POS_INF)
+    if (MAG1_IS_INF(rad))
         return nrb_zero_pm_inf(res, ctx);
 
     int subtract = (NRB_SGNBIT(x) != NRB_SGNBIT(y));
 
-    /* add midpoints */
     if (nfloat_add(NRB_MID(res), NRB_MID(x), NRB_MID(y), ctx) != GR_SUCCESS)
     {
         if (!subtract)   /* overflow */
             return nrb_zero_pm_inf(res, ctx);
         else             /* underflow */
-            _mag1_add_2exp(&rad_exp, &rad_man, rad_exp, rad_man, NFLOAT_MIN_EXP + 1);
+            mag1_add_2exp_si(rad, rad, NFLOAT_MIN_EXP + 1);
     }
     else if (!NFLOAT_IS_ZERO(NRB_MID(res)))
     {
-        /* add possible rounding error */
-        slong dexp;
-
-        /* xxx? */
-        dexp = NRB_EXP(res) - FLINT_BITS * NFLOAT_CTX_NLIMBS(ctx) + 1;
-        dexp = FLINT_MAX(dexp, NFLOAT_MIN_EXP);
-
-        _mag1_add_2exp(&rad_exp, &rad_man, rad_exp, rad_man, dexp);
+        mag1_add_2exp_si(rad, rad, NRB_EXP(res) - NFLOAT_CTX_PREC(ctx) + 1);
     }
 
-    NRB_RAD_EXP(res) = rad_exp;
-    NRB_RAD_D(res) = rad_man;
-
-    NRB_ASSERT_VALID(res);
+    *NRB_RAD(res) = *rad;
+    NRB_ASSERT_VALID(res, ctx);
 
     return GR_SUCCESS;
 }
@@ -481,40 +467,73 @@ nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 int
 nrb_sub(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {
-    slong rad_exp;
-    ulong rad_man;
+    mag1_t rad;
 
-    _mag1_add(&rad_exp, &rad_man, NRB_RAD_EXP(x), NRB_RAD_D(x), NRB_RAD_EXP(y), NRB_RAD_D(y));
+    mag1_add(rad, NRB_RAD(x), NRB_RAD(y));
 
-    if (rad_exp == NFLOAT_EXP_POS_INF)
+    if (MAG1_IS_INF(rad))
         return nrb_zero_pm_inf(res, ctx);
 
     int subtract = (NRB_SGNBIT(x) == NRB_SGNBIT(y));
 
-    /* add midpoints */
     if (nfloat_sub(NRB_MID(res), NRB_MID(x), NRB_MID(y), ctx) != GR_SUCCESS)
     {
         if (!subtract)   /* overflow */
             return nrb_zero_pm_inf(res, ctx);
         else             /* underflow */
-            _mag1_add_2exp(&rad_exp, &rad_man, rad_exp, rad_man, NFLOAT_MIN_EXP + 1);
+            mag1_add_2exp_si(rad, rad, NFLOAT_MIN_EXP + 1);
     }
     else if (!NFLOAT_IS_ZERO(NRB_MID(res)))
     {
-        /* add possible rounding error */
-        slong dexp;
-
-        /* xxx? */
-        dexp = NRB_EXP(res) - FLINT_BITS * NFLOAT_CTX_NLIMBS(ctx) + 1;
-        dexp = FLINT_MAX(dexp, NFLOAT_MIN_EXP);
-
-        _mag1_add_2exp(&rad_exp, &rad_man, rad_exp, rad_man, dexp);
+        mag1_add_2exp_si(rad, rad, NRB_EXP(res) - NFLOAT_CTX_PREC(ctx) + 1);
     }
 
-    NRB_RAD_EXP(res) = rad_exp;
-    NRB_RAD_D(res) = rad_man;
+    *NRB_RAD(res) = *rad;
+    NRB_ASSERT_VALID(res, ctx);
 
-    NRB_ASSERT_VALID(res);
+    return GR_SUCCESS;
+}
+
+#define _MAG1_ADJUST_ONE_TOO_LARGE_1(xexp, xman) \
+    do { \
+        ulong __t = (xman) >> MAG1_BITS; \
+        (xman) = ((xman) >> __t) + (__t); \
+        (xexp) += __t; \
+    } while (0)
+
+
+/* does not check for overflow */
+static void
+_nrb_unsafe_mid_get_mag1(mag1_t res, nrb_srcptr x, gr_ctx_t ctx)
+{
+    if (NFLOAT_IS_ZERO(NRB_MID(x)))
+    {
+        MAG1_ZERO(res);
+    }
+    else
+    {
+        MAG1_EXP(res) = NRB_EXP(x);
+        MAG1_MAN(res) = (NRB_D(x)[NFLOAT_CTX_NLIMBS(ctx) - 1] >> (FLINT_BITS - MAG1_BITS)) + UWORD(1);
+        _MAG1_ADJUST_ONE_TOO_LARGE_1(MAG1_EXP(res), MAG1_MAN(res));
+    }
+}
+
+static int
+nrb_fix_rad_underflow_overflow(nrb_ptr res, gr_ctx_t ctx)
+{
+    if (!MAG1_IS_SPECIAL(NRB_RAD(res)))
+    {
+        if (MAG1_EXP(NRB_RAD(res)) < NFLOAT_MIN_EXP)
+        {
+            MAG1_EXP(NRB_RAD(res)) = NFLOAT_MIN_EXP;
+            MAG1_MAN(NRB_RAD(res)) = MAG1_ONE_HALF;
+            return GR_SUCCESS;
+        }
+        else if (MAG1_EXP(NRB_RAD(res)) > NFLOAT_MAX_EXP)
+        {
+            return nrb_zero_pm_inf(res, ctx);
+        }
+    }
 
     return GR_SUCCESS;
 }
@@ -522,6 +541,60 @@ nrb_sub(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 int
 nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {
-    return GR_UNABLE;
+    mag1_t rad;
+    mag1_t xm;
+    mag1_t ym;
+    slong xyexp;
+
+    if (NRB_IS_UNBOUNDED(x) || NRB_IS_UNBOUNDED(y))
+        return nrb_zero_pm_inf(res, ctx);
+
+    _nrb_unsafe_mid_get_mag1(xm, x, ctx);
+    _nrb_unsafe_mid_get_mag1(ym, y, ctx);
+
+    mag1_unsafe_mul(rad, NRB_RAD(x), NRB_RAD(y));
+    mag1_unsafe_addmul(rad, xm, NRB_RAD(y));
+    mag1_unsafe_addmul(rad, NRB_RAD(x), ym);
+
+    xyexp = NRB_EXP(x) + NRB_EXP(y);
+
+    if (nfloat_mul(NRB_MID(res), NRB_MID(x), NRB_MID(y), ctx) != GR_SUCCESS)
+    {
+        if (xyexp > 0)   /* overflow */
+            return nrb_zero_pm_inf(res, ctx);
+        else             /* underflow */
+            mag1_unsafe_add_2exp_si(rad, rad, xyexp);
+    }
+    else if (!NFLOAT_IS_ZERO(NRB_MID(res)))
+    {
+        mag1_unsafe_add_2exp_si(rad, rad, NRB_EXP(res) - NFLOAT_CTX_PREC(ctx) + 1);
+    }
+
+    *NRB_RAD(res) = *rad;
+    int status = nrb_fix_rad_underflow_overflow(res, ctx);
+    NRB_ASSERT_VALID(res, ctx);
+
+    return status;
 }
 
+int nrb_sin(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx)
+{
+    arb_t t;
+    arb_init(t);
+    nrb_get_arb(t, x, ctx);
+    arb_sin(t, t, NFLOAT_CTX_PREC(ctx));
+    int status = nrb_set_arb(res, t, ctx);
+    arb_clear(t);
+    return status;
+}
+
+int nrb_cos(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx)
+{
+    arb_t t;
+    arb_init(t);
+    nrb_get_arb(t, x, ctx);
+    arb_cos(t, t, NFLOAT_CTX_PREC(ctx));
+    int status = nrb_set_arb(res, t, ctx);
+    arb_clear(t);
+    return status;
+}

@@ -33,24 +33,53 @@ typedef const void * nrb_srcptr;
 #define NRB_CTX_DATA_NLIMBS(ctx) (NFLOAT_CTX_NLIMBS(ctx) + NRB_HEADER_LIMBS)
 
 /* This must be the same as MAG_BITS. */
-#define NRB_RAD_BITS 30
+#define MAG1_BITS 30
+#define MAG1_ONE_HALF (UWORD(1) << (MAG1_BITS - 1))
+#define MAG1_ONE_MINUS_EPS ((UWORD(1) << MAG1_BITS) - 1)
+
+#if FLINT_BITS == 64
+# define MAG1_FIXMUL(x, y) (((x) * (y)) >> MAG1_BITS)
+#else
+# define MAG1_FIXMUL(x, y) ((ulong) (((unsigned long long int) (x) * (unsigned long long int) (y)) >> MAG1_BITS))
+#endif
+
+typedef struct
+{
+    ulong man;
+    slong exp;
+}
+mag1_struct;
+
+typedef mag1_struct mag1_t[1];
 
 #define NRB_DATA(x) ((nn_ptr) (x))
-#define NRB_RAD(x) NRB_DATA(x)
 #define NRB_MID(x) (NRB_DATA(x) + 2)
+#define NRB_RAD(x) ((mag1_struct *) NRB_DATA(x))
 
-#define NRB_RAD_EXP(x) (((slong *) (x))[0])
-#define NRB_RAD_D(x) (((nn_ptr) (x))[1])
+#define NRB_RAD_EXP(x) (NRB_RAD(x)->exp)
+#define NRB_RAD_D(x) (NRB_RAD(x)->man)
 
 #define NRB_EXP(x) NFLOAT_EXP(NRB_MID(x))
 #define NRB_SGNBIT(x) NFLOAT_SGNBIT(NRB_MID(x))
 #define NRB_D(x) NFLOAT_D(NRB_MID(x))
 
-#define NRB_ZERO_RAD(res) do { NRB_RAD_EXP(res) = NFLOAT_EXP_ZERO; } while (0)
-#define NRB_ZERO_MID(res) do { NRB_EXP(res) = NFLOAT_EXP_ZERO; NRB_SGNBIT(res) = 0; } while (0)
+#define MAG1_MAN(x) ((x)->man)
+#define MAG1_EXP(x) ((x)->exp)
+#define MAG1_IS_SPECIAL(x) ((x)->man == UWORD(0))
+#define MAG1_IS_INF(x) ((x)->exp == NFLOAT_EXP_POS_INF)
+#define MAG1_IS_ZERO(x) ((x)->exp == NFLOAT_EXP_ZERO)
+#define MAG1_ZERO(x) do { MAG1_MAN(x) = 0; MAG1_EXP(x) = NFLOAT_EXP_ZERO; } while (0)
+#define MAG1_INF(x) do { MAG1_MAN(x) = 0; MAG1_EXP(x) = NFLOAT_EXP_POS_INF; } while (0)
+#define _MAG1_EXP_INRANGE(exp) (NFLOAT_MIN_EXP <= (exp) && (exp) <= NFLOAT_MAX_EXP)
+#define _MAG1_MAN_INRANGE(man) (MAG1_ONE_HALF <= (man) && (man) <= MAG1_ONE_MINUS_EPS)
 
-#define NRB_IS_UNBOUNDED(res) (NRB_RAD_EXP(x) == NFLOAT_EXP_POS_INF)
-#define NRB_RAD_IS_ZERO(res) (NRB_RAD_EXP(x) == NFLOAT_EXP_ZERO)
+#define NRB_IS_UNBOUNDED(x) MAG1_IS_INF(NRB_RAD(x))
+#define NRB_IS_BOUNDED(x) (!MAG1_IS_INF(NRB_RAD(x)))
+#define NRB_RAD_IS_ZERO(x) MAG1_IS_ZERO(NRB_RAD(x))
+#define NRB_RAD_IS_SPECIAL(x) MAG1_IS_SPECAL(NRB_RAD(x))
+
+#define NRB_ZERO_RAD(x) MAG1_ZERO(NRB_RAD(x))
+#define NRB_ZERO_MID(x) do { NRB_EXP(x) = NFLOAT_EXP_ZERO; NRB_SGNBIT(x) = 0; } while (0)
 
 int nrb_ctx_init(gr_ctx_t ctx, slong prec);
 int nrb_ctx_write(gr_stream_t out, gr_ctx_t ctx);
@@ -72,20 +101,28 @@ nrb_init(nrb_ptr res, gr_ctx_t ctx)
 
 #define NRB_DEBUG 1
 
-int nrb_write_debug(gr_stream_t out, nrb_srcptr x, gr_ctx_t ctx);
 int nrb_print_debug(nrb_srcptr x, gr_ctx_t ctx);
 
-#define NRB_ASSERT_VALID(res) \
+NRB_INLINE int
+_mag1_is_valid(const mag1_t x)
+{
+    if (MAG1_EXP(x) == NFLOAT_EXP_ZERO && MAG1_MAN(x) == 0)
+        return 1;
+    if (MAG1_EXP(x) == NFLOAT_EXP_POS_INF && MAG1_MAN(x) == 0)
+        return 1;
+    if (_MAG1_EXP_INRANGE(MAG1_EXP(x)) && _MAG1_MAN_INRANGE(MAG1_MAN(x)))
+        return 1;
+    return 0;
+}
+
+#define NRB_ASSERT_VALID(res, ctx) \
     do { \
         if (NRB_DEBUG) \
         { \
             int mid_ok = (NRB_EXP(res) == NFLOAT_EXP_ZERO || \
                      (NFLOAT_MIN_EXP <= NRB_EXP(res) && NRB_EXP(res) <= NFLOAT_MAX_EXP && \
                         (LIMB_MSB_IS_SET(NRB_D(res)[NFLOAT_CTX_NLIMBS(ctx) - 1])))); \
-            int rad_ok = (NRB_RAD_EXP(res) == NFLOAT_EXP_ZERO || \
-                     NRB_RAD_EXP(res) == NFLOAT_EXP_POS_INF || \
-                     (NFLOAT_MIN_EXP <= NRB_RAD_EXP(res) && NRB_RAD_EXP(res) <= NFLOAT_MAX_EXP && \
-                      (UWORD(1) << (NRB_RAD_BITS - 1)) <= NRB_RAD_D(res) && NRB_RAD_D(res) <= (UWORD(1) << NRB_RAD_BITS) - 1)); \
+            int rad_ok = _mag1_is_valid(NRB_RAD(res)); \
             if (!mid_ok || !rad_ok) \
                 nrb_print_debug(res, ctx); \
             FLINT_ASSERT(mid_ok); \
@@ -97,7 +134,7 @@ int nrb_print_debug(nrb_srcptr x, gr_ctx_t ctx);
 NRB_INLINE void
 nrb_clear(nrb_ptr res, gr_ctx_t ctx)
 {
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
 }
 
 NRB_INLINE int
@@ -105,7 +142,7 @@ nrb_zero(nrb_ptr res, gr_ctx_t ctx)
 {
     NRB_ZERO_RAD(res);
     NRB_ZERO_MID(res);
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
     return GR_SUCCESS;
 }
 
@@ -114,7 +151,7 @@ nrb_one(nrb_ptr res, gr_ctx_t ctx)
 {
     NRB_ZERO_RAD(res);
     nfloat_one(NRB_MID(res), ctx);
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
     return GR_SUCCESS;
 }
 
@@ -123,7 +160,7 @@ nrb_neg_one(nrb_ptr res, gr_ctx_t ctx)
 {
     NRB_ZERO_RAD(res);
     nfloat_neg_one(NRB_MID(res), ctx);
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
     return GR_SUCCESS;
 }
 
@@ -132,7 +169,7 @@ nrb_set_ui(nrb_ptr res, ulong x, gr_ctx_t ctx)
 {
     NRB_ZERO_RAD(res);
     nfloat_set_ui(NRB_MID(res), x, ctx);
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
     return GR_SUCCESS;
 }
 
@@ -141,7 +178,7 @@ nrb_set_si(nrb_ptr res, ulong x, gr_ctx_t ctx)
 {
     NRB_ZERO_RAD(res);
     nfloat_set_si(NRB_MID(res), x, ctx);
-    NRB_ASSERT_VALID(res);
+    NRB_ASSERT_VALID(res, ctx);
     return GR_SUCCESS;
 }
 
@@ -170,100 +207,112 @@ int nrb_sub(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx);
 int nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx);
 
 
-/* Magnitude arithmetic */
+int nrb_sin(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx);
+int nrb_cos(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx);
 
-#define MAG1_ONE_HALF (UWORD(1) << (NRB_RAD_BITS - 1))
+/* Magnitude arithmetic */
 
 #define _MAG1_ADJUST_ONE_TOO_LARGE(xexp, xman) \
     do { \
-        ulong __t = (xman) >> NRB_RAD_BITS; \
+        ulong __t = (xman) >> MAG1_BITS; \
         (xman) = ((xman) >> __t) + (__t & (xman)); \
         (xexp) += __t; \
     } while (0)
 
-/* todo: separate for finite */
+#define _MAG1_ADJUST_ONE_TOO_SMALL(xexp, xman) \
+    do { \
+        ulong __t = !(xman >> (MAG1_BITS - 1)); \
+        (xman) = ((xman) << __t); \
+        (xexp) -= __t; \
+    } while (0)
+
 NRB_INLINE void
-_mag1_add(slong * rexp, ulong * rman, slong xexp, ulong xman, slong yexp, ulong yman)
+mag1_add(mag1_t res, const mag1_t x, const mag1_t y)
 {
-    if (xexp == NFLOAT_EXP_ZERO || yexp == NFLOAT_EXP_POS_INF)
+    slong exp, xexp, yexp;
+    ulong man, xman, yman;
+    slong shift;
+
+    xexp = x->exp;
+    xman = x->man;
+    yexp = y->exp;
+    yman = y->man;
+
+    if (MAG1_IS_SPECIAL(x) || MAG1_IS_SPECIAL(y))
     {
-        *rexp = yexp;
-        *rman = yman;
+        if (xexp == NFLOAT_EXP_ZERO || yexp == NFLOAT_EXP_POS_INF)
+            *res = *y;
+        else
+            *res = *x;
+        return;
     }
-    else if (yexp == NFLOAT_EXP_ZERO || xexp == NFLOAT_EXP_POS_INF)
+
+    FLINT_ASSERT(xexp >= NFLOAT_MIN_EXP && xexp <= NFLOAT_MAX_EXP);
+    FLINT_ASSERT(yexp >= NFLOAT_MIN_EXP && yexp <= NFLOAT_MAX_EXP);
+
+    shift = xexp - yexp;
+
+    if (shift < 0)
     {
-        *rexp = xexp;
-        *rman = xman;
+        FLINT_SWAP(slong, xexp, yexp);
+        FLINT_SWAP(ulong, xman, yman);
+    }
+
+    exp = xexp;
+
+    if (shift == 0)
+    {
+        man = xman + yman;
+        man = (man >> 1) + (man & 1);
+        exp++;
+    }
+    else if (shift < MAG1_BITS)
+    {
+        man = xman + (yman >> shift) + UWORD(1);
     }
     else
     {
-        slong shift;
-        slong exp;
-        ulong man;
-
-        FLINT_ASSERT(xexp >= NFLOAT_MIN_EXP && xexp <= NFLOAT_MAX_EXP);
-        FLINT_ASSERT(yexp >= NFLOAT_MIN_EXP && yexp <= NFLOAT_MAX_EXP);
-
-        shift = xexp - yexp;
-
-        if (shift < 0)
-        {
-            FLINT_SWAP(slong, xexp, yexp);
-            FLINT_SWAP(ulong, xman, yman);
-        }
-
-        exp = xexp;
-
-        if (shift == 0)
-        {
-            man = xman + yman;
-            _MAG1_ADJUST_ONE_TOO_LARGE(exp, man);
-        }
-        else if (shift < NRB_RAD_BITS)
-        {
-            man = xman + (yman >> shift) + UWORD(1);
-        }
-        else
-        {
-            man = xman + UWORD(1);
-        }
-
-        /* todo: combine the adjustments */
-        _MAG1_ADJUST_ONE_TOO_LARGE(exp, man);
-
-        if (exp > NFLOAT_MAX_EXP)
-        {
-            exp = NFLOAT_EXP_POS_INF;
-            man = 0;
-        }
-
-        *rexp = exp;
-        *rman = man;
+        man = xman + UWORD(1);
     }
+
+    _MAG1_ADJUST_ONE_TOO_LARGE(exp, man);
+
+    if (exp > NFLOAT_MAX_EXP)
+    {
+        exp = NFLOAT_EXP_POS_INF;
+        man = 0;
+    }
+
+    MAG1_EXP(res) = exp;
+    MAG1_MAN(res) = man;
 }
 
 NRB_INLINE void
-_mag1_add_2exp(slong * rexp, ulong * rman, slong xexp, ulong xman, slong yexp)
+mag1_add_2exp_si(mag1_t res, const mag1_t x, slong yexp)
 {
+    slong exp, xexp;
+    ulong man, xman;
+    slong shift;
+
+    xexp = x->exp;
+    xman = x->man;
+
+    if (yexp >= NFLOAT_MAX_EXP || xexp == NFLOAT_EXP_POS_INF)
+    {
+        MAG1_INF(res);
+        return;
+    }
+
+    yexp = FLINT_MAX(yexp, NFLOAT_MIN_EXP);
+
     if (xexp == NFLOAT_EXP_ZERO)
     {
-        /* XXX: overflow (cannot happen as currently called, but ...) */
-        *rexp = yexp + 1;
-        *rman = MAG1_ONE_HALF;
-    }
-    else if (xexp == NFLOAT_EXP_POS_INF)
-    {
-        *rexp = xexp;
-        *rman = xman;
+        exp = yexp + 1;
+        man = MAG1_ONE_HALF;
     }
     else
     {
-        slong shift;
-        slong exp;
-        ulong man;
-
         FLINT_ASSERT(xexp >= NFLOAT_MIN_EXP && xexp <= NFLOAT_MAX_EXP);
-        FLINT_ASSERT(yexp >= NFLOAT_MIN_EXP && yexp <= NFLOAT_MAX_EXP);
 
         shift = xexp - yexp;
 
@@ -271,10 +320,10 @@ _mag1_add_2exp(slong * rexp, ulong * rman, slong xexp, ulong xman, slong yexp)
         {
             exp = xexp;
 
-            if (shift >= NRB_RAD_BITS)
+            if (shift >= MAG1_BITS)
                 man = xman + UWORD(1);
             else
-                man = xman + (UWORD(1) << (NRB_RAD_BITS - shift));
+                man = xman + (UWORD(1) << (MAG1_BITS - shift));
         }
         else
         {
@@ -282,13 +331,12 @@ _mag1_add_2exp(slong * rexp, ulong * rman, slong xexp, ulong xman, slong yexp)
 
             exp = yexp + 1;
 
-            if (shift >= NRB_RAD_BITS)
+            if (shift >= MAG1_BITS)
                 man = MAG1_ONE_HALF + 1;
             else
                 man = MAG1_ONE_HALF + (xman >> (shift + 1)) + UWORD(1);
         }
 
-        /* todo: combine the adjustments */
         _MAG1_ADJUST_ONE_TOO_LARGE(exp, man);
 
         if (exp > NFLOAT_MAX_EXP)
@@ -296,12 +344,132 @@ _mag1_add_2exp(slong * rexp, ulong * rman, slong xexp, ulong xman, slong yexp)
             exp = NFLOAT_EXP_POS_INF;
             man = 0;
         }
+    }
 
-        *rexp = exp;
-        *rman = man;
+    MAG1_EXP(res) = exp;
+    MAG1_MAN(res) = man;
+}
+
+NRB_INLINE void
+mag1_unsafe_add_2exp_si(mag1_t res, const mag1_t x, slong yexp)
+{
+    slong exp, xexp;
+    ulong man, xman;
+    slong shift;
+
+    xexp = x->exp;
+    xman = x->man;
+
+    if (xexp == NFLOAT_EXP_ZERO)
+    {
+        exp = yexp + 1;
+        man = MAG1_ONE_HALF;
+    }
+    else
+    {
+        shift = xexp - yexp;
+
+        if (shift > 0)
+        {
+            exp = xexp;
+
+            if (shift >= MAG1_BITS)
+                man = xman + UWORD(1);
+            else
+                man = xman + (UWORD(1) << (MAG1_BITS - shift));
+        }
+        else
+        {
+            shift = -shift;
+
+            exp = yexp + 1;
+
+            if (shift >= MAG1_BITS)
+                man = MAG1_ONE_HALF + 1;
+            else
+                man = MAG1_ONE_HALF + (xman >> (shift + 1)) + UWORD(1);
+        }
+
+        _MAG1_ADJUST_ONE_TOO_LARGE(exp, man);
+    }
+
+    MAG1_EXP(res) = exp;
+    MAG1_MAN(res) = man;
+}
+
+/* assumes x and y both finite; does not check result for overflow or underflow */
+NRB_INLINE void
+mag1_unsafe_mul(mag1_t res, const mag1_t x, const mag1_t y)
+{
+    if (MAG1_MAN(x) == 0 || MAG1_MAN(y) == 0)
+    {
+        MAG1_ZERO(res);
+    }
+    else
+    {
+        MAG1_MAN(res) = MAG1_FIXMUL(MAG1_MAN(x), MAG1_MAN(y)) + UWORD(1);
+        MAG1_EXP(res) = MAG1_EXP(x) + MAG1_EXP(y);
+        _MAG1_ADJUST_ONE_TOO_SMALL(MAG1_EXP(res), MAG1_MAN(res));
     }
 }
 
+NRB_INLINE void
+mag1_unsafe_nonzero_mul(mag1_t res, const mag1_t x, const mag1_t y)
+{
+    MAG1_MAN(res) = MAG1_FIXMUL(MAG1_MAN(x), MAG1_MAN(y)) + UWORD(1);
+    MAG1_EXP(res) = MAG1_EXP(x) + MAG1_EXP(y);
+    _MAG1_ADJUST_ONE_TOO_SMALL(MAG1_EXP(res), MAG1_MAN(res));
+}
+
+NRB_INLINE void
+mag1_unsafe_mul_2exp_si(mag1_t res, const mag1_t x, slong yexp)
+{
+    MAG1_MAN(res) = MAG1_MAN(x);
+    MAG1_EXP(res) = MAG1_EXP(x) + (MAG1_MAN(x) == 0) ? 0 : yexp;
+}
+
+NRB_INLINE void
+mag1_unsafe_addmul(mag1_t res, const mag1_t x, const mag1_t y)
+{
+    if (MAG1_MAN(res) == 0)
+    {
+        mag1_unsafe_mul(res, x, y);
+    }
+    else if (MAG1_MAN(x) == 0 || MAG1_MAN(y) == 0)
+    {
+        return;
+    }
+    else
+    {
+        slong shift, exp;
+
+        /* x*y < 2^e */
+        exp = MAG1_EXP(x) + MAG1_EXP(y);
+        shift = MAG1_EXP(res) - exp;
+
+        if (shift >= 0)
+        {
+            if (shift >= MAG1_BITS)
+                MAG1_MAN(res)++;
+            else
+                MAG1_MAN(res) = MAG1_MAN(res) + (MAG1_FIXMUL(MAG1_MAN(x), MAG1_MAN(y)) >> shift) + 1;
+        }
+        else
+        {
+            shift = -shift;
+            MAG1_EXP(res) = exp;
+
+            if (shift >= MAG1_BITS)
+                MAG1_MAN(res) = MAG1_FIXMUL(MAG1_MAN(x), MAG1_MAN(y)) + 2;
+            else
+                MAG1_MAN(res) = MAG1_FIXMUL(MAG1_MAN(x), MAG1_MAN(y)) + (MAG1_MAN(res) >> shift) + 2;
+
+            _MAG1_ADJUST_ONE_TOO_SMALL(MAG1_EXP(res), MAG1_MAN(res));
+        }
+
+        _MAG1_ADJUST_ONE_TOO_LARGE(MAG1_EXP(res), MAG1_MAN(res));
+    }
+}
 
 #ifdef __cplusplus
 }
