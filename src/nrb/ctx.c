@@ -61,6 +61,8 @@ gr_method_tab_input _nrb_methods_input[] =
 
     {GR_METHOD_ABS,             (gr_funcptr) nrb_abs},
 
+    {GR_METHOD_SIN,             (gr_funcptr) nrb_sin},
+    {GR_METHOD_COS,             (gr_funcptr) nrb_cos},
 
     {0,                         (gr_funcptr) NULL},
 };
