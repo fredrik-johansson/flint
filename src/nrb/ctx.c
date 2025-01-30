@@ -59,6 +59,8 @@ gr_method_tab_input _nrb_methods_input[] =
     {GR_METHOD_SUB,             (gr_funcptr) nrb_sub},
     {GR_METHOD_MUL,             (gr_funcptr) nrb_mul},
 
+    {GR_METHOD_MUL_2EXP_SI,     (gr_funcptr) nrb_mul_2exp_si},
+
     {GR_METHOD_ABS,             (gr_funcptr) nrb_abs},
 
     {GR_METHOD_SIN,             (gr_funcptr) nrb_sin},

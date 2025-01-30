@@ -99,8 +99,6 @@ nrb_init(nrb_ptr res, gr_ctx_t ctx)
     NRB_ZERO_MID(res);
 }
 
-#define NRB_DEBUG 1
-
 int nrb_print_debug(nrb_srcptr x, gr_ctx_t ctx);
 
 NRB_INLINE int
@@ -115,9 +113,10 @@ _mag1_is_valid(const mag1_t x)
     return 0;
 }
 
+#if FLINT_WANT_ASSERT
 #define NRB_ASSERT_VALID(res, ctx) \
     do { \
-        if (NRB_DEBUG) \
+        if () \
         { \
             int mid_ok = (NRB_EXP(res) == NFLOAT_EXP_ZERO || \
                      (NFLOAT_MIN_EXP <= NRB_EXP(res) && NRB_EXP(res) <= NFLOAT_MAX_EXP && \
@@ -129,6 +128,9 @@ _mag1_is_valid(const mag1_t x)
             FLINT_ASSERT(rad_ok); \
         } \
     } while (0)
+#else
+#define NRB_ASSERT_VALID(res, ctx)
+#endif
 
 
 NRB_INLINE void
@@ -206,6 +208,7 @@ int nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx);
 int nrb_sub(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx);
 int nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx);
 
+int nrb_mul_2exp_si(nrb_ptr res, nrb_srcptr x, slong yexp, gr_ctx_t ctx);
 
 int nrb_sin(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx);
 int nrb_cos(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx);
