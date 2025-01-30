@@ -538,6 +538,8 @@ nrb_fix_rad_underflow_overflow(nrb_ptr res, gr_ctx_t ctx)
     return GR_SUCCESS;
 }
 
+/* am * br + ar * bm + ar * br = am * br + ar (bm + br) */
+
 int
 nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {
@@ -576,6 +578,53 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 
     return status;
 }
+
+/* assumes x is finite */
+void _mag1_mul_2exp_si(mag1_t res, const mag1_t x, slong yexp)
+{
+    if (MAG1_IS_ZERO(x))
+    {
+        *res = *x;
+    }
+    else
+    {
+        if (yexp >= NFLOAT_MAX_EXP)
+        {
+            MAG1_INF(res);
+        }
+        else
+        {
+            slong exp;
+
+            exp = MAG1_EXP(x) + FLINT_MAX(yexp, NFLOAT_MIN_EXP);
+
+            if (yexp < NFLOAT_MIN_EXP)
+            {
+                MAG1_EXP(res) = NFLOAT_MIN_EXP;
+                MAG1_MAN(res) = MAG1_ONE_HALF;
+            }
+            else
+            {
+                MAG1_EXP(res) = exp;
+                MAG1_MAN(res) = MAG_MAN(x);
+            }
+        }
+    }
+}
+
+/* todo */
+int nrb_mul_2exp_si(nrb_ptr res, nrb_srcptr x, slong yexp, gr_ctx_t ctx)
+{
+    if (NRB_IS_UNBOUNDED(x))
+        return nrb_set(res, x, ctx);
+
+    if (nfloat_mul_2exp_si(NRB_MID(res), NRB_MID(x), yexp, ctx) != GR_SUCCESS)
+        return GR_UNABLE;
+
+    _mag1_mul_2exp_si(NRB_RAD(res), NRB_RAD(x), yexp);
+    return GR_SUCCESS;
+}
+
 
 int nrb_sin(nrb_ptr res, nrb_srcptr x, gr_ctx_t ctx)
 {
