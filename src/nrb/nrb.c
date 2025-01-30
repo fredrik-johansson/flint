@@ -518,6 +518,15 @@ _nrb_unsafe_mid_get_mag1(mag1_t res, nrb_srcptr x, gr_ctx_t ctx)
     }
 }
 
+static void
+_nrb_unsafe_nonzero_mid_get_mag1(mag1_t res, nrb_srcptr x, gr_ctx_t ctx)
+{
+    MAG1_EXP(res) = NRB_EXP(x);
+    MAG1_MAN(res) = (NRB_D(x)[NFLOAT_CTX_NLIMBS(ctx) - 1] >> (FLINT_BITS - MAG1_BITS)) + UWORD(1);
+    _MAG1_ADJUST_ONE_TOO_LARGE_1(MAG1_EXP(res), MAG1_MAN(res));
+}
+
+
 static int
 nrb_fix_rad_underflow_overflow(nrb_ptr res, gr_ctx_t ctx)
 {
@@ -550,6 +559,54 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 
     if (NRB_IS_UNBOUNDED(x) || NRB_IS_UNBOUNDED(y))
         return nrb_zero_pm_inf(res, ctx);
+
+    if (!NFLOAT_IS_ZERO(NRB_MID(x)) && !NFLOAT_IS_ZERO(NRB_MID(y)) && NFLOAT_CTX_NLIMBS(ctx) == 1)
+    {
+        _nrb_unsafe_nonzero_mid_get_mag1(xm, x, ctx);
+        _nrb_unsafe_nonzero_mid_get_mag1(ym, y, ctx);
+
+        mag1_unsafe_mul(rad, NRB_RAD(x), NRB_RAD(y));
+        mag1_unsafe_addmul(rad, xm, NRB_RAD(y));
+        mag1_unsafe_addmul(rad, NRB_RAD(x), ym);
+
+        ulong hi, lo;
+        int inexact;
+        nfloat_srcptr xx = NRB_MID(x);
+        nfloat_srcptr yy = NRB_MID(y);
+        nfloat_srcptr rr = NRB_MID(res);
+
+        NFLOAT_SGNBIT(rr) = NFLOAT_SGNBIT(xx) ^ NFLOAT_SGNBIT(yy);
+
+        umul_ppmm(hi, lo, NFLOAT_D(xx)[0], NFLOAT_D(yy)[0]);
+
+        if (LIMB_MSB_IS_SET(hi))
+        {
+            NFLOAT_D(rr)[0] = hi;
+            NFLOAT_EXP(rr) = NFLOAT_EXP(xx) + NFLOAT_EXP(yy);
+        }
+        else
+        {
+            NFLOAT_D(rr)[0] = (hi << 1) | (lo >> (FLINT_BITS - 1));
+            NFLOAT_EXP(rr) = NFLOAT_EXP(xx) + NFLOAT_EXP(yy) - 1;
+            lo <<= 1;
+        }
+
+        if (NFLOAT_EXP(rr) > NFLOAT_MAX_EXP)
+            return nrb_zero_pm_inf(res, ctx);
+        else if (NFLOAT_EXP(rr) < NFLOAT_MIN_EXP)
+            mag1_unsafe_add_2exp_si(rad, rad, NFLOAT_MIN_EXP + 1);
+
+        inexact = (lo != 0);
+
+        if (inexact)
+            mag1_unsafe_add_2exp_si(rad, rad, NRB_EXP(res) - NFLOAT_CTX_PREC(ctx) + 1);
+
+        *NRB_RAD(res) = *rad;
+        int status = nrb_fix_rad_underflow_overflow(res, ctx);
+        NRB_ASSERT_VALID(res, ctx);
+
+        return status;
+    }
 
     _nrb_unsafe_mid_get_mag1(xm, x, ctx);
     _nrb_unsafe_mid_get_mag1(ym, y, ctx);
