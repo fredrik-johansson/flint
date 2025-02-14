@@ -56,7 +56,7 @@ nrb_head_struct;
 #if FLINT_BITS == 64
 #define NRB_HEADER_LIMBS 3
 #else
-#define NRB_HEADER_LIMBS 4
+#define NRB_HEADER_LIMBS 5
 #endif
 
 #define NRB_CTX(ctx) ((_nrb_ctx_struct *)(ctx))
@@ -68,7 +68,7 @@ nrb_head_struct;
 #define NRB_CTX_DATA_NLIMBS(ctx) (NRB_HEADER_LIMBS + NRB_CTX_NLIMBS(ctx))
 #else
 /* Must pad to an even number of limbs on 32-bit so that the double is 64-bit aligned. */
-#define NRB_CTX_DATA_NLIMBS(ctx) (NRB_HEADER_LIMBS + NRB_CTX_NLIMBS(ctx) + (NRB_CTX_NLIMBS(ctx) & 1))
+#define NRB_CTX_DATA_NLIMBS(ctx) (NRB_HEADER_LIMBS + NRB_CTX_NLIMBS(ctx) + !(NRB_CTX_NLIMBS(ctx) & 1))
 #endif
 
 typedef gr_ctx_struct nrb_ctx_struct;
