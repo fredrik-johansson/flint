@@ -72,6 +72,15 @@ double_uint64_u;
 #define D_EXPONENT_SHIFT 52
 
 /* Assumes that 2^i is in the normal exponent range. */
+FLINT_FORCE_INLINE double d_2exp_inrange(int i)
+{
+    FLINT_ASSERT(i >= D_MIN_NORMAL_EXPONENT && i <= D_MAX_NORMAL_EXPONENT);
+    double_uint64_u u;
+    u.i = ((uint64_t) (i + D_EXPONENT_BIAS)) << D_EXPONENT_SHIFT;
+    return u.f;
+}
+
+/* Assumes that 2^i is in the normal exponent range. */
 FLINT_FORCE_INLINE double d_mul_2exp_inrange(double x, int i)
 {
     FLINT_ASSERT(i >= D_MIN_NORMAL_EXPONENT && i <= D_MAX_NORMAL_EXPONENT);

@@ -33,8 +33,8 @@ gr_method_tab_input _nrb_methods_input[] =
     {GR_METHOD_CTX_IS_CANONICAL, (gr_funcptr) gr_generic_ctx_predicate_false},
 
     {GR_METHOD_CTX_HAS_REAL_PREC, (gr_funcptr) gr_generic_ctx_predicate_true},
-    {GR_METHOD_CTX_SET_REAL_PREC, (gr_funcptr) _nfloat_ctx_set_real_prec},
-    {GR_METHOD_CTX_GET_REAL_PREC, (gr_funcptr) _nfloat_ctx_get_real_prec},
+    {GR_METHOD_CTX_SET_REAL_PREC, (gr_funcptr) nrb_ctx_set_real_prec},
+    {GR_METHOD_CTX_GET_REAL_PREC, (gr_funcptr) nrb_ctx_get_real_prec},
 
     {GR_METHOD_INIT,            (gr_funcptr) nrb_init},
     {GR_METHOD_CLEAR,           (gr_funcptr) nrb_clear},
@@ -70,7 +70,7 @@ gr_method_tab_input _nrb_methods_input[] =
 };
 
 int
-nrb_ctx_init(gr_ctx_t ctx, slong prec)
+nrb_ctx_init(nrb_ctx_t ctx, slong prec, int flags)
 {
     slong nlimbs;
 
@@ -80,13 +80,11 @@ nrb_ctx_init(gr_ctx_t ctx, slong prec)
     nlimbs = (prec + FLINT_BITS - 1) / FLINT_BITS;
 
     ctx->which_ring = GR_CTX_RR_NRB;
-    ctx->sizeof_elem = sizeof(ulong) * (nlimbs + NRB_HEADER_LIMBS);
     ctx->size_limit = WORD_MAX;
-
     NFLOAT_CTX_NLIMBS(ctx) = nlimbs;
-    /* No NaNs or Infs; disallow underflow */
-    NFLOAT_CTX_FLAGS(ctx) = 0;
-    NFLOAT_CTX_RND(ctx) = 0;
+    ctx->sizeof_elem = sizeof(ulong) * NRB_CTX_DATA_NLIMBS(ctx);
+
+    NRB_CTX_FLAGS(ctx) = flags;
 
     ctx->methods = _nrb_methods;
 
@@ -100,11 +98,10 @@ nrb_ctx_init(gr_ctx_t ctx, slong prec)
 }
 
 int
-nrb_ctx_write(gr_stream_t out, gr_ctx_t ctx)
+nrb_ctx_write(gr_stream_t out, nrb_ctx_t ctx)
 {
     gr_stream_write(out, "Real numbers (nrb, prec = ");
-    gr_stream_write_si(out, NFLOAT_CTX_PREC(ctx));
+    gr_stream_write_si(out, NRB_CTX_PREC(ctx));
     gr_stream_write(out, ")");
     return GR_SUCCESS;
 }
-

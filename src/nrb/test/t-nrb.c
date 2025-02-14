@@ -25,10 +25,11 @@ TEST_FUNCTION_START(nrb, state)
 
     for (prec = NFLOAT_MIN_LIMBS * FLINT_BITS; prec <= NFLOAT_MAX_LIMBS * FLINT_BITS; prec += FLINT_BITS)
     {
-        nrb_ctx_init(ctx, prec);
-        gr_test_ring(ctx, 100 * flint_test_multiplier(), 0 * GR_TEST_VERBOSE);
+        nrb_ctx_init(ctx, prec, 0);
+        gr_test_ring(ctx, 100 * flint_test_multiplier(), GR_TEST_VERBOSE);
         gr_ctx_clear(ctx);
     }
+
 
     TEST_FUNCTION_END(state);
 }

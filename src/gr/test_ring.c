@@ -1009,7 +1009,7 @@ gr_test_binary_op_type_variants(gr_ctx_t R,
         flint_printf("alias: %d\n", alias);
         flint_printf("x = "); gr_println(x, R);
         flint_printf("y = "); gr_println(y, R);
-        flint_printf("y (op) y (1) = "); gr_println(xy1, R);
+        flint_printf("x (op) y (1) = "); gr_println(xy1, R);
         flint_printf("x (op) y (2) = "); gr_println(xy2, R);
         flint_printf("\n");
     }
