@@ -129,6 +129,7 @@ int nrb_ctx_get_real_prec(slong * res, nrb_ctx_t ctx)
 
 int nrb_write(gr_stream_t out, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_randtest(nrb_ptr res, flint_rand_t state, nrb_ctx_t ctx);
+int nrb_randtest_ebits(nrb_ptr res, flint_rand_t state, slong ebits, nrb_ctx_t ctx);
 
 truth_t nrb_is_zero(nrb_srcptr x, nrb_ctx_t ctx);
 truth_t nrb_is_one(nrb_srcptr x, nrb_ctx_t ctx);
@@ -209,6 +210,7 @@ int nrb_rad_add_mag(nrb_ptr res, const mag_t x, nrb_ctx_t ctx);
 */
 int nrb_get_arb(arb_t res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx);
+int nrb_get_interval_arf(arf_t a, arf_t b, nrb_srcptr x, nrb_ctx_t ctx, slong prec);
 
 int nrb_abs(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_neg(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);

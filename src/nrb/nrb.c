@@ -264,13 +264,20 @@ nrb_randtest(nrb_ptr res, flint_rand_t state, nrb_ctx_t ctx)
     arb_init(t);
     arb_randtest(t, state, NRB_CTX_PREC(ctx), n_randint(state, 2) ? 2 : 10);
     status = nrb_set_arb(res, t, ctx);
+    arb_clear(t);
 
-    if (status != GR_SUCCESS)
-    {
-        flint_printf("moo %{arb}\n", t);
-        flint_abort();
-    }
+    return status;
+}
 
+int
+nrb_randtest_ebits(nrb_ptr res, flint_rand_t state, slong ebits, nrb_ctx_t ctx)
+{
+    arb_t t;
+    int status;
+
+    arb_init(t);
+    arb_randtest(t, state, NRB_CTX_PREC(ctx), ebits);
+    status = nrb_set_arb(res, t, ctx);
     arb_clear(t);
 
     return status;
@@ -460,6 +467,45 @@ int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx)
 }
 
 int
+nrb_get_interval_arf(arf_t a, arf_t b, nrb_srcptr x, nrb_ctx_t ctx, slong prec)
+{
+    if (NRB_ERR(x) == D_INF)
+    {
+        arf_neg_inf(a);
+        arf_pos_inf(b);
+    }
+    else
+    {
+        arf_t mid, rad;
+        slong n = NRB_N(x);
+
+        arf_init(mid);
+        arf_init(rad);
+
+        if (n == 0)
+        {
+            arf_zero(mid);
+        }
+        else
+        {
+            arf_set_mpn(mid, NRB_D(x), n, NRB_SGNBIT(x));
+            arf_mul_2exp_si(mid, mid, NRB_EXP(x) - n * FLINT_BITS);
+        }
+
+        arf_set_d(rad, NRB_ERR(x));
+        arf_mul_2exp_si(rad, rad, NRB_EXP(x) - n * FLINT_BITS);
+
+        arf_sub(a, mid, rad, prec, ARF_RND_FLOOR);
+        arf_add(b, mid, rad, prec, ARF_RND_CEIL);
+
+        arf_clear(mid);
+        arf_clear(rad);
+    }
+
+    return GR_SUCCESS;
+}
+
+int
 nrb_get_arb(arb_t res, nrb_srcptr x, nrb_ctx_t ctx)
 {
     if (NRB_ERR(x) == D_INF)
@@ -546,8 +592,11 @@ nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx)
             rexp = MAG_EXP(arb_radref(x)) - xexp + n * FLINT_BITS;
             err = MAG_MAN(arb_radref(x));
 
-            rexp = FLINT_MAX(rexp, -64);
-            if (rexp > 448)
+            /* sanity checks to make sure we don't overflow the double
+               exponent range; the actual range will be fixed later
+               when we call _nrb_fix_range */
+            rexp = FLINT_MAX(rexp, -128);
+            if (rexp > 768)
             {
                 slong trim_limbs;
 
@@ -586,10 +635,6 @@ nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx)
             err += ((double) xp[xn - n - 1] + 1.0) * ULP_N1;
             err *= NRB_CORRECTION_A;
         }
-
-        /* fixme */
-        if (err != 0.0 && (err < NRB_MIN_ERR || err > NRB_MAX_ERR))
-            return GR_UNABLE;
 
         NRB_ERR(res) = err;
         NRB_N(res) = n;

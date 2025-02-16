@@ -28,35 +28,42 @@ _nrb_fix_range(nrb_ptr res, nrb_ctx_t ctx)
         int e;
         slong err_exp, trim_limbs, n, new_n;
         double err = NRB_ERR(res);
+        double err2;
 
         if (err == D_INF)
             return nrb_zero_pm_inf(res, ctx);
 
         n = NRB_N(res);
 
-        NRB_ERR(res) = frexp(err, &e);
+        err2 = frexp(err, &e);
         err_exp = e;
+
 
         if (n == 0)
         {
-            NRB_EXP(res) = err_exp;
+            NRB_ERR(res) = err2;
+            NRB_EXP(res) += err_exp;
         }
         else
         {
             trim_limbs = err_exp / FLINT_BITS - 1;
 
+            // flint_printf("trim_limbs %wd\n", trim_limbs);
+
             if (trim_limbs >= n)
             {
                 NRB_N(res) = 0;
+                NRB_EXP(res) = NRB_EXP(res) - n * FLINT_BITS + err_exp;
+                /* todo: check/tighten */
+                NRB_ERR(res) = (err2 + ULP_N1) * NRB_CORRECTION_A;
             }
             else
             {
                 NRB_N(res) = new_n = n - trim_limbs;
                 flint_mpn_copyi(NRB_D(res), NRB_D(res) + trim_limbs, new_n);
+                /* todo: check/tighten */
+                NRB_ERR(res) = d_mul_2exp_inrange2(err * NRB_CORRECTION_A, -trim_limbs * FLINT_BITS);
             }
-
-            NRB_ERR(res) = d_mul_2exp_inrange2(err * NRB_CORRECTION_A, -trim_limbs * FLINT_BITS);
-            NRB_EXP(res) += trim_limbs * FLINT_BITS;
         }
     }
 
@@ -152,7 +159,7 @@ _mulhigh_check_exact_product(nn_srcptr x, nn_srcptr y, slong n)
 }
 
 static mp_limb_pair_t
-_flint_mpn_mulhigh_normalised2(nn_ptr rp, nn_srcptr xp, nn_srcptr yp, slong n)
+_flint_mpn_mulhigh_normalised3(nn_ptr rp, nn_srcptr xp, slong xn, nn_srcptr yp, slong yn, slong n)
 {
     mp_limb_pair_t ret;
 
@@ -164,16 +171,16 @@ _flint_mpn_mulhigh_normalised2(nn_ptr rp, nn_srcptr xp, nn_srcptr yp, slong n)
         TMP_INIT;
         TMP_START;
         t = TMP_ALLOC(sizeof(ulong) * n);
-        ret = _flint_mpn_mulhigh_normalised2(t, xp, yp, n);
+        ret = _flint_mpn_mulhigh_normalised3(t, xp, xn, yp, yn, n);
         flint_mpn_copyi(rp, t, n);
         TMP_END;
         return ret;
     }
 
     if (xp == yp)
-        ret.m1 = flint_mpn_sqrhigh(rp, xp, n);
+        ret.m1 = flint_mpn_sqrhigh(rp, xp + xn - n, n);
     else
-        ret.m1 = flint_mpn_mulhigh_n(rp, xp, yp, n);
+        ret.m1 = flint_mpn_mulhigh_n(rp, xp + xn - n, yp + yn - n, n);
 
     if (LIMB_MSB_IS_SET(rp[n - 1]))
     {
@@ -199,9 +206,20 @@ mp_limb_pair_t flint_mpn_mulhigh_normalised2(nn_ptr rp, nn_srcptr xp, nn_srcptr 
     if (FLINT_HAVE_MULHIGH_NORMALISED_FUNC(n))
         return flint_mpn_mulhigh_normalised_func_tab[n](rp, xp, yp);
     else
-        return _flint_mpn_mulhigh_normalised2(rp, xp, yp, n);
+        return _flint_mpn_mulhigh_normalised3(rp, xp, n, yp, n, n);
 }
 
+/* handles aliasing, allowing xp and yp to be shifted */
+FLINT_FORCE_INLINE
+mp_limb_pair_t flint_mpn_mulhigh_normalised3(nn_ptr rp, nn_srcptr xp, slong xn, nn_srcptr yp, slong yn, slong n)
+{
+    FLINT_ASSERT(n >= 1);
+
+    if (FLINT_HAVE_MULHIGH_NORMALISED_FUNC(n))
+        return flint_mpn_mulhigh_normalised_func_tab[n](rp, xp + xn - n, yp + yn - n);
+    else
+        return _flint_mpn_mulhigh_normalised3(rp, xp, xn, yp, yn, n);
+}
 
 
 #if FLINT_BITS == 64
@@ -222,14 +240,23 @@ mp_limb_pair_t flint_mpn_mulhigh_normalised2(nn_ptr rp, nn_srcptr xp, nn_srcptr 
 int
 _nrb_mul_special(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {
-    double xerr, yerr;
-    slong xn, yn;
+    mp_limb_pair_t mul_res;
+    double xerr, yerr, err;
+    slong n, xn, yn, correction;
+    slong xexp, yexp;
+    nn_srcptr xp, yp;
 
     xn = NRB_N(x);
     yn = NRB_N(y);
 
     xerr = NRB_ERR(x);
     yerr = NRB_ERR(y);
+
+    xexp = NRB_EXP(x);
+    yexp = NRB_EXP(y);
+
+    xp = NRB_D(x);
+    yp = NRB_D(y);
 
     if (FLINT_UNLIKELY(xn == 0 || yn == 0))
     {
@@ -242,10 +269,66 @@ _nrb_mul_special(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
         /* (+/- inf) * nonzero -> (+/- inf) */
         if (xerr == D_INF || yerr == D_INF)
             return nrb_zero_pm_inf(res, ctx);
+
+        /* (x +/- xerr) * (x +/- yerr) */
+        if (yn != 0)
+            yerr = yp[yn - 1] * ULP_N1 + d_mul_2exp(yerr, -yn * FLINT_BITS);
+        if (xn != 0)
+            xerr = xp[xn - 1] * ULP_N1 + d_mul_2exp(xerr, -xn * FLINT_BITS);
+
+        NRB_ERR(res) = (xerr * yerr) * NRB_CORRECTION_A;
+        NRB_EXP(res) = xexp + yexp;
+        NRB_N(res) = 0;
+    }
+    else
+    {
+        n = FLINT_MIN(xn, yn);
+
+        double xm, ym;
+        double erra, errb, errc;
+        slong expa, expb, expc, rexp;
+
+        xm = (double) xp[xn - 1];
+        ym = (double) yp[yn - 1];
+
+        /* truncation errors */
+        if (xn < n)
+            xerr += (xp[xn - n - 1] + 1.0) * ULP_N1;
+        if (yn < n)
+            yerr += (yp[xn - n - 1] + 1.0) * ULP_N1;
+
+        erra = xm * yerr;
+        expa = xexp + yexp - FLINT_BITS - yn * FLINT_BITS;
+        errb = ym * xerr;
+        expb = xexp + yexp - FLINT_BITS - xn * FLINT_BITS;
+        errc = xerr * yerr;
+        expc = xexp + yexp - xn * FLINT_BITS - yn * FLINT_BITS;
+
+        rexp = xexp + yexp - n * FLINT_BITS;
+
+        /* todo: clamp shifts to avoid spurious subnormals? */
+        err = 0.0;
+        err += d_mul_2exp(erra, -(rexp - expa));
+        err += d_mul_2exp(errb, -(rexp - expb));
+        err += d_mul_2exp(errc, -(rexp - expc));
+
+        mul_res = flint_mpn_mulhigh_normalised3(NRB_D(res), xp, xn, yp, yn, n);
+        correction = mul_res.m2;
+        err *= (1.0 + correction);
+
+        if (mul_res.m1 != 0 || !_mulhigh_check_exact_product(xp + xn - n, yp + yn - n, n))
+        {
+            err += (mul_res.m1 + 2.0 * n) * ULP_N1;
+        }
+
+        err *= NRB_CORRECTION_A;
+        NRB_SGNBIT(res) = NRB_SGNBIT(x) ^ NRB_SGNBIT(y);
+        NRB_N(res) = n;
+        NRB_EXP(res) = xexp + yexp - correction;
+        NRB_ERR(res) = err;
     }
 
-    /* todo */
-    return GR_UNABLE;
+    NRB_RETURN_FIX_RANGE(res, ctx);
 }
 
 int
@@ -255,23 +338,17 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
     double xerr, yerr, err;
     slong xexp, yexp;
     slong n, correction;
-    int xsgn, nx, ny, ysgn;
+    int nx, ny;
     nn_srcptr xp, yp;
-
-//    flint_printf("BEGIN MUL\n");
-//    nrb_print_debug(x, ctx);
-//    nrb_print_debug(y, ctx);
 
     n = NRB_CTX_NLIMBS(ctx);
     nx = NRB_N(x);
     ny = NRB_N(y);
 
+    // flint_printf("DO MUL %wd %wd %wd\n", n, nx, ny);
+
     if (FLINT_UNLIKELY(nx != n || ny != n))
         return _nrb_mul_special(res, x, y, ctx);
-
-//    flint_printf("BEGIN MUL GENERIC\n");
-//    nrb_print_debug(x, ctx);
-//    nrb_print_debug(y, ctx);
 
     xp = NRB_D(x);
     yp = NRB_D(y);
@@ -304,12 +381,6 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
             err = (x0 * yerr + y0 * xerr + xerr * yerr) * (2.0 * ULP_N1);
             err += (r0 << 1) * ULP_N1;
         }
-
-//        flint_printf("x = %g; xerr = %g;  y = %g; yerr = %g;  z = %g; zerr = %g\n",
-//            ldexp(x0, xexp - 64), ldexp(xerr, xexp - 64),
-//            ldexp(y0, yexp - 64), ldexp(yerr, yexp - 64),
-//            ldexp(NRB_D(res)[0], xexp + yexp - correction - 64),
-//            ldexp(err, xexp + yexp - correction - 64));
     }
     else if (n == 2)
     {
@@ -363,9 +434,6 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
     NRB_N(res) = n;
     NRB_EXP(res) = xexp + yexp - correction;
     NRB_ERR(res) = err;
-
-//    flint_printf("END MUL\n");
-//    nrb_print_debug(res, ctx);
 
     NRB_RETURN_FIX_RANGE(res, ctx);
 }

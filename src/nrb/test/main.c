@@ -11,12 +11,16 @@
 
 /* Include functions *********************************************************/
 
+#include "t-mul.c"
+#include "t-get_set_arb.c"
 #include "t-nrb.c"
 
 /* Array of test functions ***************************************************/
 
 test_struct tests[] =
 {
+    TEST_FUNCTION(nrb_get_set_arb),
+    TEST_FUNCTION(nrb_mul),
     TEST_FUNCTION(nrb),
 };
 
