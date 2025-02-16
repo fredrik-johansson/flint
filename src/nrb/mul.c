@@ -221,22 +221,6 @@ mp_limb_pair_t flint_mpn_mulhigh_normalised3(nn_ptr rp, nn_srcptr xp, slong xn, 
         return _flint_mpn_mulhigh_normalised3(rp, xp, xn, yp, yn, n);
 }
 
-
-#if FLINT_BITS == 64
-#define ULP_N1 0x1.0p-64
-#define ULP_N2 0x1.0p-128
-#define ULP_N3 0x1.0p-192
-#define ULP_N4 0x1.0p-256
-#else
-#define ULP_N1 0x1.0p-32
-#define ULP_N2 0x1.0p-64
-#define ULP_N3 0x1.0p-96
-#define ULP_N4 0x1.0p-128
-#endif
-
-#define NRB_CORRECTION_A  (1.0 + 0x1.0p-50)
-#define NRB_CORRECTION_B  0x1.0000000000000p-1016
-
 int
 _nrb_mul_special(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 {

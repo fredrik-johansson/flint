@@ -235,7 +235,19 @@ int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 #define ULP_N4 0x1.0p-128
 #endif
 
+/* Correction factor to ensure that error bound calculations in
+   e.g. add and mul round up. On 64-bit we mostly need to compensate
+   for possible downward rounding in the 53-bit double arithmetic.
+   On 32-bit we also need to account for the fact that approximating
+   |x| by its leading limb gives a lower bound with only ~32 bit
+   accuracy. (Todo: we could take two limbs on 32-bit, and thereby
+   improve accuracy.) */
+#if FLINT_BITS == 64
 #define NRB_CORRECTION_A  (1.0 + 0x1.0p-50)
+#else
+#define NRB_CORRECTION_A  (1.0 + 0x1.0p-28)
+#endif
+
 #define NRB_CORRECTION_B  0x1.0000000000000p-1016
 
 #ifdef __cplusplus
