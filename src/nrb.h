@@ -36,6 +36,42 @@ _nrb_ctx_struct;
 #define NRB_MIN_EXP NFLOAT_MIN_EXP
 #define NRB_MAX_EXP NFLOAT_MAX_EXP
 
+/* An error (measured in ulps) must either be 0.0, +inf, or a finite
+   number in the following range. If the error becomes too large, we
+   must trim the number of limbs. If the error becomes too small, we
+   can increase the number of limbs (up to the maximum limit)
+   or perturb the error.
+
+   The range is chosen to allow perform a wide range of
+   manipulations without risking either underflow or overflow.
+
+   The max error is currently equivalent to several limbs. Setting
+   this to a smaller value would result in more aggressive trimming.
+   However, at lower precision, trimming is not actually desirable
+   since this can create more overhead than just powering through
+   the arithmetic.
+
+   The main reason why we want to avoid underflow is not actually
+   correctness (though that does require some attention); rather,
+   it is very important to avoid creating denormal numbers since
+   this destroys performance on many CPUs.
+*/
+
+#define NRB_MAX_ERR 0x1.0000000000000p+448
+#define NRB_MIN_ERR 0x1.0000000000000p-128
+
+#define NRB_MAX_ERR_EXP 449
+#define NRB_MIN_ERR_EXP -127
+
+#define NRB_MIN_ERR2 0x1.0000000000000p-96
+#define NRB_MIN_ERR2_EXP -95
+
+
+/* We can divide a normalized error by 2^NRB_MAX_ERROR_RIGHT_SHIFT
+   without risking denormals. */
+#define NRB_MAX_ERROR_RIGHT_SHIFT 768
+
+
 typedef struct
 {
     /* Scaled to ulp: absolute error is err * 2^(exp - n*FLINT_BITS) */
@@ -145,10 +181,6 @@ NRB_INLINE void nrb_init(nrb_ptr res, nrb_ctx_t ctx)
 
 int nrb_print_debug(nrb_srcptr x, nrb_ctx_t ctx);
 
-
-#define NRB_MIN_ERR 0x1.0000000000000p-448
-#define NRB_MAX_ERR 0x1.0000000000000p+448
-
 #define NRB_DEBUG 1
 
 #if NRB_DEBUG
@@ -248,7 +280,7 @@ int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 #define NRB_CORRECTION_A  (1.0 + 0x1.0p-28)
 #endif
 
-#define NRB_CORRECTION_B  0x1.0000000000000p-1016
+#define NRB_CORRECTION_B  0x1.0p-64
 
 #ifdef __cplusplus
 }

@@ -71,6 +71,25 @@ double_uint64_u;
 #define D_EXPONENT_BIAS 1023
 #define D_EXPONENT_SHIFT 52
 
+FLINT_FORCE_INLINE int d_pos_normal_get_exp(double x)
+{
+    FLINT_ASSERT(x > 0.0 && fpclassify(x) == FP_NORMAL);
+    double_uint64_u u;
+    u.f = x;
+    return ((int) (u.i >> D_EXPONENT_SHIFT)) - (D_EXPONENT_BIAS - 1);
+}
+
+FLINT_FORCE_INLINE double d_pos_normal_frexp(double x, int * e)
+{
+    FLINT_ASSERT(x > 0.0 && fpclassify(x) == FP_NORMAL);
+    double_uint64_u u;
+    u.f = x;
+    *e = ((int) (u.i >> D_EXPONENT_SHIFT)) - (D_EXPONENT_BIAS - 1);
+    u.i = u.i & ((((uint64_t) 1) << D_EXPONENT_SHIFT) - 1);
+    u.i |= (((uint64_t) (D_EXPONENT_BIAS - 1)) << D_EXPONENT_SHIFT);
+    return u.f;
+}
+
 /* Assumes that 2^i is in the normal exponent range. */
 FLINT_FORCE_INLINE double d_2exp_inrange(int i)
 {

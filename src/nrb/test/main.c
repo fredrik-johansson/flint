@@ -11,6 +11,7 @@
 
 /* Include functions *********************************************************/
 
+#include "t-add.c"
 #include "t-mul.c"
 #include "t-get_set_arb.c"
 #include "t-nrb.c"
@@ -19,6 +20,7 @@
 
 test_struct tests[] =
 {
+    TEST_FUNCTION(nrb_add),
     TEST_FUNCTION(nrb_get_set_arb),
     TEST_FUNCTION(nrb_mul),
     TEST_FUNCTION(nrb),

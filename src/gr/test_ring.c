@@ -1149,6 +1149,7 @@ gr_test_binary_op_left_distributive(gr_ctx_t R,
         flint_printf("\n");
         flint_printf("x = \n"); gr_println(x, R);
         flint_printf("y = \n"); gr_println(y, R);
+        flint_printf("z = \n"); gr_println(z, R);
         flint_printf("y (op2) z = \n"); gr_println(yz, R);
         flint_printf("x (op) (y (op2) z) = \n"); gr_println(x_yz, R);
         flint_printf("x (op) y = \n"); gr_println(xy, R);
@@ -1202,10 +1203,11 @@ gr_test_binary_op_right_distributive(gr_ctx_t R,
         flint_printf("\n");
         flint_printf("x = \n"); gr_println(x, R);
         flint_printf("y = \n"); gr_println(y, R);
+        flint_printf("z = \n"); gr_println(z, R);
         flint_printf("y (op2) z = \n"); gr_println(yz, R);
-        flint_printf("(y (op2) z) op x = \n"); gr_println(yz_x, R);
-        flint_printf("y (op) x = \n"); gr_println(yz, R);
+        flint_printf("y (op) x = \n"); gr_println(yx, R);
         flint_printf("z (op) x = \n"); gr_println(zx, R);
+        flint_printf("(y (op2) z) op x = \n"); gr_println(yz_x, R);
         flint_printf("(y op x) (op2) (z op x) = \n"); gr_println(yx_zx, R);
         flint_printf("\n");
     }
