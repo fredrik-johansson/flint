@@ -234,15 +234,17 @@ int nrb_set(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 void nrb_set_shallow(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 
 /*
-int nrb_mid_get_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx);
-int nrb_rad_get_mag(mag_t res, nrb_srcptr x, nrb_ctx_t ctx);
-int nrb_rad_get_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_get_rad_mag(mag_t res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_set_arf(nrb_ptr res, const arf_t x, nrb_ctx_t ctx);
-int nrb_rad_add_mag(nrb_ptr res, const mag_t x, nrb_ctx_t ctx);
 */
 int nrb_get_arb(arb_t res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx);
+
 int nrb_get_interval_arf(arf_t a, arf_t b, nrb_srcptr x, nrb_ctx_t ctx, slong prec);
+int nrb_get_mid_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_get_rad_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx);
+
+int nrb_inplace_add_error_d_2exp_si(nrb_ptr res, double err, slong err_exp, nrb_ctx_t ctx);
 
 int nrb_abs(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_neg(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);

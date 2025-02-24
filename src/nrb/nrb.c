@@ -285,17 +285,41 @@ nrb_randtest_ebits(nrb_ptr res, flint_rand_t state, slong ebits, nrb_ctx_t ctx)
 
 truth_t nrb_is_zero(nrb_srcptr x, nrb_ctx_t ctx)
 {
-    gr_ctx_t arb_ctx;
-    arb_t t;
-    truth_t ans;
+    double err;
+    int e;
+    slong n = NRB_N(x);
+    double d;
 
-    gr_ctx_init_real_arb(arb_ctx, NRB_CTX_PREC(ctx));
-    arb_init(t);
-    nrb_get_arb(t, x, ctx);
-    ans = gr_is_zero(t, arb_ctx);
-    arb_clear(t);
-    gr_ctx_clear(arb_ctx);
-    return ans;
+    err = NRB_ERR(x);
+
+    if (err == 0.0)
+        return (n == 0) ? T_TRUE : T_FALSE;
+
+    if (err == D_INF || n == 0)
+        return T_UNKNOWN;
+
+    if (err < d_2exp_inrange(FLINT_BITS - 1))
+        return T_FALSE;
+
+    err = d_pos_normal_frexp(err, &e);
+
+    if (e < FLINT_BITS * n)
+        return T_FALSE;
+
+    if (e == FLINT_BITS * n)
+    {
+        d = NRB_D(x)[n - 1] * ULP_N1;
+
+#if FLINT_BITS == 32
+            if (n >= 2)
+                d += NRB_D(x)[n - 2] * ULP_N2;
+#endif
+
+        if (err < d * (1.0 - 0x1.0p-50))
+            return T_FALSE;
+    }
+
+    return T_UNKNOWN;
 }
 
 truth_t nrb_is_one(nrb_srcptr x, nrb_ctx_t ctx)
@@ -540,6 +564,49 @@ nrb_get_arb(arb_t res, nrb_srcptr x, nrb_ctx_t ctx)
     return GR_SUCCESS;
 }
 
+int nrb_get_mid_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx)
+{
+    if (NRB_ERR(x) == D_INF)
+    {
+        arf_zero(res);
+    }
+    else
+    {
+        slong n = NRB_N(x);
+
+        if (n == 0)
+        {
+            arf_zero(res);
+        }
+        else
+        {
+            arf_set_mpn(res, NRB_D(x), n, NRB_SGNBIT(x));
+            arf_mul_2exp_si(res, res, NRB_EXP(x) - n * FLINT_BITS);
+        }
+    }
+
+    return GR_SUCCESS;
+}
+
+int nrb_get_rad_arf(arf_t res, nrb_srcptr x, nrb_ctx_t ctx)
+{
+    if (NRB_ERR(x) == D_INF)
+    {
+        arf_pos_inf(res);
+    }
+    else if (NRB_ERR(x) == 0.0)
+    {
+        arf_zero(res);
+    }
+    else
+    {
+        arf_set_d(res, NRB_ERR(x));
+        arf_mul_2exp_si(res, res, NRB_EXP(x) - NRB_N(x) * FLINT_BITS);
+    }
+
+    return GR_SUCCESS;
+}
+
 int
 nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx)
 {
@@ -640,6 +707,92 @@ nrb_set_arb(nrb_ptr res, const arb_t x, nrb_ctx_t ctx)
         NRB_N(res) = n;
         NRB_SGNBIT(res) = ARF_SGNBIT(arb_midref(x));
         NRB_EXP(res) = xexp;
+    }
+
+    return _nrb_fix_range(res, ctx);
+}
+
+int
+nrb_inplace_add_error_d_2exp_si(nrb_ptr res, double err, slong err_exp, nrb_ctx_t ctx)
+{
+    slong xexp, rexp, n;
+    double xerr;
+
+    FLINT_ASSERT(err >= 0.0);
+
+    if (err == 0.0 || NRB_ERR(res) == D_INF)
+        return GR_SUCCESS;
+
+    if (err == D_INF || err_exp > NRB_MAX_EXP)
+        return nrb_zero_pm_inf(res, ctx);
+
+    err_exp = FLINT_MAX(err_exp, NRB_MIN_EXP);
+
+    if (err < NRB_MIN_ERR)
+    {
+        int e;
+        err = frexp(err, &e);
+        err_exp += e;
+    }
+    else
+    {
+        /* todo: safely avoid this in common cases */
+        int e;
+        err = d_pos_normal_frexp(err, &e);
+        err_exp += e;
+    }
+
+    n = NRB_N(res);
+    xerr = NRB_ERR(res);
+    xexp = NRB_EXP(res);
+
+    if (n == 0 && xerr == 0.0)
+    {
+        NRB_ERR(res) = err;
+        NRB_EXP(res) = err_exp;
+        return GR_SUCCESS;
+    }
+
+    /* scale err to n-limb ulp of x */
+
+    rexp = err_exp - xexp + n * FLINT_BITS;
+
+    /* sanity checks to make sure we don't overflow the double
+        exponent range; the actual range will be fixed later
+        when we call _nrb_fix_range */
+    rexp = FLINT_MAX(rexp, -128);
+    if (rexp > 768)
+    {
+        slong trim_limbs;
+
+        trim_limbs = rexp / FLINT_BITS - 1;
+
+        if (trim_limbs >= n)
+        {
+            FLINT_ASSERT(xerr < d_2exp_inrange(768 - 32));
+
+            NRB_EXP(res) = err_exp;
+            NRB_N(res) = 0;
+            NRB_SGNBIT(res) = 0;
+            NRB_ERR(res) = err * NRB_CORRECTION_A;
+            return _nrb_fix_range(res, ctx);
+        }
+        else
+        {
+            n -= trim_limbs;
+            rexp -= trim_limbs * FLINT_BITS;
+            err = d_mul_2exp(err, rexp);
+            /* todo: avoid denormal here */
+            xerr = d_mul_2exp(xerr, -trim_limbs * FLINT_BITS);
+            NRB_ERR(res) = (xerr + err) * NRB_CORRECTION_A;
+            flint_mpn_copyi(NRB_D(res), NRB_D(res) + trim_limbs, n);
+            NRB_N(res) = n;
+        }
+    }
+    else
+    {
+        err = d_mul_2exp(err, rexp);
+        NRB_ERR(res) = (xerr + err) * NRB_CORRECTION_A;
     }
 
     return _nrb_fix_range(res, ctx);

@@ -320,11 +320,18 @@ _nrb_sub_n(nrb_ptr res, nn_srcptr xd, slong xexp, int xsgnbit, double xerr, nn_s
                 goto end;
             }
 
-            /* todo: also in other cases? */
             if (err == 0.0)
             {
                 flint_mpn_copyd(NRB_D(res) + nlimbs - n, NRB_D(res), n);
                 flint_mpn_zero(NRB_D(res), nlimbs - n);
+            }
+            /* preserve full precision if trimming doesn't save too many
+               limbs. todo: tuning */
+            else if (nlimbs - n <= 320 / FLINT_BITS)
+            {
+                flint_mpn_copyd(NRB_D(res) + nlimbs - n, NRB_D(res), n);
+                flint_mpn_zero(NRB_D(res), nlimbs - n);
+                err = d_mul_2exp_inrange(err, (nlimbs - n) * FLINT_BITS);
             }
             else
             {
@@ -444,13 +451,61 @@ end:
     NRB_RETURN_FIX_RANGE(res, ctx);
 }
 
-int nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
+int
+_nrb_add_general(nrb_ptr res, nn_srcptr xd, slong xexp, int xsgnbit, double xerr, slong xn,
+                              nn_srcptr yd, slong yexp, int ysgnbit, double yerr, slong yn, slong n, nrb_ctx_t ctx)
 {
+    ulong t[NFLOAT_MAX_LIMBS];
+    ulong u[NFLOAT_MAX_LIMBS];
     int status;
 
+    FLINT_ASSERT(xexp >= yexp);
+
+    if (xn == 0)
+    {
+        flint_mpn_copyi(NRB_D(res), yd, yn);
+        NRB_N(res) = yn;
+        NRB_EXP(res) = yexp;
+        NRB_SGNBIT(res) = ysgnbit;
+        NRB_ERR(res) = 0.0;
+        status = GR_SUCCESS;
+    }
+    else if (yn == 0)
+    {
+        flint_mpn_copyi(NRB_D(res), xd, xn);
+        NRB_N(res) = xn;
+        NRB_EXP(res) = xexp;
+        NRB_SGNBIT(res) = xsgnbit;
+        NRB_ERR(res) = 0.0;
+        status = GR_SUCCESS;
+    }
+    else
+    {
+        flint_mpn_copyi(t + n - xn, xd, xn);
+        flint_mpn_zero(t, n - xn);
+
+        flint_mpn_copyi(u + n - yn, yd, yn);
+        flint_mpn_zero(u, n - yn);
+
+        if (xsgnbit == ysgnbit)
+            status = _nrb_add_n(res, t, xexp, xsgnbit, 0.0, u, xexp - yexp, 0.0, n, ctx);
+        else
+            status = _nrb_sub_n(res, t, xexp, xsgnbit, 0.0, u, xexp - yexp, 0.0, n, ctx);
+    }
+
+    if (xerr != 0.0)
+        status |= nrb_inplace_add_error_d_2exp_si(res, xerr, xexp - xn * FLINT_BITS, ctx);
+    if (yerr != 0.0)
+        status |= nrb_inplace_add_error_d_2exp_si(res, yerr, yexp - yn * FLINT_BITS, ctx);
+
+    return status;
+}
+
+int nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
+{
     double xm, ym, xerr, yerr, err;
     slong xexp, yexp;
-    slong n, xn, yn, correction;
+    slong n, xn, yn;
     int xsgnbit, ysgnbit;
     nn_srcptr xp, yp;
 
@@ -467,9 +522,6 @@ int nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
     xn = NRB_N(x);
     yn = NRB_N(y);
 
-    if (FLINT_UNLIKELY(xn != n || yn != n))
-        goto fallback;
-
     xerr = NRB_ERR(x);
     yerr = NRB_ERR(y);
 
@@ -479,33 +531,16 @@ int nrb_add(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
     xsgnbit = NRB_SGNBIT(x);
     ysgnbit = NRB_SGNBIT(y);
 
+    if (FLINT_UNLIKELY(xn != n || yn != n))
+    {
+        return _nrb_add_general(res, xp, xexp, xsgnbit, xerr, xn,
+                                    yp, yexp, ysgnbit, yerr, yn, FLINT_MAX(xn, yn), ctx);
+    }
+
     if (xsgnbit == ysgnbit)
         return _nrb_add_n(res, xp, xexp, xsgnbit, xerr, yp, xexp - yexp, yerr, n, ctx);
     else
         return _nrb_sub_n(res, xp, xexp, xsgnbit, xerr, yp, xexp - yexp, yerr, n, ctx);
-
-fallback:
-
-    status = GR_SUCCESS;
-
-    {
-        arb_t t, u, v;
-
-        arb_init(t);
-        arb_init(u);
-        arb_init(v);
-
-        status |= nrb_get_arb(t, x, ctx);
-        status |= nrb_get_arb(u, y, ctx);
-        arb_add(v, t, u, NRB_CTX_PREC(ctx));
-        status |= nrb_set_arb(res, v, ctx);
-
-        arb_clear(t);
-        arb_clear(u);
-        arb_clear(v);
-    }
-
-    return status;
 }
 
 int nrb_sub(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
