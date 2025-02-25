@@ -468,27 +468,36 @@ nrb_abs(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx)
     return GR_SUCCESS;
 }
 
-int nrb_sin(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx)
-{
-    arb_t t;
-    arb_init(t);
-    nrb_get_arb(t, x, ctx);
-    arb_sin(t, t, NRB_CTX_PREC(ctx));
-    int status = nrb_set_arb(res, t, ctx);
-    arb_clear(t);
+#define WRAP_ARB_FUNC_1(func) \
+    arb_t t; \
+    arb_init(t); \
+    nrb_get_arb(t, x, ctx); \
+    func(t, t, NRB_CTX_PREC(ctx)); \
+    int status = nrb_set_arb(res, t, ctx); \
+    arb_clear(t); \
     return status;
-}
 
-int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx)
-{
-    arb_t t;
-    arb_init(t);
-    nrb_get_arb(t, x, ctx);
-    arb_cos(t, t, NRB_CTX_PREC(ctx));
-    int status = nrb_set_arb(res, t, ctx);
-    arb_clear(t);
+#define WRAP_ARB_FUNC_2(func) \
+    arb_t t, u; \
+    arb_init(t); \
+    arb_init(u); \
+    nrb_get_arb(t, x, ctx); \
+    nrb_get_arb(u, y, ctx); \
+    func(t, t, u, NRB_CTX_PREC(ctx)); \
+    int status = nrb_set_arb(res, t, ctx); \
+    arb_clear(t); \
+    arb_clear(u); \
     return status;
-}
+
+int nrb_inv(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_inv) }
+int nrb_div(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx) { WRAP_ARB_FUNC_2(arb_div) }
+int nrb_sqrt(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_sqrt) }
+int nrb_rsqrt(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_rsqrt) }
+int nrb_pow(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx) { WRAP_ARB_FUNC_2(arb_pow) }
+int nrb_exp(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_exp) }
+int nrb_log(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_log) }
+int nrb_sin(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_sin) }
+int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx) { WRAP_ARB_FUNC_1(arb_cos) }
 
 int
 nrb_get_interval_arf(arf_t a, arf_t b, nrb_srcptr x, nrb_ctx_t ctx, slong prec)

@@ -254,6 +254,13 @@ int nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx);
 
 int nrb_mul_2exp_si(nrb_ptr res, nrb_srcptr x, slong yexp, nrb_ctx_t ctx);
 
+int nrb_inv(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_div(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx);
+int nrb_sqrt(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_rsqrt(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_pow(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx);
+int nrb_exp(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
+int nrb_log(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_sin(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 

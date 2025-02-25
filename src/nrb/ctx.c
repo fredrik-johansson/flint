@@ -63,6 +63,13 @@ gr_method_tab_input _nrb_methods_input[] =
 
     {GR_METHOD_ABS,             (gr_funcptr) nrb_abs},
 
+    {GR_METHOD_INV,             (gr_funcptr) nrb_inv},
+    {GR_METHOD_DIV,             (gr_funcptr) nrb_div},
+    {GR_METHOD_SQRT,            (gr_funcptr) nrb_sqrt},
+    {GR_METHOD_RSQRT,           (gr_funcptr) nrb_rsqrt},
+    {GR_METHOD_POW,             (gr_funcptr) nrb_pow},
+    {GR_METHOD_EXP,             (gr_funcptr) nrb_exp},
+    {GR_METHOD_LOG,             (gr_funcptr) nrb_log},
     {GR_METHOD_SIN,             (gr_funcptr) nrb_sin},
     {GR_METHOD_COS,             (gr_funcptr) nrb_cos},
 
