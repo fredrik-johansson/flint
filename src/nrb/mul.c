@@ -20,6 +20,9 @@
 #include "gr_special.h"
 #include "nrb.h"
 
+
+
+
 int
 _nrb_fix_range(nrb_ptr res, nrb_ctx_t ctx)
 {
@@ -707,24 +710,11 @@ _nrb_mul_special(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, gr_ctx_t ctx)
 
         /* truncation errors */
         if (xn < n)
-            xerr += (xp[xn - n - 1] + 1.0) * ULP_N1;
+            xerr = _nrb_trim_error(xerr, xp, xn, n);
         if (yn < n)
-            yerr += (yp[xn - n - 1] + 1.0) * ULP_N1;
+            yerr = _nrb_trim_error(yerr, yp, yn, n);
 
-        erra = xm * yerr;
-        expa = xexp + yexp - FLINT_BITS - yn * FLINT_BITS;
-        errb = ym * xerr;
-        expb = xexp + yexp - FLINT_BITS - xn * FLINT_BITS;
-        errc = xerr * yerr;
-        expc = xexp + yexp - xn * FLINT_BITS - yn * FLINT_BITS;
-
-        rexp = xexp + yexp - n * FLINT_BITS;
-
-        /* todo: clamp shifts to avoid spurious subnormals? */
-        err = 0.0;
-        err += d_mul_2exp(erra, -(rexp - expa));
-        err += d_mul_2exp(errb, -(rexp - expb));
-        err += d_mul_2exp(errc, -(rexp - expc));
+        err = (xm * yerr + ym * xerr) * ULP_N1 + d_mul_2exp_inrange(xerr * yerr, FLINT_MAX(-n * FLINT_BITS, -NRB_MAX_ERROR_RIGHT_SHIFT2));
 
         mul_res = flint_mpn_mulhigh_normalised3(NRB_D(res), xp, xn, yp, yn, n);
         correction = mul_res.m2;
@@ -830,8 +820,7 @@ nrb_mul(nrb_ptr res, nrb_srcptr x, nrb_srcptr y, nrb_ctx_t ctx)
 
         xm = (double) xp[n - 1];
         ym = (double) yp[n - 1];
-
-        err = (xm * yerr + ym * xerr) * ULP_N1 + d_mul_2exp(xerr * yerr, -n * FLINT_BITS);
+        err = (xm * yerr + ym * xerr) * ULP_N1 + d_mul_2exp_inrange(xerr * yerr, FLINT_MAX(-n * FLINT_BITS, -NRB_MAX_ERROR_RIGHT_SHIFT2));
 
         mul_res = flint_mpn_mulhigh_normalised2(NRB_D(res), xp, yp, n);
         correction = mul_res.m2;

@@ -129,6 +129,13 @@ FLINT_FORCE_INLINE double d_mul_2exp(double x, int i)
         return ldexp(x, i);
 }
 
+/* given x >= 0, i >= 0, compute upper bound for x / 2^i, avoiding denormals */
+FLINT_FORCE_INLINE double d_udiv_2exp(double x, unsigned int i)
+{
+    if ((x >= 0x1p-256 && i <= 760) || x == 0.0 || x == D_INF)
+        return d_mul_2exp_inrange(x, -(int) i);
+}
+
 #ifdef __cplusplus
 }
 #endif

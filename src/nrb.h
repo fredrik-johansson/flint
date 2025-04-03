@@ -57,10 +57,11 @@ _nrb_ctx_struct;
    this destroys performance on many CPUs.
 */
 
-#define NRB_MAX_ERR 0x1.0000000000000p+448
+/* We want NRB_MAX_ERR^2 * 2^(-NRB_MAX_ERROR_RIGHT_SHIFT2) to be much smaller than 1 ulp. */
+#define NRB_MAX_ERR 0x1.0000000000000p+320
 #define NRB_MIN_ERR 0x1.0000000000000p-128
 
-#define NRB_MAX_ERR_EXP 449
+#define NRB_MAX_ERR_EXP 321
 #define NRB_MIN_ERR_EXP -127
 
 #define NRB_MIN_ERR2 0x1.0000000000000p-96
@@ -69,7 +70,12 @@ _nrb_ctx_struct;
 
 /* We can divide a normalized error by 2^NRB_MAX_ERROR_RIGHT_SHIFT
    without risking denormals. */
-#define NRB_MAX_ERROR_RIGHT_SHIFT 768
+#define NRB_MAX_ERROR_RIGHT_SHIFT 832
+#define NRB_MAX_ERROR_RIGHT_SHIFT_LIMBS (832 / FLINT_BITS)
+
+/* Same for squared error */
+#define NRB_MAX_ERROR_RIGHT_SHIFT2 704
+#define NRB_MAX_ERROR_RIGHT_SHIFT2_LIMBS (704 / FLINT_BITS)
 
 
 typedef struct
@@ -196,11 +202,15 @@ int _nrb_is_valid(nrb_srcptr x, nrb_ctx_t ctx);
 #if NRB_DEBUG
 #include <assert.h>
 
+#define NRB_ASSERT assert
+
 #define NRB_ASSERT_VALID(x, ctx) \
     do { \
         assert (_nrb_is_valid(x, ctx)); \
     } while (0)
 #else
+
+#define NRB_ASSERT(cond)
 #define NRB_ASSERT_VALID(res, ctx)
 #endif
 
@@ -290,6 +300,38 @@ int nrb_cos(nrb_ptr res, nrb_srcptr x, nrb_ctx_t ctx);
 #endif
 
 #define NRB_CORRECTION_B  0x1.0p-64
+
+/*
+Given the mantissa {xp, xn} with finite error bound err in ulps, calculate
+error bound in trimmed ulps after trimming the mantissa to
+{xp + xn - xn_new, xn_new}.
+*/
+FLINT_FORCE_INLINE
+double _nrb_trim_error(double err, nn_srcptr xp, slong xn, slong xn_new)
+{
+    slong trim_limbs = xn - xn_new;
+
+    NRB_ASSERT(err != D_INF);
+    NRB_ASSERT(xn_new >= 1);
+    NRB_ASSERT(trim_limbs >= 1);
+
+    if (err == 0.0)
+    {
+        err = ((double) xp[trim_limbs - 1] + (double) !flint_mpn_zero_p(xp, trim_limbs - 1)) * ULP_N1;
+    }
+    else
+    {
+        /* todo: rewrite? */
+        err = d_mul_2exp_inrange2(err, -FLINT_BITS * FLINT_MIN(trim_limbs, NRB_MAX_ERROR_RIGHT_SHIFT_LIMBS));
+        err += (xp[trim_limbs - 1] + 1.0) * ULP_N1;
+    }
+
+    err *= NRB_CORRECTION_A;
+
+    NRB_ASSERT(err == 0.0 || (err >= NRB_MIN_ERR && err <= NRB_MAX_ERR));
+
+    return err;
+}
 
 #ifdef __cplusplus
 }
