@@ -10,6 +10,517 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include "gr.h"
+#include "gr_vec.h"
+#include "gr_mat.h"
+
+/*
+
+N=100; A = Mat(ComplexFloat_acf(384),N,N)([[randint(-10,10) + randint(-10,10)*1j for i in range(N)] for j in range(N)]) / 17; d=A.diagonalization()
+
+*/
+
+/* todo: gr_sosq, gr_fmma, gr_fmms */
+/* todo: rearrange temp variables to avoid shallow sets */
+
+// TODO: IMPORTANT: make sure we use nfloat_sqr when squaring, e.g. avoid gr_addmul
+// TODO: squaring in dot products also
+
+/* aliasing only allowed for a */
+static int
+gr_sosq(gr_ptr res, gr_srcptr a, gr_srcptr b, gr_ctx_t ctx)
+{
+    int status;
+    status = gr_sqr(res, a, ctx);
+    status |= gr_addmul(res, b, b, ctx);
+    return status;
+}
+
+int
+gr_mat_approx_qr_step(gr_mat_t A, gr_mat_t Q, slong n0, slong n1, gr_srcptr shift, gr_ctx_t ctx, gr_ctx_t real_ctx)
+{
+    slong j, k, n;
+    /* complex variables */
+    gr_ptr c, s, negs, cc, cs, negcs, t;
+    /* length-2 shallow vectors */
+    gr_ptr v1, v1neg, v2, v2neg, v3;
+    /* real variables */
+    gr_ptr v, u;
+
+    slong sz = ctx->sizeof_elem;
+    slong rsz = real_ctx->sizeof_elem;
+
+#define RE(xx) (xx)
+#define IM(xx) GR_ENTRY(xx, 1, rsz)
+
+    int status = GR_SUCCESS;
+
+    FLINT_ASSERT(sz == 2 * rsz);
+
+//    flint_printf("sizes %wd, %wd\n", sz, rsz);
+
+    n = A->r;
+
+    GR_TMP_INIT5(c, s, negs, cc, cs, ctx);
+    GR_TMP_INIT2(negcs, t, ctx);
+    GR_TMP_INIT2(v, u, real_ctx);
+
+    v1 = GR_TMP_ALLOC(10 * sz);
+    v1neg = GR_ENTRY(v1, 2, sz);
+    v2 = GR_ENTRY(v1, 4, sz);
+    v2neg = GR_ENTRY(v1, 6, sz);
+    v3 = GR_ENTRY(v1, 8, sz);
+
+    /* TODO: AVOID SOME SETS */
+    /* TODO: ALLOW DOING SOME REPEATED OPS AS VECTOR OPS */
+    /* TODO: Givens using length-4 dot? (c, s consecutively in vector) */
+
+    /* Calculate Givens rotation */
+    status |= gr_sub(c, GR_MAT_ENTRY(A, n0, n0, sz), shift, ctx);
+
+//    flint_printf("gr   c = %{gr}\n\n", c, ctx);
+//    flint_printf("gr   RE(c) = %{gr}\n\n", RE(c), real_ctx);
+//    flint_printf("gr   IM(c) = %{gr}\n\n", IM(c), real_ctx);
+
+    status |= gr_set(s, GR_MAT_ENTRY(A, n0 + 1, n0, sz), ctx);
+
+//    flint_printf("gr   RE(s) = %{gr}\n\n", RE(s), real_ctx);
+//    flint_printf("gr   IM(s) = %{gr}\n\n", IM(s), real_ctx);
+
+    status |= gr_sosq(v, RE(c), IM(c), real_ctx);
+    status |= gr_sosq(u, RE(s), IM(s), real_ctx);
+    status |= gr_add(v, v, u, real_ctx);
+    status |= gr_sqrt(v, v, real_ctx);
+
+//    flint_printf("gr   v = %{gr}\n\n", v, real_ctx);
+
+    /* todo: need an unknown case? */
+    if (gr_is_zero(v, real_ctx) == T_TRUE)
+    {
+        status |= gr_one(v, real_ctx);
+        status |= gr_one(c, ctx);
+        status |= gr_zero(s, ctx);
+    }
+    else
+    {
+        status |= gr_inv(v, v, real_ctx);
+        status |= gr_mul(RE(c), RE(c), v, real_ctx);
+        status |= gr_mul(IM(c), IM(c), v, real_ctx);
+        status |= gr_mul(RE(s), RE(s), v, real_ctx);
+        status |= gr_mul(IM(s), IM(s), v, real_ctx);
+    }
+
+//    flint_printf("gr   c = %{gr}  s = %{gr}\n\n", c, ctx, s, ctx);
+
+    status |= gr_conj(cc, c, ctx);
+    status |= gr_conj(cs, s, ctx);
+
+//    flint_printf("gr   cc = %{gr}  cs = %{gr}\n\n", cc, ctx, cs, ctx);
+
+    status |= gr_neg(negs, s, ctx);
+    status |= gr_neg(negcs, cs, ctx);
+
+    gr_set_shallow(GR_ENTRY(v1, 0, sz), c, ctx);
+    gr_set_shallow(GR_ENTRY(v1, 1, sz), s, ctx);
+    gr_set_shallow(GR_ENTRY(v1neg, 0, sz), c, ctx);
+    gr_set_shallow(GR_ENTRY(v1neg, 1, sz), negs, ctx);
+    gr_set_shallow(GR_ENTRY(v2, 0, sz), cc, ctx);
+    gr_set_shallow(GR_ENTRY(v2, 1, sz), cs, ctx);
+    gr_set_shallow(GR_ENTRY(v2neg, 0, sz), cc, ctx);
+    gr_set_shallow(GR_ENTRY(v2neg, 1, sz), negcs, ctx);
+
+/* XXX: POSSIBLE ALIASING BUG IN ORIGINAL CODE (DEPENDING ON HOW DOT PRODUCT IS IMPLEMENTED) */
+#if 1
+
+#define BUTTERFLY(M, Mr1, Mr2, Mc1, Mc2, vv1, vv2) \
+    do { \
+        gr_set_shallow(GR_ENTRY(v3, 0, sz), GR_MAT_ENTRY(M, Mr1, Mc1, sz), ctx); \
+        gr_set_shallow(GR_ENTRY(v3, 1, sz), GR_MAT_ENTRY(M, Mr2, Mc2, sz), ctx); \
+        status |= _gr_vec_dot(t, NULL, 0, vv1, v3, 2, ctx); \
+        status |= _gr_vec_dot_rev(GR_MAT_ENTRY(M, Mr2, Mc2, sz), NULL, 0, vv2, v3, 2, ctx); \
+        gr_swap(GR_MAT_ENTRY(M, Mr1, Mc1, sz), t, ctx); \
+    } while (0)
+
+#else
+
+    gr_ptr t2, t3;
+    GR_TMP_INIT2(t2, t3, ctx);
+
+#define BUTTERFLY(M, Mr1, Mr2, Mc1, Mc2, vv1, vv2) \
+    do { \
+        status |= gr_mul(t, GR_ENTRY(vv1, 0, sz), GR_MAT_ENTRY(M, Mr1, Mc1, sz), ctx); \
+        status |= gr_mul(t2, GR_ENTRY(vv1, 1, sz), GR_MAT_ENTRY(M, Mr2, Mc2, sz), ctx); \
+        status |= gr_mul(t3, GR_ENTRY(vv2, 1, sz), GR_MAT_ENTRY(M, Mr1, Mc1, sz), ctx); \
+        status |= gr_add(GR_MAT_ENTRY(M, Mr1, Mc1, sz), t, t2, ctx); \
+        status |= gr_mul(t, GR_ENTRY(vv2, 0, sz), GR_MAT_ENTRY(M, Mr2, Mc2, sz), ctx); \
+        status |= gr_add(GR_MAT_ENTRY(M, Mr2, Mc2, sz), t3, t, ctx); \
+    } while (0)
+
+#endif
+
+    /* Apply Givens rotation from the left */
+    for (k = n0; k < n; k++)
+    {
+        /* x = A[n0  ,k] */
+        /* y = A[n0+1,k] */
+        /* A[n0,     k] = cc * x + cs * y */
+        /* A[n0 + 1, k] = c  * y -  s * x */
+        BUTTERFLY(A, n0, n0 + 1, k, k, v2, v1neg);
+    }
+
+    /* Apply Givens rotation from the right */
+    for (k = 0; k < FLINT_MIN(n1, n0 + 3); k++)
+    {
+        /* x = A[k,n0  ] */
+        /* y = A[k,n0+1] */
+        /* A[k,n0  ] = c * x + s * y */
+        /* A[k,n0+1] = cc * y - cs * x */
+        BUTTERFLY(A, k, k, n0, n0 + 1, v1, v2neg);
+    }
+
+    if (Q != NULL)
+    {
+        for (k = 0; k < n; k++)
+        {
+            /* x = Q[k,n0  ] */
+            /* y = Q[k,n0+1] */
+            /* Q[k,n0  ] = c * x + s * y */
+            /* Q[k,n0+1] = cc * y - cs * x */
+            BUTTERFLY(Q, k, k, n0, n0 + 1, v1, v2neg);
+        }
+    }
+
+    for (j = n0; j < n1 - 2; j++)
+    {
+        /* Calculate Givens rotation */
+        status |= gr_set(c, GR_MAT_ENTRY(A, j + 1, j, sz), ctx);
+        status |= gr_set(s, GR_MAT_ENTRY(A, j + 2, j, sz), ctx);
+
+        status |= gr_sosq(v, RE(c), IM(c), real_ctx);
+        status |= gr_sosq(u, RE(s), IM(s), real_ctx);
+        status |= gr_add(v, v, u, real_ctx);
+        status |= gr_sqrt(v, v, real_ctx);
+
+        if (gr_is_zero(v, real_ctx) == T_TRUE)
+        {
+            status |= gr_zero(GR_MAT_ENTRY(A, j + 1, j, sz), ctx);
+            status |= gr_one(v, real_ctx);
+            status |= gr_one(c, ctx);
+            status |= gr_zero(s, ctx);
+        }
+        else
+        {
+            status |= gr_set(RE(GR_MAT_ENTRY(A, j + 1, j, sz)), v, real_ctx);
+            status |= gr_zero(IM(GR_MAT_ENTRY(A, j + 1, j, sz)), real_ctx);
+            status |= gr_inv(v, v, real_ctx);
+            status |= gr_mul(RE(c), RE(c), v, real_ctx);
+            status |= gr_mul(IM(c), IM(c), v, real_ctx);
+            status |= gr_mul(RE(s), RE(s), v, real_ctx);
+            status |= gr_mul(IM(s), IM(s), v, real_ctx);
+        }
+
+//        flint_printf("gr(%wd)   c = %{gr}  s = %{gr}\n\n", j, c, ctx, s, ctx);
+
+        status |= gr_zero(GR_MAT_ENTRY(A, j + 2, j, sz), ctx);
+
+        status |= gr_conj(cc, c, ctx);
+        status |= gr_conj(cs, s, ctx);
+        status |= gr_neg(negs, s, ctx);
+        status |= gr_neg(negcs, cs, ctx);
+
+        gr_set_shallow(GR_ENTRY(v1, 0, sz), c, ctx);
+        gr_set_shallow(GR_ENTRY(v1, 1, sz), s, ctx);
+        gr_set_shallow(GR_ENTRY(v1neg, 0, sz), c, ctx);
+        gr_set_shallow(GR_ENTRY(v1neg, 1, sz), negs, ctx);
+        gr_set_shallow(GR_ENTRY(v2, 0, sz), cc, ctx);
+        gr_set_shallow(GR_ENTRY(v2, 1, sz), cs, ctx);
+        gr_set_shallow(GR_ENTRY(v2neg, 0, sz), cc, ctx);
+        gr_set_shallow(GR_ENTRY(v2neg, 1, sz), negcs, ctx);
+
+        /* Apply Givens rotation from the left */
+        for (k = j + 1; k < n; k++)
+        {
+            /* x = A[j+1, k] */
+            /* y = A[j+2, k] */
+            /* A[j+1, k] = cc * x + cs * y */
+            /* A[j+2, k] = c  * y -  s * x */
+            BUTTERFLY(A, j + 1, j + 2, k, k, v2, v1neg);
+        }
+
+        /* Apply Givens rotation from the right */
+        for (k = 0; k < FLINT_MIN(n1, j + 4); k++)
+        {
+            /* x = A[k,j+1] */
+            /* y = A[k,j+2] */
+            /* A[k,j+1] = c * x + s * y */
+            /* A[k,j+2] = cc * y - cs * x */
+            BUTTERFLY(A, k, k, j + 1, j + 2, v1, v2neg);
+        }
+
+        if (Q != NULL)
+        {
+            for (k = 0; k < n; k++)
+            {
+                /* x = Q[k,j+1] */
+                /* y = Q[k,j+2] */
+                /* Q[k,j+1] = c * x + s * y */
+                /* Q[k,j+2] = cc * y - cs * x */
+                BUTTERFLY(Q, k, k, j + 1, j + 2, v1, v2neg);
+            }
+        }
+    }
+
+#undef RE
+#undef IM
+
+    GR_TMP_CLEAR5(c, s, negs, cc, cs, ctx);
+    GR_TMP_CLEAR2(negcs, t, ctx);
+    GR_TMP_CLEAR2(v, u, real_ctx);
+
+//    GR_TMP_CLEAR2(t2, t3, ctx);
+
+    GR_TMP_FREE(v1, 10 * sz);
+
+    return status;
+}
+
+int
+gr_mat_approx_hessenberg_qr(gr_mat_t A, gr_mat_t Q, slong maxiter, gr_ctx_t ctx, gr_ctx_t real_ctx, gr_srcptr tol, gr_ctx_t mag_ctx)
+{
+    slong n, i, j, k, n0, n1, iter, total_iter;
+    /* Magnitude variables */
+    gr_ptr norm, tm, um, eps, ts;
+    /* Complex variables */
+    gr_ptr shift, s, t, a, b;
+    /* Real variables */
+    gr_ptr zero;
+
+    slong prec;
+
+    slong sz = ctx->sizeof_elem;
+    slong rsz = real_ctx->sizeof_elem;
+
+#define RE(xx) (xx)
+#define IM(xx) GR_ENTRY(xx, 1, rsz)
+
+    int status = GR_SUCCESS;
+
+    FLINT_ASSERT(sz == 2 * rsz);
+
+    if (gr_ctx_get_real_prec(&prec, ctx) != GR_SUCCESS)
+        return GR_UNABLE;
+
+    n = A->r;
+
+    if (n <= 1)
+        return GR_SUCCESS;
+
+    GR_TMP_INIT5(norm, tm, um, eps, ts, mag_ctx);
+    GR_TMP_INIT5(shift, s, t, a, b, ctx);
+    GR_TMP_INIT(zero, real_ctx);
+
+    for (i = 0; i < n; i++)
+    {
+        for (j = 0; j < FLINT_MIN(i + 2, n); j++)
+        {
+            status |= gr_set_other(tm, RE(GR_MAT_ENTRY(A, j, i, sz)), real_ctx, mag_ctx);
+            status |= gr_set_other(um, IM(GR_MAT_ENTRY(A, j, i, sz)), real_ctx, mag_ctx);
+            status |= gr_addmul(norm, tm, tm, mag_ctx);
+            status |= gr_addmul(norm, um, um, mag_ctx);
+        }
+    }
+
+    status |= gr_sqrt(norm, norm, mag_ctx);
+    status |= gr_div_ui(norm, norm, n, mag_ctx);
+
+    if (gr_is_zero(norm, mag_ctx) == T_TRUE)
+        return GR_SUCCESS;
+
+/*
+    if (gr_is_inf(norm) == T_TRUE)
+        return GR_UNABLE;
+*/
+
+    /* XXX: IN ACB, SHOULD PASS TOL TO GET BIT PRECISION TOLERANCE INSTEAD OF NFLOAT WORD PRECISION TOLERANCE */
+    if (tol == NULL)
+    {
+        status |= gr_one(eps, mag_ctx);
+        status |= gr_mul_2exp_si(eps, eps, -prec, mag_ctx);
+        status |= gr_div_ui(eps, eps, 100 * n, mag_ctx);
+    }
+    else
+    {
+        status |= gr_set(eps, tol, mag_ctx);
+    }
+
+    if (maxiter <= 0)
+    {
+        maxiter = 14 * n;
+        maxiter += prec / 10;
+    }
+
+    /* The active submatrix is A[n0:n1,n0:n1]. */
+    n0 = 0;
+    n1 = n;
+
+    iter = total_iter = 0;
+    status = GR_SUCCESS;
+
+    while (1)
+    {
+        k = n0;
+
+        /* flint_printf("total_iter %wd   active %wd\n", total_iter, n1 - n0); */
+
+        while (k + 1 < n1)
+        {
+            status |= gr_zero(ts, mag_ctx);
+
+            status |= gr_set_other(tm, RE(GR_MAT_ENTRY(A, k, k, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(tm, tm, mag_ctx);
+            status |= gr_add(ts, ts, tm, mag_ctx);
+
+            status |= gr_set_other(tm, IM(GR_MAT_ENTRY(A, k, k, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(tm, tm, mag_ctx);
+            status |= gr_add(ts, ts, tm, mag_ctx);
+
+            status |= gr_set_other(tm, RE(GR_MAT_ENTRY(A, k + 1, k + 1, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(tm, tm, mag_ctx);
+            status |= gr_add(ts, ts, tm, mag_ctx);
+
+            status |= gr_set_other(tm, IM(GR_MAT_ENTRY(A, k + 1, k + 1, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(tm, tm, mag_ctx);
+            status |= gr_add(ts, ts, tm, mag_ctx);
+
+            /* if s < eps * norm, s = norm */
+            status |= gr_mul(tm, eps, norm, mag_ctx);
+            if (gr_lt(ts, tm, mag_ctx) == T_TRUE)
+                status |= gr_set(ts, norm, mag_ctx);
+
+            /* if abs(A[k+1,k]) < eps * s, break */
+            status |= gr_set_other(tm, RE(GR_MAT_ENTRY(A, k + 1, k, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(tm, tm, mag_ctx);
+            status |= gr_set_other(um, IM(GR_MAT_ENTRY(A, k + 1, k, sz)), real_ctx, mag_ctx);
+            status |= gr_abs(um, um, mag_ctx);
+
+            /* todo: gr_hypot ... or square eps to avoid square root */
+            status |= gr_sosq(tm, tm, um, mag_ctx);
+            status |= gr_sqrt(tm, tm, mag_ctx);
+
+            status |= gr_mul(um, eps, ts, mag_ctx);
+
+            if (gr_lt(tm, um, mag_ctx) == T_TRUE)
+                break;
+
+            k++;
+        }
+
+        /* Deflation found at position (k+1, k). */
+        if (k + 1 < n1)
+        {
+            status |= gr_zero(GR_MAT_ENTRY(A, k + 1, k, sz), ctx);
+            n0 = k + 1;
+            iter = 0;
+
+            if (n0 + 1 >= n1)
+            {
+                /* Block of size at most two has converged. */
+                n0 = 0;
+                n1 = k + 1;
+                if (n1 < 2)
+                {
+                    /* QR algorithm has converged. */
+                    status = GR_SUCCESS;
+                    goto cleanup;
+                }
+            }
+        }
+        else
+        {
+            if (iter % 30 == 10)
+            {
+                /* Exceptional shift */
+                status |= gr_set(shift, GR_MAT_ENTRY(A, n1 - 1, n1 - 2, sz), ctx);
+            }
+            else if (iter % 30 == 20)
+            {
+                /* Exceptional shift */
+                status |= gr_abs(shift, GR_MAT_ENTRY(A, n1 - 1, n1 - 2, sz), ctx);
+            }
+            else if (iter % 30 == 29)
+            {
+                /* Exceptional shift */
+                status |= gr_set_other(shift, norm, mag_ctx, ctx);
+            }
+            else
+            {
+                status |= gr_add(t, GR_MAT_ENTRY(A, n1 - 2, n1 - 2, sz), GR_MAT_ENTRY(A, n1 - 1, n1 - 1, sz), ctx);
+                status |= gr_sub(a, GR_MAT_ENTRY(A, n1 - 1, n1 - 1, sz), GR_MAT_ENTRY(A, n1 - 2, n1 - 2, sz), ctx);
+                status |= gr_mul(a, a, a, ctx);
+                status |= gr_mul(b, GR_MAT_ENTRY(A, n1 - 1, n1 - 2, sz), GR_MAT_ENTRY(A, n1 - 2, n1 - 1, sz), ctx);
+                status |= gr_mul_2exp_si(b, b, 2, ctx);
+                status |= gr_add(s, a, b, ctx);
+
+                if (gr_gt(RE(s), zero, real_ctx) == T_TRUE)
+                {
+                    status |= gr_sqrt(s, s, ctx);
+                }
+                else
+                {
+                    status |= gr_neg(s, s, ctx);
+                    status |= gr_sqrt(s, s, ctx);
+                    /* multiply by i */
+                    gr_swap(RE(s), IM(s), real_ctx);
+                    status |= gr_neg(RE(s), RE(s), real_ctx);
+                }
+
+                status |= gr_add(a, t, s, ctx);
+                status |= gr_sub(b, t, s, ctx);
+                status |= gr_mul_2exp_si(a, a, -1, ctx);
+                status |= gr_mul_2exp_si(b, b, -1, ctx);
+
+                status |= gr_sub(s, GR_MAT_ENTRY(A, n1 - 1, n1 - 1, sz), a, ctx);
+                status |= gr_sub(t, GR_MAT_ENTRY(A, n1 - 1, n1 - 1, sz), b, ctx);
+
+                status |= gr_set_other(tm, RE(s), real_ctx, mag_ctx);
+                status |= gr_set_other(ts, IM(s), real_ctx, mag_ctx);
+                /* todo: hypot */
+                status |= gr_sosq(tm, tm, ts, mag_ctx);
+                status |= gr_sqrt(tm, tm, mag_ctx);
+
+                status |= gr_set_other(um, RE(t), real_ctx, mag_ctx);
+                status |= gr_set_other(ts, IM(t), real_ctx, mag_ctx);
+                /* todo: hypot */
+                status |= gr_sosq(um, um, ts, mag_ctx);
+                status |= gr_sqrt(um, um, mag_ctx);
+
+                if (gr_gt(tm, um, mag_ctx) == T_TRUE)
+                    status |= gr_set(shift, b, ctx);
+                else
+                    status |= gr_set(shift, a, ctx);
+            }
+
+            iter++;
+            total_iter++;
+
+            status |= gr_mat_approx_qr_step(A, Q, n0, n1, shift, ctx, real_ctx);
+
+            if (iter > maxiter)
+            {
+                status = GR_UNABLE;
+                goto cleanup;
+            }
+        }
+    }
+
+cleanup:
+    GR_TMP_CLEAR5(norm, tm, um, ts, eps, mag_ctx);
+    GR_TMP_CLEAR5(shift, s, t, a, b, ctx);
+    GR_TMP_CLEAR(zero, real_ctx);
+
+    return status;
+}
+
 /*
 Adapted from eigen.py in mpmath (written by Timo Hartmann)
 
@@ -94,8 +605,96 @@ acb_approx_div(acb_t z, const acb_t x, const acb_t y, slong prec)
     acb_clear(t);
 }
 
+#include "nfloat.h"
+
 void
-acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t shift, slong prec)
+acb_mat_approx_qr_step1(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t shift, slong prec)
+{
+    gr_mat_t T, U;
+    gr_ctx_t ctx, real_ctx;
+    gr_ctx_t acb_ctx;
+    gr_ptr tshift;
+
+    GR_MUST_SUCCEED(nfloat_ctx_init(real_ctx, prec, 0));
+    GR_MUST_SUCCEED(nfloat_complex_ctx_init(ctx, prec, 0));
+
+    gr_ctx_init_complex_acb(acb_ctx, prec);
+    GR_TMP_INIT(tshift, ctx);
+
+    GR_MUST_SUCCEED(gr_set_other(tshift, shift, acb_ctx, ctx));
+
+    gr_mat_init(T, A->r, A->c, ctx);
+    GR_MUST_SUCCEED(gr_mat_set_gr_mat_other(T, (gr_mat_struct *) A, acb_ctx, ctx));
+
+    if (Q != NULL)
+    {
+        gr_mat_init(U, Q->r, Q->c, ctx);
+        GR_MUST_SUCCEED(gr_mat_set_gr_mat_other(U, (gr_mat_struct *) Q, acb_ctx, ctx));
+    }
+
+    GR_MUST_SUCCEED(gr_mat_approx_qr_step(T, Q != NULL ? U : NULL, n0, n1, tshift, ctx, real_ctx));
+
+    GR_MUST_SUCCEED(gr_mat_set_gr_mat_other((gr_mat_struct *) A, T, ctx, acb_ctx));
+    if (Q != NULL)
+        GR_MUST_SUCCEED(gr_mat_set_gr_mat_other((gr_mat_struct *) Q, U, ctx, acb_ctx));
+
+    gr_mat_clear(T, ctx);
+    if (Q != NULL)
+        gr_mat_clear(U, ctx);
+
+    GR_TMP_CLEAR(tshift, ctx);
+}
+
+int
+acb_mat_approx_hessenberg_qr2(acb_mat_t A, acb_mat_t Q, const mag_t tol, slong maxiter, slong prec)
+{
+    gr_mat_t T, U;
+    gr_ctx_t ctx, real_ctx;
+    gr_ctx_t acb_ctx;
+    gr_ctx_t mag_ctx;
+    gr_ptr ttol;
+    int result;
+
+    GR_MUST_SUCCEED(nfloat_ctx_init(mag_ctx, MAG_BITS, 0));
+    GR_MUST_SUCCEED(nfloat_ctx_init(real_ctx, prec, 0));
+    GR_MUST_SUCCEED(nfloat_complex_ctx_init(ctx, prec, 0));
+
+    gr_ctx_init_complex_acb(acb_ctx, prec);
+    GR_TMP_INIT(ttol, mag_ctx);
+
+    if (tol != NULL)
+    {
+        /* XXX: correct this */
+        GR_MUST_SUCCEED(gr_set_ui(ttol, MAG_MAN(tol), mag_ctx));
+        GR_MUST_SUCCEED(gr_mul_2exp_si(ttol, ttol, MAG_EXP(tol) - MAG_BITS, mag_ctx));
+    }
+
+    gr_mat_init(T, A->r, A->c, ctx);
+    GR_MUST_SUCCEED(gr_mat_set_gr_mat_other(T, (gr_mat_struct *) A, acb_ctx, ctx));
+
+    if (Q != NULL)
+    {
+        gr_mat_init(U, Q->r, Q->c, ctx);
+        GR_MUST_SUCCEED(gr_mat_set_gr_mat_other(U, (gr_mat_struct *) Q, acb_ctx, ctx));
+    }
+
+    result = (GR_SUCCESS == gr_mat_approx_hessenberg_qr(T, Q != NULL ? U : NULL, maxiter, ctx, real_ctx, tol != NULL ? ttol : NULL, mag_ctx));
+
+    GR_MUST_SUCCEED(gr_mat_set_gr_mat_other((gr_mat_struct *) A, T, ctx, acb_ctx));
+    if (Q != NULL)
+        GR_MUST_SUCCEED(gr_mat_set_gr_mat_other((gr_mat_struct *) Q, U, ctx, acb_ctx));
+
+    gr_mat_clear(T, ctx);
+    if (Q != NULL)
+        gr_mat_clear(U, ctx);
+
+    GR_TMP_CLEAR(ttol, mag_ctx);
+
+    return result;
+}
+
+void
+acb_mat_approx_qr_step2(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t shift, slong prec)
 {
     slong j, k, n;
     acb_t c, s, negs, cc, cs, negcs, t;
@@ -139,6 +738,8 @@ acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t
         acb_approx_div_arb(s, s, v, prec);
     }
 
+//    flint_printf("acb  c = %{acb}  s = %{acb}\n\n", c, s);
+
     acb_conj(cc, c);
     acb_conj(cs, s);
     acb_neg(negs, s);
@@ -156,6 +757,8 @@ acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t
     /* Apply Givens rotation from the left */
     for (k = n0; k < n; k++)
     {
+
+
         v3[0] = *acb_mat_entry(A, n0, k);
         v3[1] = *acb_mat_entry(A, n0 + 1, k);
 
@@ -164,9 +767,13 @@ acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t
         /* A[n0,     k] = cc * x + cs * y */
         /* A[n0 + 1, k] = c  * y -  s * x */
 
+//        flint_printf("acb(%wd)  %{acb*} %{acb*}\n", k, v2, 2, v3, 2);
+
         acb_approx_dot(t,                           NULL, 0, v2,    1, v3,      1, 2, prec);
         acb_approx_dot(acb_mat_entry(A, n0 + 1, k), NULL, 0, v1neg, 1, v3 + 1, -1, 2, prec);
         acb_swap(t, acb_mat_entry(A, n0, k));
+
+//        flint_printf("acb(%wd)  %{acb}  %{acb}\n", k, acb_mat_entry(A, n0, k), acb_mat_entry(A, n0 + 1, k));
     }
 
     /* Apply Givens rotation from the right */
@@ -227,6 +834,8 @@ acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t
             acb_approx_div_arb(c, c, v, prec);
             acb_approx_div_arb(s, s, v, prec);
         }
+
+//        flint_printf("acb(%wd)  c = %{acb}  s = %{acb}\n\n", j, c, s);
 
         acb_zero(acb_mat_entry(A, j + 2, j));
 
@@ -304,6 +913,56 @@ acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t
     acb_clear(t);
     arb_clear(v);
     arb_clear(u);
+}
+
+#include "profiler.h"
+
+void
+acb_mat_approx_qr_step(acb_mat_t A, acb_mat_t Q, slong n0, slong n1, const acb_t shift, slong prec)
+{
+//    acb_mat_approx_qr_step1(A, Q, n0, n1, shift, prec);
+//    return;
+
+    if (0 && Q != NULL && prec >= 512)
+    {
+        flint_printf("prec %wd   %wd\n", prec, A->r);
+//        acb_mat_printd(A, 15); flint_printf("\n\n");
+//        acb_mat_printd(Q, 15); flint_printf("\n\n");
+
+        acb_mat_t A2, Q2;
+        acb_mat_init(A2, A->r, A->c);
+        acb_mat_init(Q2, Q->r, Q->c);
+
+        TIMEIT_START
+        acb_mat_set(A2, A);
+        acb_mat_set(Q2, Q);
+        acb_mat_approx_qr_step2(A2, Q2, n0, n1, shift, prec);
+        TIMEIT_STOP
+        TIMEIT_START
+        acb_mat_set(A2, A);
+        acb_mat_set(Q2, Q);
+        acb_mat_approx_qr_step1(A2, Q2, n0, n1, shift, prec);
+        TIMEIT_STOP
+
+        acb_mat_approx_qr_step1(A, Q, n0, n1, shift, prec);
+
+//        flint_printf("A2: ");
+//        acb_mat_printd(A2, 15); flint_printf("\n\n");
+//        flint_printf("A: ");
+//        acb_mat_printd(A, 15); flint_printf("\n\n");
+//        flint_printf("Q2: ");
+//        acb_mat_printd(Q2, 15); flint_printf("\n\n");
+//        flint_printf("Q: ");
+//        acb_mat_printd(Q, 15); flint_printf("\n\n");
+//        flint_abort();
+
+        acb_mat_clear(A2);
+        acb_mat_clear(Q2);
+    }
+    else
+    {
+        acb_mat_approx_qr_step2(A, Q, n0, n1, shift, prec);
+    }
 }
 
 void
@@ -987,8 +1646,43 @@ acb_mat_approx_eig_qr(acb_ptr E, acb_mat_t L, acb_mat_t R, const acb_mat_t A, co
         for (j = i + 2; j < n; j++)
             acb_zero(acb_mat_entry(Acopy, j, i));
 
+if (0)
+{
     result = acb_mat_approx_hessenberg_qr(Acopy,
         (L != NULL || R != NULL) ? Q : NULL, tol, maxiter, prec);
+}
+else
+{
+    acb_mat_t Acopy2, Q2;
+    acb_mat_init(Acopy2, A->r, A->c);
+
+    flint_printf("n %wd   prec %wd\n", n, prec);
+
+    TIMEIT_START
+    acb_mat_set(Acopy2, Acopy);
+    if (L != NULL || R != NULL)
+    {
+        acb_mat_init(Q2, Q->r, Q->c);
+        acb_mat_set(Q2, Q);
+    }
+    result = acb_mat_approx_hessenberg_qr(Acopy2,
+        (L != NULL || R != NULL) ? Q2 : NULL, tol, maxiter, prec);
+    TIMEIT_STOP
+
+    TIMEIT_START
+    acb_mat_set(Acopy2, Acopy);
+    if (L != NULL || R != NULL)
+    {
+        acb_mat_init(Q2, Q->r, Q->c);
+        acb_mat_set(Q2, Q);
+    }
+    result = acb_mat_approx_hessenberg_qr2(Acopy2,
+        (L != NULL || R != NULL) ? Q2 : NULL, tol, maxiter, prec);
+    TIMEIT_STOP
+
+    result = acb_mat_approx_hessenberg_qr(Acopy,
+        (L != NULL || R != NULL) ? Q : NULL, tol, maxiter, prec);
+}
 
     for (i = 0; i < n; i++)
         acb_get_mid(E + i, acb_mat_entry(Acopy, i, i));
