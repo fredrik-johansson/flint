@@ -23,6 +23,6 @@ d_mat_set(d_mat_t mat1, const d_mat_t mat2)
 
         if (mat2->r && mat2->c)
             for (i = 0; i < mat2->r; i++)
-                _d_vec_set(mat1->rows[i], mat2->rows[i], mat2->c);
+                _d_vec_set(d_mat_row(mat1, i), d_mat_row(mat2, i), mat2->c);
     }
 }

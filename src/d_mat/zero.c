@@ -22,5 +22,5 @@ d_mat_zero(d_mat_t mat)
         return;
 
     for (i = 0; i < mat->r; i++)
-        _d_vec_zero(mat->rows[i], mat->c);
+        _d_vec_zero(d_mat_row(mat, i), mat->c);
 }

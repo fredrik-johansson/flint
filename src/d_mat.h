@@ -31,12 +31,13 @@ typedef struct
     double * entries;
     slong r;
     slong c;
-    double ** rows;
+    slong stride;
 } d_mat_struct;
 
 typedef d_mat_struct d_mat_t[1];
 
-#define d_mat_entry(mat,i,j) (*((mat)->rows[i] + (j)))
+#define d_mat_entry(mat,i,j) (mat->entries[(i) * (mat)->stride + (j)])
+#define d_mat_row(mat,i) (&d_mat_entry(mat, i, 0))
 
 D_MAT_INLINE
 slong d_mat_nrows(const d_mat_t mat)
@@ -60,8 +61,8 @@ d_mat_swap_entrywise(d_mat_t mat1, d_mat_t mat2)
     slong i, j;
     for (i = 0; i < d_mat_nrows(mat1); i++)
     {
-       double * row1 = mat1->rows[i];
-       double * row2 = mat2->rows[i];
+       double * row1 = d_mat_row(mat1, i);
+       double * row2 = d_mat_row(mat2, i);
        for (j = 0; j < d_mat_ncols(mat1); j++)
           FLINT_SWAP(double, row1[j], row2[j]);
     }

@@ -28,7 +28,7 @@ d_mat_equal(const d_mat_t mat1, const d_mat_t mat2)
 
     for (j = 0; j < mat1->r; j++)
     {
-        if (!_d_vec_equal(mat1->rows[j], mat2->rows[j], mat1->c))
+        if (!_d_vec_equal(d_mat_row(mat1, j), d_mat_row(mat2, j), mat1->c))
         {
             return 0;
         }

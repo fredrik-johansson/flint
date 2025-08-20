@@ -28,7 +28,7 @@ d_mat_approx_equal(const d_mat_t mat1, const d_mat_t mat2, double eps)
 
     for (j = 0; j < mat1->r; j++)
     {
-        if (!_d_vec_approx_equal(mat1->rows[j], mat2->rows[j], mat1->c, eps))
+        if (!_d_vec_approx_equal(d_mat_row(mat1, j), d_mat_row(mat2, j), mat1->c, eps))
         {
             return 0;
         }

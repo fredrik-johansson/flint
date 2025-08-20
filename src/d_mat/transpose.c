@@ -25,18 +25,17 @@ d_mat_transpose(d_mat_t B, const d_mat_t A)
 
     if (B == A)
     {
-        d_mat_t t;
-        d_mat_init(t, A->r, A->c);
-        d_mat_transpose(t, A);
-        d_mat_swap_entrywise(B, t);
-        d_mat_clear(t);
-        return;
+        /* todo: cache efficient version */
+        for (i = 0; i < A->r - 1; i++)
+            for (j = i + 1; j < A->c; j++)
+                FLINT_SWAP(double, d_mat_entry(A, j, i), d_mat_entry(A, i, j));
     }
-
-    for (ii = 0; ii < B->r; ii += blocksize)
-        for (jj = 0; jj < B->c; jj += blocksize)
-            for (i = ii; i < FLINT_MIN(ii + blocksize, B->r); i++)
-                for (j = jj; j < FLINT_MIN(jj + blocksize, B->c); j++)
-                    d_mat_entry(B, i, j) = d_mat_entry(A, j, i);
-
+    else
+    {
+        for (ii = 0; ii < B->r; ii += blocksize)
+            for (jj = 0; jj < B->c; jj += blocksize)
+                for (i = ii; i < FLINT_MIN(ii + blocksize, B->r); i++)
+                    for (j = jj; j < FLINT_MIN(jj + blocksize, B->c); j++)
+                        d_mat_entry(B, i, j) = d_mat_entry(A, j, i);
+    }
 }

@@ -12,6 +12,7 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include <string.h>
 #include "double_extras.h"
 #include "d_vec.h"
 #include "fmpz.h"
@@ -27,6 +28,36 @@ fmpz_mat_move_row(fmpz_mat_t A, slong i, slong j)
     gr_ctx_t ctx;
     gr_ctx_init_fmpz(ctx);
     GR_MUST_SUCCEED(gr_mat_move_row((gr_mat_struct *) A, i, j, ctx));
+}
+
+
+static void d_mat_move_row(d_mat_t A, slong i, slong new_i)
+{
+    double * tmp;
+    slong c = A->c, r = A->c;
+    slong j;
+
+    if (i == new_i)
+        return;
+
+    tmp = GR_TMP_ALLOC(c * sizeof(double));
+
+    if (new_i < i)
+    {
+        memcpy(tmp, d_mat_row(A, i), c * sizeof(double));
+        for (j = i; j > new_i; j--)
+            memcpy(d_mat_row(A, j), d_mat_row(A, j - 1), c * sizeof(double));
+        memcpy(d_mat_row(A, new_i), tmp, c * sizeof(double));
+    }
+    else
+    {
+        memcpy(tmp, d_mat_row(A, i), c * sizeof(double));
+        for (j = i; j < new_i; j++)
+            memcpy(d_mat_row(A, j), d_mat_row(A, j + 1), c * sizeof(double));
+        memcpy(d_mat_row(A, new_i), tmp, c * sizeof(double));
+    }
+
+    GR_TMP_FREE(tmp, c * sizeof(double));
 }
 
 #ifdef GM
@@ -101,7 +132,7 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
         max_exp = 0;
         for (i = 0; i < d; i++)
         {
-            expo[i] = _fmpz_vec_get_d_vec_2exp(appB->rows[i], fmpz_mat_row(B, i), n);
+            expo[i] = _fmpz_vec_get_d_vec_2exp(d_mat_row(appB, i), fmpz_mat_row(B, i), n);
             max_exp = FLINT_MAX(max_exp, expo[i]);
         }
         max_iter =
@@ -118,7 +149,7 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
 
         do
         {
-            d_mat_entry(A->appSP, i, i) = _d_vec_norm(appB->rows[i], n);
+            d_mat_entry(A->appSP, i, i) = _d_vec_norm(d_mat_row(appB, i), n);
         } while ((d_mat_entry(A->appSP, i, i) <= 0.0) && (++i < d));    /* Check if this should be D_EPS and not 0.0: done */
 
         zeros = i - 1;          /* all vectors B[i] with i <= zeros are zero vectors */
@@ -309,16 +340,8 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
                 /* Step6: Update the mu's and r's */
                 /* ****************************** */
 
-                mutmp = mu->rows[kappa2];
-                for (i = kappa2; i > kappa; i--)
-                    mu->rows[i] = mu->rows[i - 1];
-                mu->rows[kappa] = mutmp;
-
-                mutmp = r->rows[kappa2];
-                for (i = kappa2; i > kappa; i--)
-                    r->rows[i] = r->rows[i - 1];
-                r->rows[kappa] = mutmp;
-
+                d_mat_move_row(mu, kappa2, kappa);
+                d_mat_move_row(r, kappa2, kappa);
                 d_mat_entry(r, kappa, kappa) = s[kappa];
 
                 /* ************************ */
@@ -330,10 +353,7 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
                 if (U != NULL)
                     fmpz_mat_move_row(U, kappa2, kappa);
 
-                appBtmp = appB->rows[kappa2];
-                for (i = kappa2; i > kappa; i--)
-                    appB->rows[i] = appB->rows[i - 1];
-                appB->rows[kappa] = appBtmp;
+                d_mat_move_row(appB, kappa2, kappa);
 
                 j = expo[kappa2];
                 for (i = kappa2; i > kappa; i--)
@@ -378,7 +398,7 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
                     zeros++;
                     kappa++;
                     d_mat_entry(A->appSP, kappa, kappa) =
-                        _d_vec_norm(appB->rows[kappa], n);
+                        _d_vec_norm(d_mat_row(appB, kappa), n);
                     d_mat_entry(r, kappa, kappa) =
                         d_mat_entry(A->appSP, kappa, kappa);
                 }
@@ -642,16 +662,8 @@ int _fmpz_lll_d(fmpz_mat_t B, fmpz_mat_t U, const fmpz_t gs_B, const fmpz_lll_t 
                 /* Step6: Update the mu's and r's */
                 /* ****************************** */
 
-                mutmp = mu->rows[kappa2];
-                for (i = kappa2; i > kappa; i--)
-                    mu->rows[i] = mu->rows[i - 1];
-                mu->rows[kappa] = mutmp;
-
-                mutmp = r->rows[kappa2];
-                for (i = kappa2; i > kappa; i--)
-                    r->rows[i] = r->rows[i - 1];
-                r->rows[kappa] = mutmp;
-
+                d_mat_move_row(mu, kappa2, kappa);
+                d_mat_move_row(r, kappa2, kappa);
                 d_mat_entry(r, kappa, kappa) = s[kappa];
 
                 /* *************** */

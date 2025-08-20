@@ -31,18 +31,18 @@
     do { \
         if (heuristic) \
         { \
-            d_mat_entry(G, I, J) = fmpz_lll_heuristic_dot(appB->rows[I], appB->rows[J], C, B, I, J, expo[I] + expo[J]); \
+            d_mat_entry(G, I, J) = fmpz_lll_heuristic_dot(d_mat_row(appB, I), d_mat_row(appB, J), C, B, I, J, expo[I] + expo[J]); \
         } \
         else if (advance) \
         { \
-            d_mat_entry(G, I, J) = _d_vec_dot(appB->rows[I], appB->rows[J], C); \
+            d_mat_entry(G, I, J) = _d_vec_dot(d_mat_row(appB, I), d_mat_row(appB, J), C); \
         } \
         else \
         { \
             if (I != J) \
-                d_mat_entry(G, I, J) = _d_vec_dot(appB->rows[I], appB->rows[J], C); \
+                d_mat_entry(G, I, J) = _d_vec_dot(d_mat_row(appB, I), d_mat_row(appB, J), C); \
             else \
-                d_mat_entry(G, I, J) = _d_vec_norm(appB->rows[I], C); \
+                d_mat_entry(G, I, J) = _d_vec_norm(d_mat_row(appB, I), C); \
         } \
     } while (0)
 
@@ -283,7 +283,7 @@ int _fmpz_lll_check_babai(int cur_kappa, int kappa,
             if (test)           /* Anything happened? */
             {
                 expo[kappa] =
-                    _fmpz_vec_get_d_vec_2exp(appB->rows[kappa],
+                    _fmpz_vec_get_d_vec_2exp(d_mat_row(appB, kappa),
                                              fmpz_mat_row(B, kappa), n);
                 aa = zeros + 1;
 
