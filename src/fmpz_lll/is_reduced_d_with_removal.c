@@ -43,7 +43,7 @@ fmpz_lll_is_reduced_d_with_removal(const fmpz_mat_t B, const fmpz_lll_t fl,
         n = B->r;
 
         d_mat_init(A, m, n);
-        d_mat_init(Q, m, n);
+        d_mat_init(Q, n, m);
         d_mat_init(R, n, n);
         d_mat_init(V, n, n);
         d_mat_zero(R);
@@ -61,25 +61,25 @@ fmpz_lll_is_reduced_d_with_removal(const fmpz_mat_t B, const fmpz_lll_t fl,
         {
             for (j = 0; j < m; j++)
             {
-                d_mat_entry(Q, j, k) = d_mat_entry(A, j, k);
+                d_mat_entry(Q, k, j) = d_mat_entry(A, j, k);
             }
             for (i = 0; i < k; i++)
             {
                 s = 0;
                 for (j = 0; j < m; j++)
                 {
-                    s += d_mat_entry(Q, j, i) * d_mat_entry(Q, j, k);
+                    s += d_mat_entry(Q, i, j) * d_mat_entry(Q, k, j);
                 }
                 d_mat_entry(R, i, k) = s;
                 for (j = 0; j < m; j++)
                 {
-                    d_mat_entry(Q, j, k) -= s * d_mat_entry(Q, j, i);
+                    d_mat_entry(Q, k, j) -= s * d_mat_entry(Q, i, j);
                 }
             }
             s = 0;
             for (j = 0; j < m; j++)
             {
-                s += d_mat_entry(Q, j, k) * d_mat_entry(Q, j, k);
+                s += d_mat_entry(Q, k, j) * d_mat_entry(Q, k, j);
             }
             d_mat_entry(R, k, k) = s = sqrt(s);
             if (s != 0)
@@ -87,7 +87,7 @@ fmpz_lll_is_reduced_d_with_removal(const fmpz_mat_t B, const fmpz_lll_t fl,
                 s = 1 / s;
                 for (j = 0; j < m; j++)
                 {
-                    d_mat_entry(Q, j, k) *= s;
+                    d_mat_entry(Q, k, j) *= s;
                 }
             }
         }
@@ -100,12 +100,14 @@ fmpz_lll_is_reduced_d_with_removal(const fmpz_mat_t B, const fmpz_lll_t fl,
             {
                 for (k = j + 1; k < n; k++)
                 {
-                    d_mat_entry(V, j, i) +=
-                        d_mat_entry(V, k, i) * d_mat_entry(R, j, k);
+                    d_mat_entry(V, i, j) +=
+                        d_mat_entry(V, i, k) * d_mat_entry(R, j, k);
                 }
-                d_mat_entry(V, j, i) *= -d_mat_entry(V, j, j);
+                d_mat_entry(V, i, j) *= -d_mat_entry(V, j, j);
             }
         }
+
+        d_mat_transpose(V, V);
 
         d_mat_init(Wu, n, n);
         d_mat_init(Wd, n, n);
