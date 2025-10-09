@@ -26,9 +26,9 @@ void _fq_nmod_sparse_reduce(ulong *R, slong lenR, const fq_nmod_ctx_t ctx)
         for (k = ctx->len - 2; k >= 0; k--)
         {
             /* TODO clean this mess up */
-            R[ctx->j[k] + i - d] = n_submod(R[ctx->j[k] + i - d],
-                                            n_mulmod2_preinv(R[i], ctx->a[k], ctx->mod.n, ctx->mod.ninv),
-                                            ctx->mod.n);
+            R[ctx->j[k] + i - d] = nmod_sub(R[ctx->j[k] + i - d],
+                                            nmod_mul(R[i], ctx->a[k], ctx->mod),
+                                            ctx->mod);
         }
         R[i] = UWORD(0);
     }
@@ -37,15 +37,20 @@ void _fq_nmod_sparse_reduce(ulong *R, slong lenR, const fq_nmod_ctx_t ctx)
 void _fq_nmod_dense_reduce(ulong* R, slong lenR, const fq_nmod_ctx_t ctx)
 {
     ulong  *q, *r;
+    slong lenq, lenr;
+    TMP_INIT;
+
+    NMOD_VEC_NORM(R, lenR);
 
     if (lenR < ctx->modulus->length)
-    {
-        _nmod_vec_reduce(R, R, lenR, ctx->mod);
         return;
-    }
 
-    q = _nmod_vec_init(lenR - ctx->modulus->length + 1);
-    r = _nmod_vec_init(ctx->modulus->length - 1);
+    lenq = lenR - ctx->modulus->length + 1;
+    lenr = ctx->modulus->length - 1;
+
+    TMP_START;
+    q = TMP_ALLOC((lenq + lenr) * sizeof(ulong));
+    r = q + lenq;
 
     _nmod_poly_divrem_newton_n_preinv(q, r, R, lenR,
                                       ctx->modulus->coeffs, ctx->modulus->length,
@@ -53,8 +58,7 @@ void _fq_nmod_dense_reduce(ulong* R, slong lenR, const fq_nmod_ctx_t ctx)
                                       ctx->mod);
 
     _nmod_vec_set(R, r, ctx->modulus->length - 1);
-    _nmod_vec_clear(q);
-    _nmod_vec_clear(r);
+    TMP_END;
 
 }
 
