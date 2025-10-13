@@ -25,7 +25,6 @@ void _fq_nmod_sparse_reduce(ulong *R, slong lenR, const fq_nmod_ctx_t ctx)
     {
         for (k = ctx->len - 2; k >= 0; k--)
         {
-            /* TODO clean this mess up */
             R[ctx->j[k] + i - d] = nmod_sub(R[ctx->j[k] + i - d],
                                             nmod_mul(R[i], ctx->a[k], ctx->mod),
                                             ctx->mod);
