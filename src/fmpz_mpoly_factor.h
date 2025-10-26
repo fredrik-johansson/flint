@@ -374,7 +374,7 @@ void fmpz_bpoly_fit_length(fmpz_bpoly_t A, slong len)
         fmpz_bpoly_realloc(A, len);
 }
 
-void fmpz_bpoly_print_pretty(fmpz_bpoly_t A,
+void fmpz_bpoly_print_pretty(const fmpz_bpoly_t A,
                                          const char * var0, const char * var1);
 
 FMPZ_MPOLY_FACTOR_INLINE

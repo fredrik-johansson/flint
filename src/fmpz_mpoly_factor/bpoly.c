@@ -25,7 +25,7 @@ void fmpz_bpoly_clear(fmpz_bpoly_t A)
     }
 }
 
-void fmpz_bpoly_print_pretty(fmpz_bpoly_t A, const char * var0, const char * var1)
+void fmpz_bpoly_print_pretty(const fmpz_bpoly_t A, const char * var0, const char * var1)
 {
     slong i;
     int first = 1;

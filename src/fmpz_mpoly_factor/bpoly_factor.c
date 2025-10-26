@@ -9,13 +9,14 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include "n_poly.h"
 #include "fmpz_vec.h"
 #include "fmpz_poly.h"
 #include "fmpz_mod.h"
 #include "fmpz_mpoly_factor.h"
 #include "fmpz_mod_mpoly_factor.h"
 
-void fmpz_tpoly_print(fmpz_tpoly_t A, const char * xvar, const char * yvar, const char * zvar)
+void fmpz_tpoly_print(const fmpz_tpoly_t A, const char * xvar, const char * yvar, const char * zvar)
 {
     slong i;
     int first;
@@ -146,12 +147,60 @@ void fmpz_bpoly_make_primitive(fmpz_poly_t g, fmpz_bpoly_t A)
     fmpz_poly_clear(q);
 }
 
-int fmpz_bpoly_divides(fmpz_bpoly_t Q, fmpz_bpoly_t A, fmpz_bpoly_t B)
+int fmpz_bpoly_divides_heuristic(fmpz_bpoly_t Q, const fmpz_bpoly_t A, const fmpz_bpoly_t B)
+{
+    slong i;
+    nmod_poly_t tmp;
+    nmod_t mod;
+    n_bpoly_t Qm, Am, Bm;
+    int divides;
+
+    FLINT_ASSERT(B->length > 0);
+
+    nmod_init(&mod, n_nextprime(UWORD(1) << (FLINT_BITS - 4), 1));
+    nmod_poly_init_mod(tmp, mod);
+
+    n_bpoly_init(Qm);
+    n_bpoly_init(Am);
+    n_bpoly_init(Bm);
+
+    n_bpoly_fit_length(Am, A->length);
+    Am->length = A->length;
+    for (i = 0; i < A->length; i++)
+    {
+        fmpz_poly_get_nmod_poly(tmp, A->coeffs + i);
+        n_poly_set_nmod_poly(Am->coeffs + i, tmp);
+    }
+    n_bpoly_normalise(Am);
+
+    n_bpoly_fit_length(Bm, B->length);
+    Bm->length = B->length;
+    for (i = 0; i < B->length; i++)
+    {
+        fmpz_poly_get_nmod_poly(tmp, B->coeffs + i);
+        n_poly_set_nmod_poly(Bm->coeffs + i, tmp);
+    }
+    n_bpoly_normalise(Bm);
+
+    divides = Bm->length > 0;
+    if (divides)
+        divides = n_bpoly_mod_divides(Qm, Am, Bm, mod);
+
+    nmod_poly_clear(tmp);
+    n_bpoly_clear(Am);
+    n_bpoly_clear(Bm);
+
+    return divides;
+}
+
+
+int fmpz_bpoly_divides(fmpz_bpoly_t Q, const fmpz_bpoly_t A, const fmpz_bpoly_t B)
 {
     slong i, qoff;
     int divides;
     fmpz_poly_t q, t;
     fmpz_bpoly_t R;
+    slong steps = 0;
 
     FLINT_ASSERT(Q != A);
     FLINT_ASSERT(Q != B);
@@ -166,6 +215,13 @@ int fmpz_bpoly_divides(fmpz_bpoly_t Q, fmpz_bpoly_t A, fmpz_bpoly_t B)
 
     while (R->length >= B->length)
     {
+        steps++;
+        if (A->length > 10 && steps == 3 && !fmpz_bpoly_divides_heuristic(Q, A, B))
+        {
+            divides = 0;
+            goto cleanup;
+        }
+
         divides = fmpz_poly_divides(q, R->coeffs + R->length - 1, B->coeffs + B->length - 1);
         if (!divides)
             goto cleanup;
@@ -738,6 +794,7 @@ static void _recombine_naive(
                     fmpz_mod_bpoly_swap(trymet, tryme, I->ctxpk);
                 }
             }
+
             fmpz_bpoly_set_fmpz_mod_bpoly(trymez, tryme, I->ctxpk);
             fmpz_bpoly_make_primitive(g, trymez);
 
