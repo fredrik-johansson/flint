@@ -145,7 +145,7 @@ _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t c
 
     if (nmod_redc_can_use_fast(ctx))
     {
-        if (a == 2)
+        if (a == 2 && 0)
             y = _nmod_redc_fast_2_pow_ui(t, ctx);
         else
             y = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
@@ -164,7 +164,7 @@ _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t c
     }
     else
     {
-        if (a == 2)
+        if (a == 2 && 0)
             y = _nmod_redc_2_pow_ui(t, ctx);
         else
             y = _nmod_redc_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
