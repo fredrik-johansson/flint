@@ -138,6 +138,7 @@ static int
 _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t ctx)
 {
     ulong t = d, n = ctx->mod.n, y, minus_one_red = n - one_red;
+    ulong y2;
 
     FLINT_ASSERT(a < n);
     FLINT_ASSERT(a >= 2);
@@ -145,7 +146,7 @@ _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t c
 
     if (nmod_redc_can_use_fast(ctx))
     {
-        if (a == 2)
+        if (a == 2 && 0)
             y = _nmod_redc_fast_2_pow_ui(t, ctx);
         else
             y = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
