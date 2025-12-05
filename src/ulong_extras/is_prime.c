@@ -146,8 +146,18 @@ _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t c
 
     if (nmod_redc_can_use_fast(ctx))
     {
-        if (a == 2 && 0)
+        if (a == 2)
+        {
             y = _nmod_redc_fast_2_pow_ui(t, ctx);
+            y2 = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
+
+            if (nmod_redc_fast_normalise(y, ctx) != nmod_redc_fast_normalise(y2, ctx) ||
+               y >= 2 * n || y2 >= 2 * n)
+            {
+                flint_printf("REDC POWERING: d = %wu, y = %wu, y2 = %wu, n = %wu\n", d, y, y2, n);
+                flint_abort();
+            }
+        }
         else
             y = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
 
