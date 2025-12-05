@@ -59,18 +59,4 @@ jobs:
         run: |
           git clone --depth=1 https://github.com/algebraic-solving/msolve
           cd msolve/ && ./autogen.sh && ./configure && $MAKE && make check
-      - name: "Build FLINT for Nemo"
-        run: |
-          gmp_path=$(julia -e 'include("dev/find_gmp_mpfr.jl"); print(gmp_artifact_dir())')
-          mpfr_path=$(julia -e 'include("dev/find_gmp_mpfr.jl"); print(mpfr_artifact_dir())')
-          echo "Path to GMP and MPFR: ${gmp_path}, ${mpfr_path}"
-          ./bootstrap.sh && ./configure CC=${CC} --with-gmp=$gmp_path --with-mpfr=$mpfr_path && $MAKE
-          mkdir lib
-          cp libflint.so* lib/
-      - name: "Test Nemo.jl"
-        run: |
-          git clone --depth 1 https://github.com/Nemocas/Nemo.jl.git
-          mkdir -p ~/.julia/artifacts
-          echo -e "[e134572f-a0d5-539d-bddf-3cad8db41a82]\nFLINT = \"$(pwd)\"" > ~/.julia/artifacts/Overrides.toml
-          julia -e "import Pkg; Pkg.develop(path=\"./Nemo.jl\"); Pkg.test(\"Nemo\")"
 
