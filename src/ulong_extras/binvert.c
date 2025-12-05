@@ -13,7 +13,6 @@
 
 /* Uses Hurchalla's algorithm https://arxiv.org/abs/2204.04342 plus
    (optionally) a lookup table to save one iteration. */
-
 #define USE_BINVERT_TABLE 1
 
 #if USE_BINVERT_TABLE
