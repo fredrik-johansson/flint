@@ -148,8 +148,8 @@ _n_is_strong_probabprime_redc(ulong a, ulong d, ulong one_red, nmod_redc_ctx_t c
     {
         if (a == 2)
         {
-            y = _nmod_redc_fast_2_pow_ui(t, ctx);
-            y2 = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
+            y2 = _nmod_redc_fast_2_pow_ui(t, ctx);
+            y = _nmod_redc_fast_pow_ui(nmod_redc_set_nmod(a, ctx), t, ctx);
 
             if (nmod_redc_fast_normalise(y, ctx) != nmod_redc_fast_normalise(y2, ctx) ||
                y >= 2 * n || y2 >= 2 * n)
