@@ -59,22 +59,24 @@ _nmod_poly_powmod_fmpz_binexp_preinv (nn_ptr res, nn_srcptr poly, fmpz_t e,
 
     _nmod_vec_set(res, poly, lenf - 1);
 
+    nmod_poly_mulmod_precond_t pre;
+    _nmod_poly_mulmod_precond_init_num(pre, poly, lenf - 1, f, lenf, finv, lenfinv, fmpz_popcnt(e) - 1, mod);
+
     bits = fmpz_sizeinbase(e, 2);
     for (i = bits - 2; i >= 0; i--)
     {
         _nmod_poly_mul(T, res, lenf - 1, res, lenf - 1, mod);
-
         _nmod_poly_divrem_newton_n_preinv(Q, res, T, 2*lenf - 3, f,
                                                      lenf, finv, lenfinv, mod);
 
         if (fmpz_tstbit(e, i))
         {
-            _nmod_poly_mul(T, res, lenf - 1, poly, lenf - 1, mod);
-
-            _nmod_poly_divrem_newton_n_preinv(Q, res, T, 2 * lenf - 3, f,
-                                                     lenf, finv, lenfinv, mod);
+            _nmod_poly_mulmod_precond(T, pre, res, lenf - 1, mod);
+            _nmod_vec_set(res, T, lenf - 1);
         }
     }
+
+    nmod_poly_mulmod_precond_clear(pre);
 
     _nmod_vec_clear(T);
 }
@@ -198,6 +200,9 @@ _nmod_poly_powmod_ui_binexp_preinv(nn_ptr res, nn_srcptr poly, ulong e,
 
     _nmod_vec_set(res, poly, lenf - 1);
 
+    nmod_poly_mulmod_precond_t pre;
+    _nmod_poly_mulmod_precond_init_num(pre, poly, lenf - 1, f, lenf, finv, lenfinv, mpn_popcount(&e, 1) - 1, mod);
+
     for (i = FLINT_BIT_COUNT(e) - 2; i >= 0; i--)
     {
         _nmod_poly_mul(T, res, lenf - 1, res, lenf - 1, mod);
@@ -206,11 +211,12 @@ _nmod_poly_powmod_ui_binexp_preinv(nn_ptr res, nn_srcptr poly, ulong e,
 
         if (e & (UWORD(1) << i))
         {
-            _nmod_poly_mul(T, res, lenf - 1, poly, lenf - 1, mod);
-            _nmod_poly_divrem_newton_n_preinv(Q, res, T, 2*lenf - 3, f,
-                                                     lenf, finv, lenfinv, mod);
+            _nmod_poly_mulmod_precond(T, pre, res, lenf - 1, mod);
+            _nmod_vec_set(res, T, lenf - 1);
         }
     }
+
+    nmod_poly_mulmod_precond_clear(pre);
 
     _nmod_vec_clear(T);
 }

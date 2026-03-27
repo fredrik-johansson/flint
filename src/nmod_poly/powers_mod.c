@@ -259,12 +259,21 @@ _nmod_poly_powers_mod_preinv_naive(nn_ptr * res, nn_srcptr f, slong flen, slong 
     if (n == 2)
        return;
 
+    nmod_poly_mulmod_precond_t fpre;
+    _nmod_poly_mulmod_precond_init_num(fpre, f, flen, g, glen, ginv, ginvlen, (n - 2) / 2, mod);
+
     /* f^i = f^(i - 1)*f */
     for (i = 2; i < n; i++)
     {
-        _nmod_poly_mulmod_preinv(res[i], res[i / 2], glen - 1, res[(i + 1) / 2],
-                                    glen - 1, g, glen, ginv, ginvlen, mod);
+        if (i % 2 == 0)
+            _nmod_poly_mulmod_preinv(res[i], res[i / 2], glen - 1, res[(i + 1) / 2],
+                                        glen - 1, g, glen, ginv, ginvlen, mod);
+        else
+            _nmod_poly_mulmod_precond(res[i], fpre, res[i - 1], glen - 1, mod);
+
     }
+
+    nmod_poly_mulmod_precond_clear(fpre);
 }
 
 void

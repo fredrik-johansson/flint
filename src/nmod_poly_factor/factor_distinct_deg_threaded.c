@@ -257,7 +257,7 @@ void nmod_poly_factor_distinct_deg_threaded(nmod_poly_factor_t res,
                 if (i > 0 && I[i - 1].length > 1)
                 {
                     _nmod_poly_reduce_matrix_mod_poly(HH + num_threads + 1,
-                                                                    HH + 0, v);
+                                                                    HH + 0, v, vinv);
 
                     nmod_mat_clear(HH + 0);
                     nmod_mat_init_set(HH + 0, HH + num_threads + 1);
@@ -306,7 +306,7 @@ void nmod_poly_factor_distinct_deg_threaded(nmod_poly_factor_t res,
             if (I[num_threads].length > 1)
             {
                 _nmod_poly_reduce_matrix_mod_poly(HH + num_threads + 1,
-                                                                    HH + 0, v);
+                                                                    HH + 0, v, vinv);
 
                 nmod_mat_clear(HH + 0);
                 nmod_mat_init_set(HH + 0, HH + num_threads + 1);
@@ -448,7 +448,7 @@ void nmod_poly_factor_distinct_deg_threaded(nmod_poly_factor_t res,
                 if (HH[i].c > v->length - 1)
                 {
                     _nmod_poly_reduce_matrix_mod_poly(HH + num_threads + 1,
-                                                                    HH + i, v);
+                                                                    HH + i, v, vinv);
 
                     nmod_mat_clear(HH + i);
                     nmod_mat_init_set(HH + i, HH + num_threads + 1);

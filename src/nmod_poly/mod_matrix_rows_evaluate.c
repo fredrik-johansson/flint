@@ -25,28 +25,30 @@ _nmod_poly_mod_matrix_rows_evaluate_horner(nn_ptr res, const nmod_mat_t A, nn_sr
 
     _nmod_vec_set(res, nmod_mat_entry_ptr(A, len - 1, 0), n);
 
+    nmod_poly_mulmod_precond_t hpre;
+    _nmod_poly_mulmod_precond_init_num(hpre, h, n, poly3, len3, poly3inv, len3inv, len - 1, mod);
+
     for (i = len - 2; i >= 0; i--)
     {
-        _nmod_poly_mulmod_preinv(t, res, n, h, n, poly3, len3, poly3inv, len3inv, mod);
+        _nmod_poly_mulmod_precond(t, hpre, res, n, mod);
         _nmod_poly_add(res, t, n, nmod_mat_entry_ptr(A, i, 0), n, mod);
     }
+
+    nmod_poly_mulmod_precond_clear(hpre);
 
     _nmod_vec_clear(t);
 }
 
 static void
-_nmod_poly_mod_matrix_rows_evaluate_rectangular(nn_ptr res, const nmod_mat_t A, nn_srcptr h, slong n, nn_srcptr poly3, slong len3,
-    nn_srcptr poly3inv, slong len3inv, nmod_t mod)
+_nmod_poly_mod_matrix_rows_evaluate_rectangular_precomp(nn_ptr res, const nmod_mat_t A, nn_srcptr h, slong n, nn_srcptr poly3, slong len3,
+    nn_srcptr poly3inv, slong len3inv, nn_srcptr xs, slong m, const nmod_poly_mulmod_precond_t xmpre, nmod_t mod)
 {
-    nn_ptr xs, s, t, q, u;
+    nn_ptr s, t, q, u;
     slong len = A->r;
-    slong i, j, m, r;
+    slong i, j, r;
 
-    m = n_sqrt(len) + 1;
-    m = FLINT_MIN(m, 30);
     r = (len + m - 1) / m;
 
-    xs = _nmod_vec_init((m + 1) * n);
     s = _nmod_vec_init(2 * n);
     t = _nmod_vec_init(2 * n);
     q = _nmod_vec_init(2 * n);
@@ -54,21 +56,6 @@ _nmod_poly_mod_matrix_rows_evaluate_rectangular(nn_ptr res, const nmod_mat_t A, 
 
 #define XP(ii) (xs + (ii) * n)
 #define COEFF(ii) (nmod_mat_entry_ptr(A, (ii), 0))
-
-    /* Compute powers of h */
-    for (i = 0; i <= m; i++)
-    {
-        if (i == 0)
-        {
-            XP(0)[0] = 1;
-            _nmod_vec_zero(XP(0) + 1, n - 1);
-        }
-        else if (i == 1)
-            _nmod_vec_set(XP(1), h, n);
-        else
-            _nmod_poly_mulmod_preinv(XP(i), XP(i / 2), n,
-                XP((i + 1) / 2), n, poly3, len3, poly3inv, len3inv, mod);
-    }
 
     _nmod_vec_set(s, COEFF((r - 1) * m), n);
     _nmod_vec_zero(s + n, n - 1);
@@ -89,18 +76,41 @@ _nmod_poly_mod_matrix_rows_evaluate_rectangular(nn_ptr res, const nmod_mat_t A, 
             _nmod_vec_add(s, s, t, 2 * n - 1, mod);
         }
         _nmod_poly_divrem_newton_n_preinv(q, u, s, 2 * n - 1, poly3, len3, poly3inv, len3inv, mod);
-        _nmod_poly_mulmod_preinv(t, res, n, XP(m), n, poly3, len3, poly3inv, len3inv, mod);
+        _nmod_poly_mulmod_precond(t, xmpre, res, n, mod);
         _nmod_vec_add(res, t, u, n, mod);
     }
 
 #undef XP
 #undef COEFF
 
-    _nmod_vec_clear(xs);
     _nmod_vec_clear(s);
     _nmod_vec_clear(t);
     _nmod_vec_clear(q);
     _nmod_vec_clear(u);
+}
+
+static void
+_nmod_poly_mod_matrix_rows_evaluate_rectangular(nn_ptr res, const nmod_mat_t A, nn_srcptr h, slong n, nn_srcptr poly3, slong len3,
+    nn_srcptr poly3inv, slong len3inv, nmod_t mod)
+{
+    nmod_poly_mulmod_precond_t xmpre;
+    slong i, m;
+    slong len = A->r;
+    nn_ptr xs;
+
+    m = n_sqrt(len) + 1;
+    m = FLINT_MIN(m, 30);
+    xs = _nmod_vec_init((m + 1) * n);
+    nn_ptr xsptr[31];
+    for (i = 0; i <= m; i++)
+        xsptr[i] = xs + i * n;
+    _nmod_poly_powers_mod_preinv_naive(xsptr, h, n, m + 1, poly3, len3, poly3inv, len3inv, mod);
+    _nmod_poly_mulmod_precond_init_num(xmpre, xsptr[m], n, poly3, len3, poly3inv, len3inv, (len + m - 1) / m - 1, mod);
+
+    _nmod_poly_mod_matrix_rows_evaluate_rectangular_precomp(res, A, h, n, poly3, len3, poly3inv, len3inv, xs, m, xmpre, mod);
+
+    nmod_poly_mulmod_precond_clear(xmpre);
+    _nmod_vec_clear(xs);
 }
 
 void

@@ -1738,7 +1738,7 @@ Modular composition
     and ``res`` and ``h`` have length ``n``. The length of ``poly3`` must
     be equal to ``n + 1``.
 
-.. function:: void _nmod_poly_reduce_matrix_mod_poly (nmod_mat_t A, const nmod_mat_t B, const nmod_poly_t f)
+.. function:: void _nmod_poly_reduce_matrix_mod_poly (nmod_mat_t A, const nmod_mat_t B, const nmod_poly_t f, const nmod_poly_t finv)
 
     Sets the ith row of ``A`` to the reduction of the ith row of `B` modulo
     `f` for `i=1,\ldots,\sqrt{\deg(f)}`. We require `B` to be at least

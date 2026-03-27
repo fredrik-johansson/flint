@@ -44,7 +44,7 @@ static int nmod_poly_is_reducible_trial_div(const nmod_poly_t poly)
 int nmod_poly_is_irreducible_ddf(const nmod_poly_t poly)
 {
 
-    nmod_poly_t f, v, vinv, tmp;
+    nmod_poly_t f, v, vinv, tmp, tmp2;
     nmod_poly_struct * h, * H, * I;
     nmod_mat_t HH;
     slong i, j, l, m, n, d;
@@ -67,6 +67,7 @@ int nmod_poly_is_irreducible_ddf(const nmod_poly_t poly)
     nmod_poly_init_mod(v, poly->mod);
     nmod_poly_init_mod(vinv, poly->mod);
     nmod_poly_init_mod(tmp, poly->mod);
+    nmod_poly_init_mod(tmp2, poly->mod);
 
     h =  flint_malloc((2 * m + l + 1) * sizeof(nmod_poly_struct));
     H = h + (l + 1);
@@ -123,7 +124,7 @@ int nmod_poly_is_irreducible_ddf(const nmod_poly_t poly)
 
         for (i = l - 1; i >= 0 && 2*d <= v->length - 1; i--, d++)
         {
-            nmod_poly_rem(tmp, h + i, v);
+            nmod_poly_divrem_newton_n_preinv(tmp2, tmp, h + i, v, vinv);
             nmod_poly_sub(tmp, H + j, tmp);
             nmod_poly_mulmod_preinv (I + j, tmp, I + j, v, vinv);
         }
@@ -143,6 +144,7 @@ int nmod_poly_is_irreducible_ddf(const nmod_poly_t poly)
     nmod_poly_clear(v);
     nmod_poly_clear(vinv);
     nmod_poly_clear(tmp);
+    nmod_poly_clear(tmp2);
 
     nmod_mat_clear (HH);
 

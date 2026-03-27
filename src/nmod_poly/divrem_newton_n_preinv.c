@@ -97,16 +97,24 @@ void _nmod_poly_divrem_newton_n_preinv(nn_ptr Q, nn_ptr R, nn_srcptr A,
     if (lenB > 20 && _nmod_poly_divrem_try_sparse(Q, R, A, lenA, B, lenB, Binv, lenBinv, mod))
         return;
 
-    _nmod_poly_div_newton_n_preinv(Q, A, lenA, B, lenB, Binv, lenBinv, mod);
-
-    if (lenB > 1)
+    /* todo: implement as iterated preinv division */
+    if (lenA > 2 * lenB - 1)
     {
-        if (lenQ >= lenB - 1)
-            _nmod_poly_mullow(R, Q, lenQ, B, lenB - 1, lenB - 1, mod);
-        else
-            _nmod_poly_mullow(R, B, lenB - 1, Q, lenQ, lenB - 1, mod);
+        _nmod_poly_divrem(Q, R, A, lenA, B, lenB, mod);
+    }
+    else
+    {
+        _nmod_poly_div_newton_n_preinv(Q, A, lenA, B, lenB, Binv, lenBinv, mod);
 
-        _nmod_vec_sub(R, A, R, lenB - 1, mod);
+        if (lenB > 1)
+        {
+            if (lenQ >= lenB - 1)
+                _nmod_poly_mullow(R, Q, lenQ, B, lenB - 1, lenB - 1, mod);
+            else
+                _nmod_poly_mullow(R, B, lenB - 1, Q, lenQ, lenB - 1, mod);
+
+            _nmod_vec_sub(R, A, R, lenB - 1, mod);
+        }
     }
 }
 
@@ -135,11 +143,6 @@ void nmod_poly_divrem_newton_n_preinv(nmod_poly_t Q, nmod_poly_t R,
         nmod_poly_set(R, A);
         nmod_poly_zero(Q);
         return;
-    }
-
-    if (lenA > 2 * lenB - 1)
-    {
-        flint_printf ("Exception (nmod_poly_divrem_newton_n_preinv).\n");
     }
 
     if (Q == A || Q == B || Q == Binv)

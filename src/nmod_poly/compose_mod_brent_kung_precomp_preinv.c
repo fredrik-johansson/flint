@@ -19,7 +19,7 @@
 
 void
 _nmod_poly_reduce_matrix_mod_poly(nmod_mat_t A, const nmod_mat_t B,
-                                   const nmod_poly_t f)
+                                   const nmod_poly_t f, const nmod_poly_t finv)
 {
     nn_ptr tmp1;
     slong n = f->length - 1;
@@ -32,8 +32,8 @@ _nmod_poly_reduce_matrix_mod_poly(nmod_mat_t A, const nmod_mat_t B,
     nmod_mat_entry(A, 0, 0) = 1;
 
     for (i = 1; i < m; i++)
-        _nmod_poly_divrem(tmp1, nmod_mat_entry_ptr(A, i, 0), nmod_mat_entry_ptr(B, i, 0), B->c, f->coeffs,
-                                                            f->length, f->mod);
+        _nmod_poly_divrem_newton_n_preinv(tmp1, nmod_mat_entry_ptr(A, i, 0), nmod_mat_entry_ptr(B, i, 0), B->c, f->coeffs,
+                                                            f->length, finv->coeffs, finv->length, f->mod);
 
     _nmod_vec_clear(tmp1);
 }

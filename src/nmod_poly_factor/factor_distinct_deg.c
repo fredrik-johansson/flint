@@ -20,7 +20,7 @@
 void nmod_poly_factor_distinct_deg(nmod_poly_factor_t res,
                                   const nmod_poly_t poly, slong * const * degs)
 {
-    nmod_poly_t f, g, v, vinv, tmp;
+    nmod_poly_t f, g, v, vinv, tmp, tmp2;
     nmod_poly_struct * h, * H, * I;
     slong i, j, l, m, n, index, d;
     nmod_mat_t HH, HHH;
@@ -48,6 +48,7 @@ void nmod_poly_factor_distinct_deg(nmod_poly_factor_t res,
     nmod_poly_init_mod(g, poly->mod);
     nmod_poly_init_mod(vinv, poly->mod);
     nmod_poly_init_mod(tmp, poly->mod);
+    nmod_poly_init_mod(tmp2, poly->mod);
 
     h = flint_malloc((2 * m + l + 1) * sizeof(nmod_poly_struct));
     H = h + (l + 1);
@@ -97,13 +98,15 @@ void nmod_poly_factor_distinct_deg(nmod_poly_factor_t res,
         {
             if (I[j - 1].length > 1)
             {
-                _nmod_poly_reduce_matrix_mod_poly(HHH, HH, v);
+                _nmod_poly_reduce_matrix_mod_poly(HHH, HH, v, vinv);
 
                 nmod_mat_clear(HH);
                 nmod_mat_init_set(HH, HHH);
                 nmod_mat_clear(HHH);
 
-                nmod_poly_rem(tmp, H + j - 1, v);
+                nmod_poly_divrem_newton_n_preinv(tmp2, tmp, H + j - 1, v, vinv);
+                //nmod_poly_rem(tmp, H + j - 1, v);
+
                 nmod_poly_compose_mod_brent_kung_precomp_preinv(H + j, tmp, HH,
                                                                 v, vinv);
             } else
@@ -115,7 +118,9 @@ void nmod_poly_factor_distinct_deg(nmod_poly_factor_t res,
 
         for (i = l - 1; i >= 0 && 2*d <= v->length - 1; i--, d++)
         {
-            nmod_poly_rem(tmp, h + i, v);
+            nmod_poly_divrem_newton_n_preinv(tmp2, tmp, h + i, v, vinv);
+            //nmod_poly_rem(tmp, h + i, v);
+
             nmod_poly_sub(tmp, H + j, tmp);
             nmod_poly_mulmod_preinv(I + j, tmp, I + j, v, vinv);
         }
@@ -178,6 +183,7 @@ void nmod_poly_factor_distinct_deg(nmod_poly_factor_t res,
     nmod_poly_clear(v);
     nmod_poly_clear(vinv);
     nmod_poly_clear(tmp);
+    nmod_poly_clear(tmp2);
 
     nmod_mat_clear(HH);
 
