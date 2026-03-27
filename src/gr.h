@@ -729,7 +729,7 @@ typedef enum
     GR_CTX_FMPZ_MPOLY, GR_CTX_GR_MPOLY,
     GR_CTX_FMPZ_MPOLY_Q,
     GR_CTX_FMPZ_MOD_MPOLY_Q,
-    GR_CTX_GR_FRACTION, GR_CTX_GR_COMPLEX,
+    GR_CTX_GR_FRACTION, GR_CTX_GR_COMPLEX, GR_CTX_GR_QUATERNION,
     GR_CTX_GR_SERIES, GR_CTX_SERIES_MOD_GR_POLY,
     GR_CTX_GR_MAT,
     GR_CTX_GR_VEC,
@@ -1489,6 +1489,10 @@ void gr_ctx_init_gr_fraction(gr_ctx_t ctx, gr_ctx_t domain, int flags);
 /* Generic complex numbers */
 
 void gr_ctx_init_gr_complex(gr_ctx_t ctx, gr_ctx_t real_ctx);
+
+/* Generic quaternion algebras */
+
+void gr_ctx_init_gr_quaternion(gr_ctx_t ctx, gr_ctx_t basef_ctx, int flags);
 
 /* Generic series - moved to gr_series.h */
 
