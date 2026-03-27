@@ -7067,6 +7067,51 @@ class Complex_gr_complex(gr_ctx):
         self._real_ctx._decrement_refcount()
 
 
+class Quaternion_gr_quaternion(gr_ctx):
+    """
+        >>> H = Quaternion_gr_quaternion(QQ)
+        >>> H.gens()
+        [I, J]
+        >>> I, J = H.gens()
+        >>> (2 + 3*I + 4*J) * (4 + 5*I + 6*J)
+        (-31) + (22) * I + (28) * J + (-2) * I * J
+        >>> (4 + 5*I + 6*J) * (2 + 3*I + 4*J)
+        (-31) + (22) * I + (28) * J + (2) * I * J
+
+        >>> H = Quaternion_gr_quaternion(QQ, k_as_gen=True)
+        >>> H.gens()
+        [I, J, K]
+        >>> H("(1 + 2*I + 3*J + 4*K)^5")
+        (3916) + (1112) * I + (1668) * J + (2224) * K
+
+    """
+
+    def __init__(self, real_ctx, k_as_gen=False):
+        assert isinstance(real_ctx, gr_ctx)
+        gr_ctx.__init__(self)
+
+        flags = 0
+        if k_as_gen:
+            flags |= 1
+
+        libgr.gr_ctx_init_gr_quaternion(self._ref, real_ctx, flags)
+
+        class _gr_quaternion_struct(ctypes.Structure):
+            _fields_ = [('data', ctypes.c_ubyte * libgr.gr_ctx_sizeof_elem(self._ref))]
+
+        class gr_quaternion(gr_elem):
+            _struct_type = _gr_quaternion_struct
+
+        self._elem_type = gr_quaternion
+
+        real_ctx._refcount += 1
+        self._real_ctx = real_ctx
+        self._elem_type = gr_quaternion
+
+    def __del__(self):
+        self._real_ctx._decrement_refcount()
+
+
 
 
 class fexpr(gr_elem):

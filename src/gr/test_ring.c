@@ -4741,7 +4741,11 @@ gr_test_ring(gr_ctx_t R, slong iters, int test_flags)
     gr_test_iter(R, state, "ordered_ring_cmpabs", gr_test_ordered_ring_cmpabs, iters, test_flags);
 
     gr_test_iter(R, state, "numerator_denominator", gr_test_numerator_denominator, iters, test_flags);
-    gr_test_iter(R, state, "complex_parts", gr_test_complex_parts, iters, test_flags);
+
+    /* Hack: z = re(z) + im(z)*i works over the complex numbers, but not the quaternions.
+       Figure out a good criterion for running this test (or modifying it for quaternions). */
+    if (R->which_ring != GR_CTX_GR_QUATERNION)
+        gr_test_iter(R, state, "complex_parts", gr_test_complex_parts, iters, test_flags);
 
     if (gr_ctx_is_unique_factorization_domain(R) == T_TRUE)
     {
