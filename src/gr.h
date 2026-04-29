@@ -1492,7 +1492,7 @@ void gr_ctx_init_gr_complex(gr_ctx_t ctx, gr_ctx_t real_ctx);
 
 /* Generic quaternion algebras */
 
-void gr_ctx_init_gr_quaternion(gr_ctx_t ctx, gr_ctx_t basef_ctx, int flags);
+void gr_ctx_init_gr_quaternion(gr_ctx_t ctx, gr_ctx_t basef_ctx, gr_srcptr a, gr_srcptr b, int flags);
 
 /* Generic series - moved to gr_series.h */
 

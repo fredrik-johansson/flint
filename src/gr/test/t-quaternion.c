@@ -14,6 +14,7 @@
 
 TEST_FUNCTION_START(gr_quaternion, state)
 {
+    gr_ptr a, b;
     gr_ctx_t R, C;
     int reps = 100 * flint_test_multiplier();
     int i, test_flags;
@@ -30,10 +31,16 @@ TEST_FUNCTION_START(gr_quaternion, state)
             case 2:  gr_ctx_init_fmpz_poly(R); break;
             case 3:  gr_ctx_init_real_arb(R, 53); break;
         }
-
-        gr_ctx_init_gr_quaternion(C, R, 0);
+        
+        a = gr_heap_init(R);
+        b = gr_heap_init(R);
+        gr_set_si(a, -1-i, R);
+        gr_set_si(b, -1-2*i, R);
+        gr_ctx_init_gr_quaternion(C, R, a, b, 0);
         gr_test_ring(C, reps, test_flags);
 
+        gr_heap_clear(a, R);
+        gr_heap_clear(b, R);
         gr_ctx_clear(C);
         gr_ctx_clear(R);
     }
