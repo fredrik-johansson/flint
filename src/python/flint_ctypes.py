@@ -7071,6 +7071,8 @@ class Complex_gr_complex(gr_ctx):
 class Quaternion_gr_quaternion(gr_ctx):
     """
         >>> H = Quaternion_gr_quaternion(QQ)
+        >>> H
+        Quaternion algebra over Rational field (fmpq) with a = -1 with b = -1
         >>> H.gens()
         [I, J]
         >>> I, J = H.gens()
@@ -7085,9 +7087,17 @@ class Quaternion_gr_quaternion(gr_ctx):
         >>> H("(1 + 2*I + 3*J + 4*K)^5")
         (3916) + (1112) * I + (1668) * J + (2224) * K
 
+        >>> H = Quaternion_gr_quaternion(ZZ, 2, 3)
+        >>> H
+        Quaternion algebra over Integer ring (fmpz) with a = 2 with b = 3
+        >>> I, J = H.gens()
+        >>> (4 + 5 * I + 3 * J - I*J) ** 4
+        (12113) + (6960) * I + (4176) * J + (-1392) * I * J
+
+
     """
 
-    def __init__(self, real_ctx, k_as_gen=False):
+    def __init__(self, real_ctx, a=-1, b=-1, k_as_gen=False):
         assert isinstance(real_ctx, gr_ctx)
         gr_ctx.__init__(self)
 
@@ -7095,7 +7105,10 @@ class Quaternion_gr_quaternion(gr_ctx):
         if k_as_gen:
             flags |= 1
 
-        libgr.gr_ctx_init_gr_quaternion(self._ref, real_ctx, flags)
+        a = real_ctx(a)
+        b = real_ctx(b)
+
+        libgr.gr_ctx_init_gr_quaternion(self._ref, real_ctx, a._ref, b._ref, flags)
 
         class _gr_quaternion_struct(ctypes.Structure):
             _fields_ = [('data', ctypes.c_ubyte * libgr.gr_ctx_sizeof_elem(self._ref))]
