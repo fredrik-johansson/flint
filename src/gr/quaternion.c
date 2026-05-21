@@ -633,7 +633,7 @@ _gr_quaternion_sub(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx
 }
 
 
-static int
+int
 _gr_quaternion_mul_classical(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
 {
     gr_srcptr a1 = RE(x, ctx), b1 = IM(x, ctx), c1 = JM(x, ctx), d1 = KM(x, ctx);
@@ -744,7 +744,7 @@ _gr_quaternion_mul_classical(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion
     return status;
 }
 
-static int
+int
 _gr_quaternion_mul_fast(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
 {
 	gr_srcptr x1 = RE(x, ctx), x2 = IM(x, ctx), x3 = JM(x, ctx), x4 = KM(x, ctx);
@@ -754,8 +754,9 @@ _gr_quaternion_mul_fast(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_
     gr_srcptr a = GR_QUATERNION_CTX(ctx)->a;
     gr_srcptr b = GR_QUATERNION_CTX(ctx)->b;
     int status = GR_SUCCESS;
-    
-    /*if(gr_ctx_is_field(basef_ctx)!=T_TRUE) return GR_UNABLE;*/
+
+    int a_is_neg_one = (gr_is_neg_one(a, basef_ctx) == T_TRUE);
+    int b_is_neg_one = (gr_is_neg_one(b, basef_ctx) == T_TRUE);
 
     gr_ptr s1, s2, s3, s4;
     GR_TMP_INIT4(s1, s2, s3, s4, basef_ctx);
@@ -834,10 +835,18 @@ _gr_quaternion_mul_fast(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_
     status |= gr_mul(s6, tx2, ty2, basef_ctx);
     status |= gr_mul(s7, tx3, ty3, basef_ctx);
     status |= gr_mul(s8, tx4, ty4, basef_ctx);
-    status |= gr_mul(s9, x4, y2, basef_ctx);
-    status |= gr_mul(s10, rx, ry, basef_ctx);
-    status |= gr_mul(s11, x3, y4, basef_ctx);
-    status |= gr_mul(s12, ux, uy, basef_ctx);
+
+    if (!a_is_neg_one)
+    {
+        status |= gr_mul(s9, x4, y2, basef_ctx);
+        status |= gr_mul(s10, rx, ry, basef_ctx);
+    }
+
+    if (!b_is_neg_one)
+    {
+        status |= gr_mul(s11, x3, y4, basef_ctx);
+        status |= gr_mul(s12, ux, uy, basef_ctx);
+    }
 
     /* Addition Components */
 
@@ -862,22 +871,28 @@ _gr_quaternion_mul_fast(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_
     status |= gr_add(ss4, ss4, s8, basef_ctx);
     status |= gr_divexact_ui(ss4, ss4, 4, basef_ctx);
 
-    status |= gr_add_ui(aa, a, 1, basef_ctx);
-    status |= gr_add_ui(bb, b, 1, basef_ctx);
+    if (!a_is_neg_one)
+    {
+        status |= gr_add_ui(aa, a, 1, basef_ctx);
+        status |= gr_sub(sss1, s10, s3, basef_ctx);
+        status |= gr_sub(sss1, sss1, s9, basef_ctx);
+        status |= gr_mul(sss1, sss1, aa, basef_ctx);
 
-    status |= gr_sub(sss1, s10, s3, basef_ctx);
-    status |= gr_sub(sss1, sss1, s9, basef_ctx);
-    status |= gr_mul(sss1, sss1, aa, basef_ctx);
+        status |= gr_sub(sss3, s3, s9, basef_ctx);
+        status |= gr_mul(sss3, sss3, aa, basef_ctx);
+    }
 
-    status |= gr_sub(sss2, s2, s11, basef_ctx);
-    status |= gr_mul(sss2, sss2, bb, basef_ctx);
-    status |= gr_sub(sss3, s3, s9, basef_ctx);
-    status |= gr_mul(sss3, sss3, aa, basef_ctx);
+    if (!b_is_neg_one)
+    {
+        status |= gr_add_ui(bb, b, 1, basef_ctx);
+        status |= gr_sub(sss2, s2, s11, basef_ctx);
+        status |= gr_mul(sss2, sss2, bb, basef_ctx);
 
-    status |= gr_mul(ssss, a, s11, basef_ctx);
-    status |= gr_add(ssss, ssss, s12, basef_ctx);
-    status |= gr_sub(ssss, ssss, s2, basef_ctx);
-    status |= gr_mul(ssss, ssss, bb, basef_ctx);
+        status |= gr_mul(ssss, a, s11, basef_ctx);
+        status |= gr_add(ssss, ssss, s12, basef_ctx);
+        status |= gr_sub(ssss, ssss, s2, basef_ctx);
+        status |= gr_mul(ssss, ssss, bb, basef_ctx);
+    }
 
     /* Additions */
 
