@@ -632,8 +632,9 @@ _gr_quaternion_sub(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx
     return status;
 }
 
+
 static int
-_gr_quaternion_mul(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
+_gr_quaternion_mul_classical(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
 {
     gr_srcptr a1 = RE(x, ctx), b1 = IM(x, ctx), c1 = JM(x, ctx), d1 = KM(x, ctx);
     gr_srcptr a2 = RE(y, ctx), b2 = IM(y, ctx), c2 = JM(y, ctx), d2 = KM(y, ctx);
@@ -741,6 +742,182 @@ _gr_quaternion_mul(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx
     GR_TMP_CLEAR2(km_st1, km_st2, basef_ctx);
 
     return status;
+}
+
+static int
+_gr_quaternion_mul_fast(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
+{
+	gr_srcptr x1 = RE(x, ctx), x2 = IM(x, ctx), x3 = JM(x, ctx), x4 = KM(x, ctx);
+    gr_srcptr y1 = RE(y, ctx), y2 = IM(y, ctx), y3 = JM(y, ctx), y4 = KM(y, ctx);
+    gr_ptr z1 = RE(res, ctx), z2 = IM(res, ctx), z3 = JM(res, ctx), z4 = KM(res, ctx);
+    gr_ctx_struct * basef_ctx = BASEF_CTX(ctx);
+    gr_srcptr a = GR_QUATERNION_CTX(ctx)->a;
+    gr_srcptr b = GR_QUATERNION_CTX(ctx)->b;
+    int status = GR_SUCCESS;
+    
+    /*if(gr_ctx_is_field(basef_ctx)!=T_TRUE) return GR_UNABLE;*/
+
+    gr_ptr s1, s2, s3, s4;
+    GR_TMP_INIT4(s1, s2, s3, s4, basef_ctx);
+    gr_ptr s5, s6, s7, s8;
+    GR_TMP_INIT4(s5, s6, s7, s8, basef_ctx);
+    gr_ptr tx1, tx2, tx3, tx4;
+    GR_TMP_INIT4(tx1, tx2, tx3, tx4, basef_ctx);
+    gr_ptr ty1, ty2, ty3, ty4;
+    GR_TMP_INIT4(ty1, ty2, ty3, ty4, basef_ctx);
+    gr_ptr s9, s11;
+    GR_TMP_INIT2(s9, s11, basef_ctx);
+    gr_ptr s10, s12;
+    GR_TMP_INIT2(s10, s12, basef_ctx);
+    gr_ptr rx, ry, ux, ay4, uy;
+    GR_TMP_INIT5(rx, ry, ux, ay4, uy, basef_ctx);
+    gr_ptr ss1, ss2, ss3, ss4;
+    GR_TMP_INIT4(ss1, ss2, ss3, ss4, basef_ctx);
+    gr_ptr aa, bb;
+    GR_TMP_INIT2(aa, bb, basef_ctx);
+    gr_ptr sss1, sss2, sss3;
+    GR_TMP_INIT3(sss1, sss2, sss3, basef_ctx);
+    gr_ptr ssss;
+    GR_TMP_INIT(ssss, basef_ctx);
+    gr_ptr two_s2, two_s3, two_s4;
+    GR_TMP_INIT3(two_s2, two_s3, two_s4, basef_ctx);
+
+
+    /* Preliminary Additions */
+
+    status |= gr_add(tx1, x1, x2, basef_ctx);
+    status |= gr_add(tx1, tx1, x3, basef_ctx);
+    status |= gr_add(tx1, tx1, x4, basef_ctx);
+
+    status |= gr_add(ty1, y1, y2, basef_ctx);
+    status |= gr_add(ty1, ty1, y3, basef_ctx);
+    status |= gr_add(ty1, ty1, y4, basef_ctx);
+
+	status |= gr_add(tx2, x1, x2, basef_ctx);
+    status |= gr_sub(tx2, tx2, x3, basef_ctx);
+    status |= gr_sub(tx2, tx2, x4, basef_ctx);
+
+    status |= gr_add(ty2, y1, y2, basef_ctx);
+    status |= gr_sub(ty2, ty2, y3, basef_ctx);
+    status |= gr_sub(ty2, ty2, y4, basef_ctx);
+
+    status |= gr_sub(tx3, x1, x2, basef_ctx);
+    status |= gr_add(tx3, tx3, x3, basef_ctx);
+    status |= gr_sub(tx3, tx3, x4, basef_ctx);
+
+    status |= gr_sub(ty3, y1, y2, basef_ctx);
+    status |= gr_add(ty3, ty3, y3, basef_ctx);
+    status |= gr_sub(ty3, ty3, y4, basef_ctx);
+
+    status |= gr_sub(tx4, x1, x2, basef_ctx);
+    status |= gr_sub(tx4, tx4, x3, basef_ctx);
+    status |= gr_add(tx4, tx4, x4, basef_ctx);
+
+    status |= gr_sub(ty4, y1, y2, basef_ctx);
+    status |= gr_sub(ty4, ty4, y3, basef_ctx);
+    status |= gr_add(ty4, ty4, y4, basef_ctx);
+
+    status |= gr_add(rx, x2, x4, basef_ctx);
+    status |= gr_add(ry, y2, y4, basef_ctx);
+
+    status |= gr_add(ux, x3, x4, basef_ctx);
+    status |= gr_mul(ay4, a, y4, basef_ctx);
+    status |= gr_sub(uy, y3, ay4, basef_ctx);
+
+    /* Multiplications */
+
+    status |= gr_mul(s1, x1, y1, basef_ctx);
+    status |= gr_mul(s2, x4, y3, basef_ctx);
+    status |= gr_mul(s3, x2, y4, basef_ctx);
+    status |= gr_mul(s4, x3, y2, basef_ctx);
+    status |= gr_mul(s5, tx1, ty1, basef_ctx);
+    status |= gr_mul(s6, tx2, ty2, basef_ctx);
+    status |= gr_mul(s7, tx3, ty3, basef_ctx);
+    status |= gr_mul(s8, tx4, ty4, basef_ctx);
+    status |= gr_mul(s9, x4, y2, basef_ctx);
+    status |= gr_mul(s10, rx, ry, basef_ctx);
+    status |= gr_mul(s11, x3, y4, basef_ctx);
+    status |= gr_mul(s12, ux, uy, basef_ctx);
+
+    /* Addition Components */
+
+    status |= gr_add(ss1, s5, s6, basef_ctx);
+    status |= gr_add(ss1, ss1, s7, basef_ctx);
+    status |= gr_add(ss1, ss1, s8, basef_ctx);
+    status |= gr_divexact_ui(ss1, ss1, 4, basef_ctx);
+
+
+    status |= gr_add(ss2, s5, s6, basef_ctx);
+    status |= gr_sub(ss2, ss2, s7, basef_ctx);
+    status |= gr_sub(ss2, ss2, s8, basef_ctx);
+    status |= gr_divexact_ui(ss2, ss2, 4, basef_ctx);
+
+    status |= gr_sub(ss3, s5, s6, basef_ctx);
+    status |= gr_add(ss3, ss3, s7, basef_ctx);
+    status |= gr_sub(ss3, ss3, s8, basef_ctx);
+    status |= gr_divexact_ui(ss3, ss3, 4, basef_ctx);
+
+    status |= gr_sub(ss4, s5, s6, basef_ctx);
+    status |= gr_sub(ss4, ss4, s7, basef_ctx);
+    status |= gr_add(ss4, ss4, s8, basef_ctx);
+    status |= gr_divexact_ui(ss4, ss4, 4, basef_ctx);
+
+    status |= gr_add_ui(aa, a, 1, basef_ctx);
+    status |= gr_add_ui(bb, b, 1, basef_ctx);
+
+    status |= gr_sub(sss1, s10, s3, basef_ctx);
+    status |= gr_sub(sss1, sss1, s9, basef_ctx);
+    status |= gr_mul(sss1, sss1, aa, basef_ctx);
+
+    status |= gr_sub(sss2, s2, s11, basef_ctx);
+    status |= gr_mul(sss2, sss2, bb, basef_ctx);
+    status |= gr_sub(sss3, s3, s9, basef_ctx);
+    status |= gr_mul(sss3, sss3, aa, basef_ctx);
+
+    status |= gr_mul(ssss, a, s11, basef_ctx);
+    status |= gr_add(ssss, ssss, s12, basef_ctx);
+    status |= gr_sub(ssss, ssss, s2, basef_ctx);
+    status |= gr_mul(ssss, ssss, bb, basef_ctx);
+
+    /* Additions */
+
+    status |= gr_mul_ui(z1, s1, 2, basef_ctx);
+    status |= gr_sub(z1, z1, ss1, basef_ctx);
+    status |= gr_add(z1, z1, sss1, basef_ctx);
+    status |= gr_add(z1, z1, ssss, basef_ctx);
+
+    status |= gr_mul_ui(two_s2, s2, 2, basef_ctx);
+    status |= gr_sub(z2, ss2, two_s2, basef_ctx);
+    status |= gr_add(z2, z2, sss2, basef_ctx);
+
+    status |= gr_mul_ui(two_s3, s3, 2, basef_ctx);
+    status |= gr_sub(z3, ss3, two_s3, basef_ctx);
+    status |= gr_add(z3, z3, sss3, basef_ctx);
+
+    status |= gr_mul_ui(two_s4, s4, 2, basef_ctx);
+    status |= gr_sub(z4, ss4, two_s4, basef_ctx);
+
+    /* Clears */
+
+    GR_TMP_CLEAR4(s1, s2, s3, s4, basef_ctx);
+    GR_TMP_CLEAR4(s5, s6, s7, s8, basef_ctx);
+    GR_TMP_CLEAR4(tx1, tx2, tx3, tx4, basef_ctx);
+    GR_TMP_CLEAR4(ty1, ty2, ty3, ty4, basef_ctx);
+    GR_TMP_CLEAR2(s9, s11, basef_ctx);
+    GR_TMP_CLEAR5(rx, ry, ux, ay4, uy, basef_ctx);
+    GR_TMP_CLEAR4(ss1, ss2, ss3, ss4, basef_ctx);
+    GR_TMP_CLEAR2(aa, bb, basef_ctx);
+    GR_TMP_CLEAR3(sss1, sss2, sss3, basef_ctx);
+    GR_TMP_CLEAR(ssss, basef_ctx);
+    GR_TMP_CLEAR3(two_s2, two_s3, two_s4, basef_ctx);
+
+    return status;
+}
+
+static int
+_gr_quaternion_mul(gr_ptr res, gr_srcptr x, gr_srcptr y, gr_quaternion_ctx_t ctx)
+{
+    return _gr_quaternion_mul_fast(res, x, y, ctx);
 }
 
 static int
