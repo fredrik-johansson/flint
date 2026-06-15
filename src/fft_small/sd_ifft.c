@@ -1201,7 +1201,7 @@ static void radix_4_moth_inv_trunc_block_0_4_1(
 
 /************************ the recursive stuff ********************************/
 
-static void sd_ifft_no_trunc_block(
+void sd_ifft_no_trunc_block(
     const sd_fft_ctx_t Q,
     double* x,
     ulong S, /* stride */
@@ -1274,7 +1274,7 @@ static void sd_ifft_no_trunc_block(
     }
 }
 
-static void sd_ifft_no_trunc_internal(
+void sd_ifft_no_trunc_internal(
     const sd_fft_ctx_t Q,
     double* x,
     ulong k, /* transform length BLK_SZ*2^k */
@@ -1317,7 +1317,7 @@ static void sd_ifft_no_trunc_internal(
     }
 }
 
-static void sd_ifft_trunc_block(
+void sd_ifft_trunc_block(
     const sd_fft_ctx_t Q,
     double* x,  /* data + BLK_SZ*I */
     ulong S, /* stride */
@@ -1415,7 +1415,7 @@ static void sd_ifft_trunc_block(
 }
 
 
-static void sd_ifft_trunc_internal(
+void sd_ifft_trunc_internal(
     const sd_fft_ctx_t Q,
     double* x,  /* x = data + BLK_SZ*I  where I = starting index */
     ulong k,    /* transform length 2^(k + LG_BLK_SZ) */

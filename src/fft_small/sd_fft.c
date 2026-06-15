@@ -866,7 +866,7 @@ DEFINE_IT(4, 4)
     Compute an untruncated k-layer transform with lengths
     (BLK_SZ*S*2^k, BLK_SZ*S*2^(k-1), ..., BLK_SZ*S*2) and mask (0..BLK_SZ).
 */
-static void sd_fft_no_trunc_block(
+void sd_fft_no_trunc_block(
     const sd_fft_ctx_t Q,
     double* x,
     ulong S, /* stride */
@@ -964,7 +964,7 @@ static void sd_fft_no_trunc_block(
     Computes an untruncated (LG_BLK_SZ + k)-layer contiguous transform with
     lengths (BLK_SZ*2^k, BLK_SZ*2^(k-1), ..., BLK_SZ, BLK_SZ/2, ..., 2).
 */
-static void sd_fft_no_trunc_internal(
+void sd_fft_no_trunc_internal(
     const sd_fft_ctx_t Q,
     double* x,
     ulong k,    /* 1 transform of length BLK_SZ*2^k */
@@ -1011,7 +1011,7 @@ static void sd_fft_no_trunc_internal(
 }
 
 
-static void sd_fft_trunc_block(
+void sd_fft_trunc_block(
     const sd_fft_ctx_t Q,
     double* x,
     ulong S,
@@ -1135,7 +1135,7 @@ static void sd_fft_trunc_block(
 }
 
 
-static void sd_fft_trunc_internal(
+void sd_fft_trunc_internal(
     const sd_fft_ctx_t Q,
     double* x,      /* x = data + BLK_SZ*I  where I = starting index */
     ulong k,        /* transform length BLK_SZ*2^k */

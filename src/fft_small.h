@@ -20,6 +20,8 @@
 # include <stdatomic.h>
 #endif
 
+#include "thread_pool.h"
+
 #define LG_BLK_SZ 8
 #define BLK_SZ 256
 
@@ -264,6 +266,83 @@ void sd_fft_ctx_point_mul(const sd_fft_ctx_t Q,
                             double* a, const double* b, ulong m_, ulong depth);
 void sd_fft_ctx_point_sqr(const sd_fft_ctx_t Q,
                             double* a, ulong m_, ulong depth);
+
+
+/*
+    Multithreaded variants of sd_fft_trunc / sd_ifft_trunc and of the pointwise
+    multiply/square.  Each takes a budget of thread-pool handles previously
+    acquired by thread_pool_request() on global_thread_pool.
+
+    Contract:
+      * nhandles == 0  ->  runs the existing serial routine with no pool
+                           interaction (zero overhead).
+      * Output is BIT-IDENTICAL to the serial routine for any nhandles, because
+        the same leaf operations run on the same blocks; only the iteration
+        order over provably-disjoint tasks changes.
+      * The caller owns the handles and must guarantee that no other transform
+        runs concurrently on the same handles.  The intended use serializes
+        transforms so the running one owns the whole budget (see the spare-
+        thread regime in mpn_mul.c).
+
+    These routines parallelize only the OUTERMOST decomposition; every
+    sub-transform runs through the unchanged serial leaf code in
+    sd_fft.c / sd_ifft.c, so the SIMD butterflies are untouched.
+*/
+
+/* Internal recursion depth k below which the two fork-joins per transform are
+   not worth their synchronization cost.  Tune with profile/p-sd_fft_threaded.c.
+   k relates to the user depth L by  k = L - LG_BLK_SZ. */
+#ifndef PAR_MIN_K
+#define PAR_MIN_K 6
+#endif
+
+/* Pointwise step runs serially below this many BLK_SZ blocks (= 2^(depth-8)). */
+#ifndef PW_PAR_MIN_BLK
+#define PW_PAR_MIN_BLK 64
+#endif
+
+void sd_fft_trunc_threaded(sd_fft_ctx_t Q, double * d, ulong L,
+                           ulong itrunc, ulong otrunc,
+                           thread_pool_handle * handles, slong nhandles);
+
+void sd_ifft_trunc_threaded(sd_fft_ctx_t Q, double * d, ulong L, ulong trunc,
+                            thread_pool_handle * handles, slong nhandles);
+
+/* Pointwise multiply/square restricted to the block range [Istart, Istop). */
+void sd_fft_ctx_point_mul_range(const sd_fft_ctx_t Q, double * a,
+                                const double * b, ulong m_, ulong depth,
+                                ulong Istart, ulong Istop);
+void sd_fft_ctx_point_sqr_range(const sd_fft_ctx_t Q, double * a,
+                                ulong m_, ulong depth,
+                                ulong Istart, ulong Istop);
+
+void sd_fft_ctx_point_mul_threaded(const sd_fft_ctx_t Q, double * a,
+                                   const double * b, ulong m_, ulong depth,
+                                   thread_pool_handle * handles, slong nhandles);
+void sd_fft_ctx_point_sqr_threaded(const sd_fft_ctx_t Q, double * a,
+                                   ulong m_, ulong depth,
+                                   thread_pool_handle * handles, slong nhandles);
+
+/*
+    The recursive workhorses below live in sd_fft.c / sd_ifft.c and are declared
+    `static` there today.  Building the threaded drivers requires giving them
+    external linkage: remove the `static` keyword at each definition and rely on
+    these prototypes (see INTEGRATION.md).  Signatures are copied verbatim from
+    the current definitions.
+*/
+void sd_fft_no_trunc_block(const sd_fft_ctx_t Q, double * x, ulong S, ulong k, ulong j);
+void sd_fft_no_trunc_internal(const sd_fft_ctx_t Q, double * x, ulong k, ulong j);
+void sd_fft_trunc_block(const sd_fft_ctx_t Q, double * x, ulong S, ulong k, ulong j,
+                        ulong itrunc, ulong otrunc);
+void sd_fft_trunc_internal(const sd_fft_ctx_t Q, double * x, ulong k, ulong j,
+                           ulong itrunc, ulong otrunc);
+
+void sd_ifft_no_trunc_block(const sd_fft_ctx_t Q, double * x, ulong S, ulong k, ulong j);
+void sd_ifft_no_trunc_internal(const sd_fft_ctx_t Q, double * x, ulong k, ulong j);
+void sd_ifft_trunc_block(const sd_fft_ctx_t Q, double * x, ulong S, ulong k, ulong j,
+                         ulong z, ulong n, int f);
+void sd_ifft_trunc_internal(const sd_fft_ctx_t Q, double * x, ulong k, ulong j,
+                            ulong z, ulong n, int f);
 
 
 /*

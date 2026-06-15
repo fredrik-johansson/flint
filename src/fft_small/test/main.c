@@ -17,6 +17,7 @@
 #include "t-nmod_poly_divrem.c"
 #include "t-nmod_poly_mul.c"
 #include "t-sd_fft.c"
+#include "t-sd_fft_threaded.c"
 
 /* Array of test functions ***************************************************/
 
@@ -27,7 +28,8 @@ test_struct tests[] =
     TEST_FUNCTION(mpn_ctx_mpn_mul),
     TEST_FUNCTION(_nmod_poly_divrem_mpn_ctx),
     TEST_FUNCTION(_nmod_poly_mul_mid_mpn_ctx),
-    TEST_FUNCTION(sd_fft)
+    TEST_FUNCTION(sd_fft),
+    TEST_FUNCTION(sd_fft_threaded),
 };
 
 /* main function *************************************************************/

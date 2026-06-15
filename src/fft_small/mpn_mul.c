@@ -455,6 +455,41 @@ static void slow_mpn_to_fft(
     }
 }
 
+/* One prime's transform pipeline, threaded with the full handle budget.
+   do_mod != 0 : buffers hold raw limbs; convert with slow_mpn_to_fft first.
+   do_mod == 0 : ab/bb already hold mod-reduced data (to_ffts ran earlier). */
+static void
+_mpn_mul_one_prime_threaded(
+    sd_fft_ctx_struct * Q, double * ab, double * bb,
+    ulong cop, ulong depth, ulong atrunc, ulong btrunc, ulong ztrunc,
+    int squaring,
+    int do_mod, const ulong * a, ulong an, const ulong * b, ulong bn,
+    ulong bits, const double * two_pow_tab,
+    thread_pool_handle * handles, slong nhandles)
+{
+    ulong m;
+
+    if (!squaring)
+    {
+        if (do_mod)
+            slow_mpn_to_fft(Q, bb, btrunc, b, bn, bits, two_pow_tab);
+        sd_fft_trunc_threaded(Q, bb, depth, btrunc, ztrunc, handles, nhandles);
+    }
+
+    if (do_mod)
+        slow_mpn_to_fft(Q, ab, atrunc, a, an, bits, two_pow_tab);
+    sd_fft_trunc_threaded(Q, ab, depth, atrunc, ztrunc, handles, nhandles);
+
+    NMOD_RED2(m, cop >> (FLINT_BITS - depth), cop << depth, Q->mod);
+    m = nmod_inv(m, Q->mod);
+
+    if (squaring)
+        sd_fft_ctx_point_sqr_threaded(Q, ab, m, depth, handles, nhandles);
+    else
+        sd_fft_ctx_point_mul_threaded(Q, ab, bb, m, depth, handles, nhandles);
+
+    sd_ifft_trunc_threaded(Q, ab, depth, ztrunc, handles, nhandles);
+}
 
 
 
@@ -1575,30 +1610,44 @@ timeit_start(timer);
                 thread4: -
         */
 
-        wf = (fft_worker_struct*) worker_struct_buffer;
-
-        for (ulong l = 0; l < P.np; l++)
+        if (P.nhandles >= 1 && nthreads >= 2*P.np)
         {
-            fft_worker_struct* X = wf + l;
-            X->fctx = R->ffts + l;
-            X->cop = *crt_data_co_prime_red(R->crts + P.np - 1, l);
-            X->depth = depth;
-            X->ztrunc = ztrunc;
-            X->abuf = abuf + l*stride;
-            X->atrunc = atrunc;
-            X->bbuf = bbuf + l*stride;
-            X->btrunc = btrunc;
-            X->next = (l + nthreads < P.np) ? X + nthreads : NULL;
-            X->squaring = squaring;
+            /* spare-thread regime: serialize primes, thread each transform */
+            for (ulong l = 0; l < P.np; l++)
+                _mpn_mul_one_prime_threaded(
+                    R->ffts + l, abuf + l*stride, bbuf + l*stride,
+                    *crt_data_co_prime_red(R->crts + P.np - 1, l),
+                    depth, atrunc, btrunc, ztrunc, squaring,
+                    /*do_mod=*/0, NULL, 0, NULL, 0, 0, NULL,
+                    P.handles, P.nhandles);
         }
+        else
+        {
+            wf = (fft_worker_struct*) worker_struct_buffer;
 
-        for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
-            thread_pool_wake(global_thread_pool, P.handles[i - 1], 0,
-                                                      fft_worker_func, wf + i);
-        fft_worker_func(wf + 0);
+            for (ulong l = 0; l < P.np; l++)
+            {
+                fft_worker_struct* X = wf + l;
+                X->fctx = R->ffts + l;
+                X->cop = *crt_data_co_prime_red(R->crts + P.np - 1, l);
+                X->depth = depth;
+                X->ztrunc = ztrunc;
+                X->abuf = abuf + l*stride;
+                X->atrunc = atrunc;
+                X->bbuf = bbuf + l*stride;
+                X->btrunc = btrunc;
+                X->next = (l + nthreads < P.np) ? X + nthreads : NULL;
+                X->squaring = squaring;
+            }
 
-        for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
-            thread_pool_wait(global_thread_pool, P.handles[i - 1]);
+            for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
+                thread_pool_wake(global_thread_pool, P.handles[i - 1], 0,
+                                                          fft_worker_func, wf + i);
+            fft_worker_func(wf + 0);
+
+            for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
+                thread_pool_wait(global_thread_pool, P.handles[i - 1]);
+        }
 
 #if TIME_THIS
 timeit_stop(timer);
@@ -1620,34 +1669,47 @@ flint_printf("    fft: %wd\n", timer->wall);
 #if TIME_THIS
 timeit_start(timer);
 #endif
-        for (ulong l = 0; l < np; l++)
+        if (P.nhandles >= 1 && nthreads >= 2*np)
         {
-            mod_fft_worker_struct* X = w + l;
-            X->bits = bits;
-            X->fctx = R->ffts + l;
-            X->cop = *crt_data_co_prime_red(R->crts + np - 1, l);
-            X->depth = depth;
-            X->ztrunc = ztrunc;
-            X->a = a;
-            X->an = an;
-            X->abuf = abuf + l*stride;
-            X->atrunc = atrunc;
-            X->b = b;
-            X->bn = bn;
-            X->bbuf = bbuf + (l%nthreads)*stride;
-            X->btrunc = btrunc;
-            X->two_pow_tab = R->slow_two_pow_tab[l];
-            X->next = (l + nthreads < np) ? X + nthreads : NULL;
-            X->squaring = squaring;
+            for (ulong l = 0; l < np; l++)
+                _mpn_mul_one_prime_threaded(
+                    R->ffts + l, abuf + l*stride, bbuf,   /* single b-slot */
+                    *crt_data_co_prime_red(R->crts + np - 1, l),
+                    depth, atrunc, btrunc, ztrunc, squaring,
+                    /*do_mod=*/1, a, an, b, bn, bits, R->slow_two_pow_tab[l],
+                    P.handles, P.nhandles);
         }
+        else
+        {
+            for (ulong l = 0; l < np; l++)
+            {
+                mod_fft_worker_struct* X = w + l;
+                X->bits = bits;
+                X->fctx = R->ffts + l;
+                X->cop = *crt_data_co_prime_red(R->crts + np - 1, l);
+                X->depth = depth;
+                X->ztrunc = ztrunc;
+                X->a = a;
+                X->an = an;
+                X->abuf = abuf + l*stride;
+                X->atrunc = atrunc;
+                X->b = b;
+                X->bn = bn;
+                X->bbuf = bbuf + (l%nthreads)*stride;
+                X->btrunc = btrunc;
+                X->two_pow_tab = R->slow_two_pow_tab[l];
+                X->next = (l + nthreads < np) ? X + nthreads : NULL;
+                X->squaring = squaring;
+            }
 
-        for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
-            thread_pool_wake(global_thread_pool, P.handles[i - 1], 0,
-                                                   mod_fft_worker_func, w + i);
-        mod_fft_worker_func(w + 0);
+            for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
+                thread_pool_wake(global_thread_pool, P.handles[i - 1], 0,
+                                                       mod_fft_worker_func, w + i);
+            mod_fft_worker_func(w + 0);
 
-        for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
-            thread_pool_wait(global_thread_pool, P.handles[i - 1]);
+            for (ulong i = n_min(P.nhandles, P.np - 1); i > 0; i--)
+                thread_pool_wait(global_thread_pool, P.handles[i - 1]);
+        }
 
 #if TIME_THIS
 timeit_stop(timer);
