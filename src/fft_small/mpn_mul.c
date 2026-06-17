@@ -1609,7 +1609,9 @@ void _mpn_ctx_mpn_mul_range(mpn_ctx_t R, ulong* z, ulong lo, ulong hi,
     {
         ulong d = n_flog2(zlen);
         ulong w = n_pow2(d);
-        if (atrunc <= w && btrunc <= w && c_hi <= w && w <= zlen && zlen <= c_lo + w)
+        if (w > zlen) { w >>= 1; d -= 1; }   /* largest power of two <= zlen */
+        if (d >= LG_BLK_SZ &&
+            atrunc <= w && btrunc <= w && c_hi <= w && w <= zlen && zlen <= c_lo + w)
         {
             depth = d;
             ztrunc = w;
