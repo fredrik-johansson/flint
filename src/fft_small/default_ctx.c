@@ -45,6 +45,12 @@ mpn_mul_default_mpn_ctx(nn_ptr r1, nn_srcptr i1, slong n1, nn_srcptr i2, slong n
 }
 
 void
+mpn_mulmid_default_mpn_ctx(nn_ptr r1, nn_srcptr i1, slong n1, nn_srcptr i2, slong n2, slong lo, slong hi)
+{
+    _mpn_ctx_mpn_mul_range(get_default_mpn_ctx(), r1, lo, hi, i1, n1, i2, n2);
+}
+
+void
 _nmod_poly_mul_mid_default_mpn_ctx(nn_ptr res, slong zl, slong zh, nn_srcptr a, slong an, nn_srcptr b, slong bn, nmod_t mod)
 {
     _nmod_poly_mul_mid_mpn_ctx(res, zl, zh, a, an, b, bn, mod, get_default_mpn_ctx());

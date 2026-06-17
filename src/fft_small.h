@@ -397,6 +397,7 @@ void mpn_ctx_init(mpn_ctx_t R, ulong p);
 void mpn_ctx_clear(mpn_ctx_t R);
 void* mpn_ctx_fit_buffer(mpn_ctx_t R, ulong n);
 void mpn_ctx_mpn_mul(mpn_ctx_t R, ulong* z, const ulong* a, ulong an, const ulong* b, ulong bn);
+void _mpn_ctx_mpn_mul_range(mpn_ctx_t R, ulong* z, ulong lo, ulong hi, const ulong* a, ulong an, const ulong* b, ulong bn);
 
 void _nmod_poly_mul_mid_mpn_ctx(
     ulong* z, ulong zl, ulong zh,
@@ -485,6 +486,7 @@ int _nmod_poly_divrem_precomp(
 mpn_ctx_struct * get_default_mpn_ctx(void);
 
 void mpn_mul_default_mpn_ctx(nn_ptr r1, nn_srcptr i1, slong n1, nn_srcptr i2, slong n2);
+void mpn_mulmid_default_mpn_ctx(nn_ptr r1, nn_srcptr i1, slong n1, nn_srcptr i2, slong n2, slong lo, slong hi);
 void _nmod_poly_mul_mid_default_mpn_ctx(nn_ptr res, slong zl, slong zh, nn_srcptr a, slong an, nn_srcptr b, slong bn, nmod_t mod);
 
 
