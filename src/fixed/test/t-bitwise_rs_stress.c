@@ -1,0 +1,212 @@
+/*
+    Copyright (C) 2026 Fredrik Johansson
+
+    This file is part of FLINT.
+
+    FLINT is free software: you can redistribute it and/or modify it under
+    the terms of the GNU Lesser General Public License (LGPL) as published
+    by the Free Software Foundation; either version 3 of the License, or
+    (at your option) any later version.  See <https://www.gnu.org/licenses/>.
+*/
+
+#include "test_helpers.h"
+#include "mpn_extras.h"
+#include "arb.h"
+#include "fixed.h"
+
+/* Adversarial stress inputs for the bitwise reductions: for exp,
+   sparse sums of the tabulated logarithms L_i = log(1 + 2^-i)
+   (perturbed by a few ulp), so that the greedy subtraction runs into
+   exact matches, single-limb model ties, near-zero residuals and --
+   when an index is duplicated -- the extra correction step at i = r;
+   for log, sparse products of the factors 1 + 2^-i built by exact
+   shift-and-adds, so that the reduction must rediscover the factor
+   set, driving the deficit through zero and near-tie states. */
+
+static double
+ulp_error_vs_arb(nn_srcptr res, slong rn, const arb_t exact, slong n)
+{
+    arb_t va, delta;
+    fmpz_t t;
+    mag_t mb;
+    double u;
+
+    arb_init(va);
+    arb_init(delta);
+    fmpz_init(t);
+    mag_init(mb);
+
+    fmpz_set_ui_array(t, res, rn);
+    arb_set_fmpz(va, t);
+    arb_mul_2exp_si(va, va, -FLINT_BITS * n);
+    arb_sub(delta, va, exact, ARF_PREC_EXACT);
+    arb_get_mag(mb, delta);
+    mag_mul_2exp_si(mb, mb, FLINT_BITS * n);
+    u = mag_get_d(mb);
+
+    arb_clear(va);
+    arb_clear(delta);
+    fmpz_clear(t);
+    mag_clear(mb);
+
+    return u;
+}
+
+TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
+{
+    slong iter;
+
+    for (iter = 0; iter < 200 * flint_test_multiplier(); iter++)
+    {
+        slong nmin = (FLINT_BITS == 64) ? 1 : 2;
+        slong n = nmin + n_randint(state, (iter % 5 == 0) ? 40 : 10);
+        slong imax = FLINT_MIN(FLINT_BITS * n - 16, 448);
+        int r = (iter % 4 == 0) ? 0
+                : 32 + (int) n_randint(state, FLINT_MAX(1, imax - 32));
+        int reff = (r == 0) ? 32 : r;
+        slong nc, j, k, nsum;
+        ulong x[52], res[53], cy;
+        arb_t xa, exact;
+        fmpz_t f;
+        slong prec = FLINT_BITS * n + 128;
+        double u;
+
+        /* make sure the table covers the indices we want to use */
+        _fixed_exp_logs_ensure(n, FLINT_MIN((slong) reff + 2, imax));
+        nc = _fixed_exp_logs_n;
+
+        /* ---- exp: x = sum of tabulated L_i, sparse and possibly
+           with repeats (every fifth iteration duplicates the index
+           at the reduction limit, forcing the extra step) ---- */
+        flint_mpn_zero(x, n);
+        nsum = 1 + n_randint(state, 10);
+        for (j = 0; j < nsum; j++)
+        {
+            slong i = 1 + n_randint(state, FLINT_MIN((slong) reff + 2,
+                imax));
+            nn_srcptr Li = _fixed_exp_logs + i * nc + (nc - n);
+
+            cy = mpn_add_n(x, x, Li, n);
+            if (cy)
+                mpn_sub_n(x, x, Li, n);    /* would exceed 1: revert */
+        }
+        if (iter % 5 == 0 && reff <= imax)
+        {
+            /* duplicate L_r (twice on top of whatever is there) */
+            nn_srcptr Lr = _fixed_exp_logs
+                + FLINT_MIN((slong) reff, _fixed_exp_logs_r) * nc
+                + (nc - n);
+
+            for (k = 0; k < 2; k++)
+            {
+                cy = mpn_add_n(x, x, Lr, n);
+                if (cy)
+                    mpn_sub_n(x, x, Lr, n);
+            }
+        }
+        /* perturb by a few ulp in either direction */
+        k = (slong) n_randint(state, 7) - 3;
+        if (k > 0)
+        {
+            cy = mpn_add_1(x, x, n, (ulong) k);
+            if (cy)
+                mpn_sub_1(x, x, n, (ulong) k);
+        }
+        else if (k < 0)
+        {
+            cy = mpn_sub_1(x, x, n, (ulong) (-k));
+            if (cy)
+                mpn_add_1(x, x, n, (ulong) (-k));
+        }
+
+        fixed_exp_bitwise_rs(res, x, n, r);
+
+        arb_init(xa);
+        arb_init(exact);
+        fmpz_init(f);
+        fmpz_set_ui_array(f, x, n);
+        arb_set_fmpz(xa, f);
+        arb_mul_2exp_si(xa, xa, -FLINT_BITS * n);
+        arb_exp(exact, xa, prec);
+        u = ulp_error_vs_arb(res, n + 1, exact, n);
+        if (u > (double) FIXED_EXP_BITWISE_RS_MAX_ERR(n, r))
+            TEST_FUNCTION_FAIL("exp: n = %wd, r = %d, ulp = %f\n",
+                n, r, u);
+
+        /* ---- log: X = product of factors 1 + 2^-i staying below 2,
+           built by exact shift-and-adds (every fifth iteration
+           attempts a duplicated factor at the reduction limit) ---- */
+        {
+            ulong P[53], sh[53];
+            slong wn = n + 1, tries;
+            int rl = (iter % 4 == 0) ? 0
+                     : 16 + (int) n_randint(state, FLINT_MAX(1, imax - 16));
+
+            flint_mpn_zero(P, n);
+            P[n] = 1;
+
+            tries = 2 + (slong) n_randint(state, 12);
+            for (j = 0; j < tries; j++)
+            {
+                slong i;
+
+                if (iter % 5 == 0 && j < 2)
+                    i = FLINT_MAX(1, FLINT_MIN((rl == 0) ? 32 : rl,
+                        imax));
+                else
+                    i = 1 + n_randint(state, imax);
+
+                if (i >= FLINT_BITS * wn)
+                    continue;
+                mpn_rshift(sh, P, wn, 1);     /* dummy init */
+                {
+                    slong q = i / FLINT_BITS, b = i % FLINT_BITS;
+
+                    flint_mpn_zero(sh, wn);
+                    if (b)
+                        mpn_rshift(sh, P + q, wn - q, (int) b);
+                    else
+                        flint_mpn_copyi(sh, P + q, wn - q);
+                }
+                cy = mpn_add(P, P, wn, sh, n);   /* low n limbs of v */
+                if (cy || P[n] > 1)
+                {
+                    mpn_sub(P, P, wn, sh, n);    /* crossed 2: revert */
+                }
+            }
+
+            /* perturb the fraction by a few ulp */
+            k = (slong) n_randint(state, 7) - 3;
+            if (k > 0)
+            {
+                cy = mpn_add_1(P, P, n, (ulong) k);
+                if (cy)
+                    mpn_sub_1(P, P, n, (ulong) k);
+            }
+            else if (k < 0)
+            {
+                cy = mpn_sub_1(P, P, n, (ulong) (-k));
+                if (cy)
+                    mpn_add_1(P, P, n, (ulong) (-k));
+            }
+
+            fixed_log1p_bitwise_rs(res, P, n, rl);
+
+            fmpz_set_ui_array(f, P, n);
+            arb_set_fmpz(xa, f);
+            arb_mul_2exp_si(xa, xa, -FLINT_BITS * n);
+            arb_add_ui(xa, xa, 1, prec);
+            arb_log(exact, xa, prec);
+            u = ulp_error_vs_arb(res, n, exact, n);
+            if (u > (double) FIXED_LOG1P_BITWISE_RS_MAX_ERR(n, rl))
+                TEST_FUNCTION_FAIL("log: n = %wd, r = %d, ulp = %f\n",
+                    n, rl, u);
+        }
+
+        arb_clear(xa);
+        arb_clear(exact);
+        fmpz_clear(f);
+    }
+
+    TEST_FUNCTION_END(state);
+}
