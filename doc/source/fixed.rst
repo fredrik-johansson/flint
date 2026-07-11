@@ -132,6 +132,15 @@ Exponential with bitwise argument reduction
     `t < 2^{-16}` (available for `n \le 5` on 64-bit machines) and
     pay up to about `n = 4`.
 
+    With `r = 0` the sizes `n = 1, 2, 3, 5` are fully specialized on
+    64-bit machines: the reduction parameter is a compile-time
+    constant and the series is built for exactly that `r`, with the
+    smallest number of terms `N` satisfying
+    `N r + \log_2(N!) \ge 64 n` -- that is, the `1/N!` of the last
+    coefficient is spent on dropping terms rather than kept as slack,
+    which at `r = 16` gives `N = 11, 14, 17` for `n = 3, 4, 5` where
+    `4 n` terms would otherwise be used.
+
     Small `r` minimizes table and reduction work, large `r` shortens
     the series; as a rule of thumb on 64-bit machines, `r = 32` is
     best up to about 8 limbs, `r = 64` up to about 32 limbs, and

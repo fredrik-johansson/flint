@@ -102,32 +102,52 @@ def emit_tables():
 
 
 class Gen:
-    def __init__(self, N, m, zbits, use_divrem=False, name=None):
-        assert zbits in (64, 32, 16)
+    def __init__(self, N, m, zbits, use_divrem=False, name=None,
+                 xn=None, noshrink=False):
+        # zbits need not be a divisor of 64: the leading-zero shrink
+        # lz(j) = floor(j zbits / 64) is well defined for any zbits,
+        # and xn (the output precision) may be given explicitly rather
+        # than derived from N, which is what lets the series spend the
+        # 1/N! gain on FEWER TERMS instead of on slack: N is then the
+        # smallest number of terms with N zbits + log2(N!) >= 64 xn.
+        assert 4 <= zbits <= 64
         assert 1 <= N <= NMAX
         self.N = N
         self.m = m
         self.zbits = zbits
+        self.noshrink = noshrink
         self.m_split = (m != 0 and N >= 4
                         and (zbits == 64 or m % (64 // zbits) == 0))
         self.use_divrem = use_divrem
-        self.xn = -(-N * zbits // 64)          # ceil
+        self.xn = xn if xn is not None else -(-N * zbits // 64)
         base = ("mpn_exp_series" if zbits == 64
                 else "mpn_exp_series%d" % zbits)
         self.name = name or "%s_%d_rs%d%s" % (base, N, m,
                                               "_dr" if use_divrem else "")
         if N >= 4 and m:
-            assert 2 <= m <= (N if zbits == 16 else N - 1)
-            # block bases need lz(b) - lz(m) = lz(b - m), which for
-            # lz(j) = j * zbits / 64 means m must be a multiple of
-            # 64 / zbits (the number of terms per limb of shrink);
-            # at zbits = 16 no legal m exists below N = 5, so those
-            # sizes use the unsplit series
-            if zbits < 64 and m % (64 // zbits) != 0:
-                raise ValueError("m must be a multiple of %d at "
-                                 "zbits = %d" % (64 // zbits, zbits))
+            assert 2 <= m <= N
+            # Block bases need lz(b) - lz(m) = lz(b - m).  With m = N
+            # there is a single block (base 0) and no boundary, so the
+            # constraint is vacuous -- which is what makes arbitrary
+            # zbits usable at all.  Otherwise it forces zbits | 64 and
+            # m a multiple of 64 / zbits.
+            if m < N and not self.noshrink and (64 % zbits != 0
+                          or m % (64 // zbits) != 0):
+                raise ValueError("m = %d illegal at zbits = %d"
+                                 % (m, zbits))
 
     def lz(self, j):
+        # With the shrink on, lz(j) = floor(j zbits / 64) is the number
+        # of leading zero limbs of x^j.  It satisfies the block-base
+        # identity lz(b) - lz(m) = lz(b - m) only when 64 % zbits == 0,
+        # which is exactly why the tuned families sit at zbits = 16, 32
+        # and 64: at any other zbits rectangular splitting is illegal
+        # and the series must be a single block.  Turning the shrink OFF
+        # gives up the leading-zero savings but makes lz identically 0,
+        # so the identity is trivial and ANY m is legal -- the tradeoff
+        # worth measuring for bit-granular r.
+        if self.noshrink:
+            return 0
         return (j * self.zbits) // 64
 
     def gn(self, j):
@@ -632,6 +652,22 @@ WINNERS_64 = {4: (2, 0), 5: (3, 0), 6: (3, 0), 7: (5, 0), 8: (3, 0), 9: (3, 0), 
 WINNERS_16 = {4: (4, 0), 8: (4, 0), 12: (4, 0), 16: (4, 0),
               20: (4, 0)}
 
+# Fully specialized series for the small sizes, one per n: the
+# reduction parameter r is fixed (and hardcoded into the caller, see
+# dev/gen_fixed_exp_bitwise_small.py), and N is the smallest number of
+# terms with N r + log2(N!) >= 64 n -- that is, the 1/N! of the last
+# coefficient is SPENT on dropping terms rather than banked as slack.
+# r need not divide 64 here; where it does not, rectangular splitting
+# is unavailable (the block bases would need lz(b) - lz(m) = lz(b - m))
+# and the series is a single block, m = N.  Entries are
+# n: (r, N, m, use_divrem), benchmarked end to end.
+# n = 4 is absent on purpose: there r = 32 measured fastest, and at
+# zbits = 32 the term count N = 2 n is ALREADY the factorial-minimal
+# one, so there is nothing to specialize -- that size keeps the
+# ordinary path with its tuned default.
+WINNERS_OPT = {1: (12, 5, 5, 0), 2: (16, 8, 4, 0), 3: (16, 11, 4, 0),
+               5: (16, 17, 4, 0)}
+
 WINNERS_32 = {1: (0, 0), 2: (0, 0), 3: (1, 0), 4: (1, 0), 5: (1, 0), 6: (4, 0), 7: (4, 0), 8: (6, 0), 9: (6, 0), 10: (4, 0), 11: (4, 0), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (4, 0), 16: (4, 0), 17: (4, 0), 18: (4, 0), 19: (4, 0), 20: (4, 0), 21: (4, 1)}
 
 
@@ -705,6 +741,19 @@ if __name__ == "__main__":
     f32 = generate_best(32, WINNERS_32)
     f16 = generate_best(16, WINNERS_16)
 
+    # the fully specialized per-n family
+    fo = [header(), emit_tables()]
+    fo.append("typedef void (*exp_series_fn)(mp_ptr, mp_srcptr);")
+    fo.append("")
+    for n in sorted(WINNERS_OPT):
+        r, N, m, dr = WINNERS_OPT[n]
+        g = Gen(N, m, r, use_divrem=bool(dr), xn=n,
+                name="mpn_exp_series_opt_%d" % n)
+        code, eb = g.generate()
+        fo.append(code)
+        fo.append("")
+    fopt = "\n".join(fo)
+
     f64 = f64[f64.index('/* c_k = 20!/k!'):]
     m32 = re.search(r'mpn_exp_series32_\d+\(', f32)
     i32 = f32.rindex('\n', 0, f32.rindex('void', 0, m32.start()))
@@ -712,14 +761,18 @@ if __name__ == "__main__":
     m16 = re.search(r'mpn_exp_series16_\d+\(', f16)
     i16 = f16.rindex('\n', 0, f16.rindex('void', 0, m16.start()))
     f16 = f16[i16:]
+    mo = re.search(r'mpn_exp_series_opt_\d+\(', fopt)
+    io = fopt.rindex('\n', 0, fopt.rindex('void', 0, mo.start()))
+    fopt = fopt[io:]
 
     out = ("/* Generated by dev/gen_fixed_exp_rs_hard.py -- private static\n"
            "   Taylor series routines for the fixed module -- do not edit"
            " by hand. */\n\n"
            "typedef void (*exp_series_fn)(nn_ptr, nn_srcptr);\n\n"
            + _statify(f64) + "\n" + _statify(f32)
-           + "\n" + _statify(f16))
+           + "\n" + _statify(f16) + "\n" + fopt)
     out = _drop_err_tabs(out)
+    out = out.replace('mpn_exp_series_opt_', '_fixed_exp_rs_opt_')
     out = out.replace('mpn_exp_series16_', '_fixed_exp_rs16_')
     out = out.replace('mpn_exp_series32_', '_fixed_exp_rs32_')
     out = out.replace('mpn_exp_series_', '_fixed_exp_rs_')

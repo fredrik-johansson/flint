@@ -112,6 +112,15 @@ void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n);
    series family exists only for 64-bit limbs. */
 #if FLINT_BITS == 64
 void _fixed_exp_rs16(nn_ptr res, nn_srcptr x, slong n);
+
+/* Internal: the fully specialized exp series, one per n <= 5, each
+   built for the reduction parameter hardcoded alongside it in
+   fixed_exp_bitwise_rs and using the smallest number of terms N with
+   N r + log2(N!) >= 64 n. */
+void _fixed_exp_rs_opt_1(nn_ptr res, nn_srcptr x);
+void _fixed_exp_rs_opt_2(nn_ptr res, nn_srcptr x);
+void _fixed_exp_rs_opt_3(nn_ptr res, nn_srcptr x);
+void _fixed_exp_rs_opt_5(nn_ptr res, nn_srcptr x);
 #endif
 
 /* Internal: thread-local cached table of L_i = log(1 + 2^-i)

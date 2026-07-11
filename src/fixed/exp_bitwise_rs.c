@@ -359,11 +359,14 @@ _fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
 static const int _fixed_exp_bitwise_rs_r_tab[] =
     {16, 32, 64, 128, 192, 256, 320};
 static const short _fixed_exp_bitwise_rs_n_tab[] =
-    {1, 5, 12, 39, 115, 137, 154};
+    {1, 4, 12, 39, 115, 137, 154};
 
 void
 fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
+#if FLINT_BITS == 64
+    int r0;
+#endif
     slong num, wn;
     nn_ptr t, y, sh;
     slong * used;
@@ -374,6 +377,10 @@ fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     /* on 32-bit limbs, n = 1 would clamp r to 16 below, violating
        the 2^-32 contract of the series functions */
     FLINT_ASSERT(FLINT_BITS == 64 || n >= 2);
+
+#if FLINT_BITS == 64
+    r0 = r;         /* the specialized sizes trigger on r = 0 only */
+#endif
 
     if (r == 0)
     {
@@ -390,6 +397,12 @@ fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
 #if FLINT_BITS == 64
 #ifndef FIXED_EXP_BITWISE_NO_SMALL
+    /* fully specialized sizes: with r = 0 the caller has left the
+       reduction parameter to us, so the whole call collapses to code
+       with a compile-time constant r and its matching series */
+    if (n <= 5 && r0 == 0 && _fixed_exp_bitwise_rs_opt(res, x, n))
+        return;
+
     if (n <= 7)
     {
         _fixed_exp_bitwise_rs_small(res, x, n, r);

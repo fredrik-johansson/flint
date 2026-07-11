@@ -1428,3 +1428,139 @@ static const exp_series_fn _fixed_exp_rs16_tab[22] = {
     _fixed_exp_rs16_20,
     NULL,
 };
+
+void
+_fixed_exp_rs_opt_1(nn_ptr res, nn_srcptr x)
+{
+    ulong x2[1];
+    ulong x3[1];
+    ulong x4[1];
+    ulong s[2];
+    ulong t[2];
+
+    flint_mpn_sqrhigh(x2, x, 1);
+    flint_mpn_mulhigh_n(x3, x, x2, 1);
+    flint_mpn_sqrhigh(x4, x2, 1);
+
+    umul_ppmm(t[1], t[0], x4[0], exp_series_cs[4]);
+    t[1] += mpn_addmul_1(t, x3, 1, exp_series_cs[3]);
+
+    flint_mpn_mulhigh_n(res, t, exp_series_fac20_inv + 18, 2);
+
+    mpn_rshift(s, x2, 1, 1);
+    res[1] += mpn_add_n(res, res, s, 1);
+    res[1] = 1 + mpn_add_n(res, res, x, 1);
+}
+
+/* res[0..2] ~= sum_{k<8} x^k/k!; x: 2 frac limbs,
+   0 <= x < 2^-16; one-sided error <= 8 ulp (2^-128) */
+void
+_fixed_exp_rs_opt_2(nn_ptr res, nn_srcptr x)
+{
+    ulong x2[2];
+    ulong x3[2];
+    ulong x4p[3];
+    ulong s[3];
+    ulong t[3];
+
+    nn_ptr x4 = x4p + 1;
+    x4p[0] = 0;
+
+    flint_mpn_sqrhigh(x2, x, 2);
+    flint_mpn_mulhigh_n(x3, x, x2, 2);
+    flint_mpn_sqrhigh(x4, x2, 2);
+
+    umul_ppmm(t[1], t[0], x3[1], exp_series_cs[7]);
+    t[1] += mpn_addmul_1(t, x2 + 1, 1, exp_series_cs[6]);
+    t[1] += mpn_addmul_1(t, x + 1, 1, exp_series_cs[5]);
+    t[1] += exp_series_cs[4];
+    flint_mpn_mulhigh_n(s, t, x4 - 1, 2);
+    s[2] = mpn_addmul_1(s, x3, 2, exp_series_cs[3]);
+
+    flint_mpn_mulhigh_n(res, s, exp_series_fac20_inv + 17, 3);
+
+    mpn_rshift(t, x2, 2, 1);
+    res[2] += mpn_add_n(res, res, t, 2);
+    res[2] = 1 + mpn_add_n(res, res, x, 2);
+}
+
+/* res[0..3] ~= sum_{k<11} x^k/k!; x: 3 frac limbs,
+   0 <= x < 2^-16; one-sided error <= 8 ulp (2^-192) */
+void
+_fixed_exp_rs_opt_3(nn_ptr res, nn_srcptr x)
+{
+    ulong x2[3];
+    ulong x3[3];
+    ulong x4p[4];
+    ulong s[4];
+    ulong t[4];
+
+    nn_ptr x4 = x4p + 1;
+    x4p[0] = 0;
+
+    flint_mpn_sqrhigh(x2, x, 3);
+    flint_mpn_mulhigh_n(x3, x, x2, 3);
+    flint_mpn_sqrhigh(x4, x2, 3);
+
+    umul_ppmm(t[1], t[0], x2[2], exp_series_cs[10]);
+    t[1] += mpn_addmul_1(t, x + 2, 1, exp_series_cs[9]);
+    t[1] += exp_series_cs[8];
+    flint_mpn_mulhigh_n(s, t, x4, 2);
+    s[2] = mpn_addmul_1(s, x3 + 1, 2, exp_series_cs[7]);
+    s[2] += mpn_addmul_1(s, x2 + 1, 2, exp_series_cs[6]);
+    s[2] += mpn_addmul_1(s, x + 1, 2, exp_series_cs[5]);
+    s[2] += exp_series_cs[4];
+    flint_mpn_mulhigh_n(t, s, x4 - 1, 3);
+    t[3] = mpn_addmul_1(t, x3, 3, exp_series_cs[3]);
+
+    flint_mpn_mulhigh_n(res, t, exp_series_fac20_inv + 16, 4);
+
+    mpn_rshift(s, x2, 3, 1);
+    res[3] += mpn_add_n(res, res, s, 3);
+    res[3] = 1 + mpn_add_n(res, res, x, 3);
+}
+
+/* res[0..5] ~= sum_{k<17} x^k/k!; x: 5 frac limbs,
+   0 <= x < 2^-16; one-sided error <= 8 ulp (2^-320) */
+void
+_fixed_exp_rs_opt_5(nn_ptr res, nn_srcptr x)
+{
+    ulong x2[5];
+    ulong x3[5];
+    ulong x4p[6];
+    ulong s[6];
+    ulong t[6];
+
+    nn_ptr x4 = x4p + 1;
+    x4p[0] = 0;
+
+    flint_mpn_sqrhigh(x2, x, 5);
+    flint_mpn_mulhigh_n(x3, x, x2, 5);
+    flint_mpn_sqrhigh(x4, x2, 5);
+
+    t[0] = 0;
+    t[1] = exp_series_cs[16];
+    flint_mpn_mulhigh_n(s, t, x4 + 2, 2);
+    s[2] = mpn_addmul_1(s, x3 + 3, 2, exp_series_cs[15]);
+    s[2] += mpn_addmul_1(s, x2 + 3, 2, exp_series_cs[14]);
+    s[2] += mpn_addmul_1(s, x + 3, 2, exp_series_cs[13]);
+    s[2] += exp_series_cs[12];
+    flint_mpn_mulhigh_n(t, s, x4 + 1, 3);
+    t[3] = mpn_addmul_1(t, x3 + 2, 3, exp_series_cs[11]);
+    t[3] += mpn_addmul_1(t, x2 + 2, 3, exp_series_cs[10]);
+    t[3] += mpn_addmul_1(t, x + 2, 3, exp_series_cs[9]);
+    t[3] += exp_series_cs[8];
+    flint_mpn_mulhigh_n(s, t, x4, 4);
+    s[4] = mpn_addmul_1(s, x3 + 1, 4, exp_series_cs[7]);
+    s[4] += mpn_addmul_1(s, x2 + 1, 4, exp_series_cs[6]);
+    s[4] += mpn_addmul_1(s, x + 1, 4, exp_series_cs[5]);
+    s[4] += exp_series_cs[4];
+    flint_mpn_mulhigh_n(t, s, x4 - 1, 5);
+    t[5] = mpn_addmul_1(t, x3, 5, exp_series_cs[3]);
+
+    flint_mpn_mulhigh_n(res, t, exp_series_fac20_inv + 14, 6);
+
+    mpn_rshift(s, x2, 5, 1);
+    res[5] += mpn_add_n(res, res, s, 5);
+    res[5] = 1 + mpn_add_n(res, res, x, 5);
+}
