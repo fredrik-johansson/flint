@@ -665,7 +665,7 @@ WINNERS_16 = {4: (4, 0), 8: (4, 0), 12: (4, 0), 16: (4, 0),
 # N = 2 n is already factorial-minimal.  Entries are n: (r, N, m,
 # use_divrem), benchmarked end to end.
 WINNERS_OPT = {1: (12, 5, 5, 0), 2: (16, 8, 4, 0), 3: (16, 11, 4, 0),
-               5: (16, 17, 4, 0)}
+               4: (16, 14, 4, 0), 5: (16, 17, 4, 0)}
 
 WINNERS_32 = {1: (0, 0), 2: (0, 0), 3: (1, 0), 4: (1, 0), 5: (1, 0), 6: (4, 0), 7: (4, 0), 8: (6, 0), 9: (6, 0), 10: (4, 0), 11: (4, 0), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (4, 0), 16: (4, 0), 17: (4, 0), 18: (4, 0), 19: (4, 0), 20: (4, 0), 21: (4, 1)}
 
@@ -745,10 +745,11 @@ if __name__ == "__main__":
     fo.append("typedef void (*exp_series_fn)(mp_ptr, mp_srcptr);")
     fo.append("")
     for n in sorted(WINNERS_OPT):
-        # n = 1, 2 and 3 are hand-written (see exp_rs_opt_hand.inc),
-        # where a mixed-precision Horner beats anything the framework
-        # emits at these sizes
-        if n <= 3:
+        # n = 1..4 are hand-written (see exp_rs_opt_hand.inc), where a
+        # mixed-precision Horner beats anything the framework emits.
+        # Only n = 5 is still generated: there the seventeen-term chain
+        # is long enough that the tuned rectangular splitting wins.
+        if n <= 4:
             continue
         r, N, m, dr = WINNERS_OPT[n]
         g = Gen(N, m, r, use_divrem=bool(dr), xn=n,

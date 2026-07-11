@@ -36,7 +36,7 @@ def lst(p, k, hi_to_lo=True):
 # 141 ns at n = 4): the compiler fully unrolls the 32-iteration window,
 # and the resulting code costs more than the folding saves.  These
 # entries all sit at r <= 16, where unrolling is still a win.
-OPT_R = {1: 12, 2: 16, 3: 16, 5: 16}
+OPT_R = {1: 12, 2: 16, 3: 16, 4: 16, 5: 16}
 
 
 def gen(n, opt=False):
@@ -228,8 +228,7 @@ for n in range(1, 8):
     out.append(gen(n))
 for n in sorted(OPT_R):
     out.append(gen(n, opt=True))
-out.append("""/* sizes with a hardcoded reduction parameter; n = 4 is
-   absent (see OPT_R) and falls through to the tuned default */
+out.append("""/* sizes with a hardcoded reduction parameter (see OPT_R) */
 static int
 _fixed_exp_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)
 {
@@ -238,6 +237,7 @@ _fixed_exp_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)
         case 1: _fixed_exp_bitwise_rs_opt_1(res, x); return 1;
         case 2: _fixed_exp_bitwise_rs_opt_2(res, x); return 1;
         case 3: _fixed_exp_bitwise_rs_opt_3(res, x); return 1;
+        case 4: _fixed_exp_bitwise_rs_opt_4(res, x); return 1;
         case 5: _fixed_exp_bitwise_rs_opt_5(res, x); return 1;
         default: return 0;
     }

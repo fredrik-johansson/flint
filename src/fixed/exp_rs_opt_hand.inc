@@ -270,3 +270,91 @@ _fixed_exp_rs_opt_3(nn_ptr res, nn_srcptr x)
     cy = mpn_add_n(res, x, T, 3);
     res[3] = 1 + cy;
 }
+
+/* exp(x), x < 2^-16, four fraction limbs.  N = 14 terms.  The level
+   widths from the analysis above are
+
+       V_2 4, V_3 4, V_4..V_7 3, V_8..V_11 2, V_12 V_13 1
+
+   so only the two outermost Horner steps run at the full width.  With
+   the series this cheap the reduction becomes the dominant cost, and
+   r = 16 measured best -- where the generated series wanted r = 32. */
+void
+_fixed_exp_rs_opt_4(nn_ptr res, nn_srcptr x)
+{
+    ulong v, w1, w0, h, l, cy;
+    ulong A[4], B[4], T[4], x2[4];
+    ulong X2 = x[3], X1 = x[2];
+
+    v = UWORD(0x00000000b092309d);
+
+    /* V_12 = C_12 + x V_13  (1 x 1) */
+    v = UWORD(0x00000008f76c77fc) + n_mulhi(X2, v);
+
+    /* V_11 = C_11 + x V_12  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, X2, X1, v);
+    add_ssaaaa(w1, w0, UWORD(0x0000006b99159fd5), UWORD(0x138e3f9d1f92e0df), h, l);
+
+    /* V_10 = C_10 + x V_11  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, X2, X1, w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x0000049f93edde27), UWORD(0xd71cbbc05b4fa999), h, l);
+
+    /* V_9 = C_9 + x V_10  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, X2, X1, w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x00002e3bc74aad8e), UWORD(0x671f5583911ca002), h, l);
+
+    /* V_8 = C_8 + x V_9  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, X2, X1, w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x0001a01a01a01a01), UWORD(0xa01a01a01a01a01a), h, l);
+
+    /* V_7 = C_7 + x V_8  (3 x 2) */
+    _fixed_mulhi_3x2(&A[2], &A[1], &A[0], x[3], x[2], x[1],
+        w1, w0);
+    B[0] = UWORD(0x0d00d00d00d00d00);
+    B[1] = UWORD(0x00d00d00d00d00d0);
+    B[2] = UWORD(0x000d00d00d00d00d);
+    mpn_add_n(A, A, B, 3);
+
+    /* V_6 = C_6 + x V_7  (3 x 3) */
+    flint_mpn_mulhigh_n(T, x + 1, A, 3);
+    B[0] = UWORD(0x5b05b05b05b05b05);
+    B[1] = UWORD(0x05b05b05b05b05b0);
+    B[2] = UWORD(0x005b05b05b05b05b);
+    mpn_add_n(A, T, B, 3);
+
+    /* V_5 = C_5 + x V_6  (3 x 3) */
+    flint_mpn_mulhigh_n(T, x + 1, A, 3);
+    B[0] = UWORD(0x2222222222222222);
+    B[1] = UWORD(0x2222222222222222);
+    B[2] = UWORD(0x0222222222222222);
+    mpn_add_n(A, T, B, 3);
+
+    /* V_4 = C_4 + x V_5  (3 x 3) */
+    flint_mpn_mulhigh_n(T, x + 1, A, 3);
+    B[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    B[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    B[2] = UWORD(0x0aaaaaaaaaaaaaaa);
+    mpn_add_n(A, T, B, 3);
+
+    /* V_3 = C_3 + x V_4  (4 x 3) */
+    B[0] = UWORD(0);
+    B[1] = A[0];
+    B[2] = A[1];
+    B[3] = A[2];
+    flint_mpn_mulhigh_n(T, x, B, 4);
+    B[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    B[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    B[2] = UWORD(0xaaaaaaaaaaaaaaaa);
+    B[3] = UWORD(0x2aaaaaaaaaaaaaaa);
+    mpn_add_n(A, T, B, 4);
+
+    /* V_2 = 1/2 + x V_3 (C_2 is just the top bit) */
+    flint_mpn_mulhigh_n(A, x, A, 4);
+    A[3] += UWORD(0x8000000000000000);
+
+    /* x^2 V_2 */
+    flint_mpn_sqrhigh(x2, x, 4);
+    flint_mpn_mulhigh_n(T, x2, A, 4);
+    cy = mpn_add_n(res, x, T, 4);
+    res[4] = 1 + cy;
+}

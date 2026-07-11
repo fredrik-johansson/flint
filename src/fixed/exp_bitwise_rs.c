@@ -359,7 +359,7 @@ _fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
 static const int _fixed_exp_bitwise_rs_r_tab[] =
     {16, 32, 64, 128, 192, 256, 320};
 static const short _fixed_exp_bitwise_rs_n_tab[] =
-    {1, 4, 12, 39, 115, 137, 154};
+    {1, 5, 12, 39, 115, 137, 154};
 
 void
 fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)

@@ -1366,6 +1366,161 @@ _fixed_exp_bitwise_rs_opt_3(nn_ptr res, nn_srcptr x)
 }
 
 static void
+_fixed_exp_bitwise_rs_opt_4(nn_ptr res, nn_srcptr x)
+{
+    const int r = 16;
+    slong i, j, num, bj, nc;
+    ulong t0, t1, t2, t3, bw, h, e;
+    ulong d0, d1, d2, d3;
+    ulong y0, y1, y2, y3, y4;
+    ulong s0, s1, s2, s3, s4;
+    ulong ts[4], ys[6], sh[5];
+    slong used[4 * FLINT_BITS + 2];
+
+
+    _fixed_exp_logs_ensure(4, r);
+    nc = _fixed_exp_logs_n;
+
+    t0 = x[0];
+    t1 = x[1];
+    t2 = x[2];
+    t3 = x[3];
+
+/* exact compare-subtract of L_ii, recording the index */
+#define STEP(ii) \
+    do { \
+        nn_srcptr Lq = _fixed_exp_logs + (ii) * nc + (nc - 4); \
+        sub_dddddmmmmmsssss(bw, d3, d2, d1, d0, \
+            UWORD(0), t3, t2, t1, t0, \
+            UWORD(0), Lq[3], Lq[2], Lq[1], Lq[0]); \
+        t0 = (t0 & bw) | (d0 & ~bw); \
+        t1 = (t1 & bw) | (d1 & ~bw); \
+        t2 = (t2 & bw) | (d2 & ~bw); \
+        t3 = (t3 & bw) | (d3 & ~bw); \
+        used[num] = (ii); \
+        num += (bw == 0); \
+    } while (0)
+
+/* apply the pending recorded subtractions */
+#define FLUSH() \
+    for (; bj < num; bj++) \
+    { \
+        nn_srcptr Lq = _fixed_exp_logs + used[bj] * nc + (nc - 4); \
+        sub_ddddmmmmssss(t3, t2, t1, t0, \
+            t3, t2, t1, t0, \
+            Lq[3], Lq[2], Lq[1], Lq[0]); \
+    }
+
+    num = 0;
+    bj = 0;
+
+/* one reduction window: decisions on the single-limb model
+   hreg, exact steps at the boundary and inside the ambiguity
+   band (see _fixed_exp_reduce) */
+#define WINDOW(cc, hreg) \
+    do { \
+        if (FLINT_BITS * (cc) <= r) \
+        { \
+            slong i1 = FLINT_MIN((slong) r, \
+                FLINT_BITS * ((cc) + 1) - 1); \
+            nn_srcptr lp; \
+            FLUSH(); \
+            STEP(FLINT_BITS * (cc)); \
+            bj = num; \
+            h = hreg; \
+            e = 0; \
+            lp = _fixed_exp_logs + (FLINT_BITS * (cc) + 1) * nc \
+                + (nc - 1 - (cc)); \
+            for (i = FLINT_BITS * (cc) + 1; i <= i1; i++, lp += nc) \
+            { \
+                ulong lt = lp[0]; \
+                if (h - lt + e <= 2 * e) \
+                { \
+                    FLUSH(); \
+                    STEP(i); \
+                    bj = num; \
+                    h = hreg; \
+                    e = 0; \
+                } \
+                else \
+                { \
+                    ulong sub = (h > lt); \
+                    h -= (lt + 1) & (-sub); \
+                    used[num] = i; \
+                    num += sub; \
+                    e += sub; \
+                } \
+            } \
+        } \
+    } while (0)
+
+    WINDOW(0, t3);
+    WINDOW(1, t2);
+    WINDOW(2, t1);
+    WINDOW(3, t0);
+
+#undef WINDOW
+
+    FLUSH();
+
+    /* one extra subtraction restores t < L_r < 2^-r */
+    STEP(r);
+
+#undef STEP
+#undef FLUSH
+
+    /* exp of the reduced argument */
+    ts[0] = t0;
+    ts[1] = t1;
+    ts[2] = t2;
+    ts[3] = t3;
+    _fixed_exp_rs_opt_4(ys, ts);
+    y0 = ys[0];
+    y1 = ys[1];
+    y2 = ys[2];
+    y3 = ys[3];
+    y4 = ys[4];
+
+    j = 0;
+
+    if (num > 0 && used[0] == 0)
+    {
+        add_sssssaaaaaaaaaa(y4, y3, y2, y1, y0,
+            y4, y3, y2, y1, y0, y4, y3, y2, y1, y0);
+        j = 1;
+    }
+
+    for (; j < num && used[j] < FLINT_BITS; j++)
+    {
+        int b = (int) used[j];
+
+        s0 = MPN_RIGHT_SHIFT_LOW(y1, y0, b);
+        s1 = MPN_RIGHT_SHIFT_LOW(y2, y1, b);
+        s2 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
+        s3 = MPN_RIGHT_SHIFT_LOW(y4, y3, b);
+        s4 = y4 >> b;
+        add_sssssaaaaaaaaaa(y4, y3, y2, y1, y0,
+            y4, y3, y2, y1, y0, s4, s3, s2, s1, s0);
+    }
+
+    ys[0] = y0;
+    ys[1] = y1;
+    ys[2] = y2;
+    ys[3] = y3;
+    ys[4] = y4;
+
+    /* rare factors with i >= FLINT_BITS */
+    if (j < num)
+        _fixed_exp_recon(ys, sh, 5, used, j, num);
+
+    res[0] = ys[0];
+    res[1] = ys[1];
+    res[2] = ys[2];
+    res[3] = ys[3];
+    res[4] = ys[4];
+}
+
+static void
 _fixed_exp_bitwise_rs_opt_5(nn_ptr res, nn_srcptr x)
 {
     const int r = 16;
@@ -1528,8 +1683,7 @@ _fixed_exp_bitwise_rs_opt_5(nn_ptr res, nn_srcptr x)
     res[5] = ys[5];
 }
 
-/* sizes with a hardcoded reduction parameter; n = 4 is
-   absent (see OPT_R) and falls through to the tuned default */
+/* sizes with a hardcoded reduction parameter (see OPT_R) */
 static int
 _fixed_exp_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)
 {
@@ -1538,6 +1692,7 @@ _fixed_exp_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)
         case 1: _fixed_exp_bitwise_rs_opt_1(res, x); return 1;
         case 2: _fixed_exp_bitwise_rs_opt_2(res, x); return 1;
         case 3: _fixed_exp_bitwise_rs_opt_3(res, x); return 1;
+        case 4: _fixed_exp_bitwise_rs_opt_4(res, x); return 1;
         case 5: _fixed_exp_bitwise_rs_opt_5(res, x); return 1;
         default: return 0;
     }
