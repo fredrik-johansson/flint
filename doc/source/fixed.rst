@@ -128,6 +128,10 @@ Exponential with bitwise argument reduction
     The logarithm table is generated at runtime and cached per thread
     at the largest precision and index range requested so far.
 
+    Values below 32 are served by a wider-range series for
+    `t < 2^{-16}` (available for `n \le 5` on 64-bit machines) and
+    pay up to about `n = 4`.
+
     Small `r` minimizes table and reduction work, large `r` shortens
     the series; as a rule of thumb on 64-bit machines, `r = 32` is
     best up to about 8 limbs, `r = 64` up to about 32 limbs, and

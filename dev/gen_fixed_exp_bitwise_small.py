@@ -40,6 +40,12 @@ def gen(n):
     o("    ulong ts[%d], ys[%d], sh[%d];" % (wn, wn + 2, wn + 1))
     o("    slong used[%d * FLINT_BITS + 2];" % n)
     o("")
+    # r < 32 shortens the reduction at the price of a longer series;
+    # the wider-range series (x < 2^-16) exists for n <= 5
+    if n <= 5:
+        o("    r = FLINT_MAX(r, 16);")
+    else:
+        o("    r = FLINT_MAX(r, 32);")
     o("    r = FLINT_MIN((slong) r, FLINT_BITS * %d - 16);" % n)
     o("")
     o("    _fixed_exp_logs_ensure(%d, r);" % wn)
@@ -146,7 +152,13 @@ def gen(n):
     o("    /* exp of the reduced argument */")
     for k in range(wn):
         o("    ts[%d] = t%d;" % (k, k))
-    o("    fixed_exp_rs(ys, ts, %d);" % wn)
+    if n <= 5:
+        o("    if (r < 32)")
+        o("        _fixed_exp_rs16(ys, ts, %d);" % wn)
+        o("    else")
+        o("        fixed_exp_rs(ys, ts, %d);" % wn)
+    else:
+        o("    fixed_exp_rs(ys, ts, %d);" % wn)
     for k in range(wn + 1):
         o("    y%d = ys[%d];" % (k, k))
     o("")

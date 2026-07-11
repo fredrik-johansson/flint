@@ -107,6 +107,13 @@ void fixed_atanh_rs(nn_ptr res, nn_srcptr x, slong n);
    from the actual leading zero bits of x).  Exposed for testing. */
 void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n);
 
+/* Internal: exp for the wider range x < 2^-16 (n <= 5), used by the
+   small reduction parameters of fixed_exp_bitwise_rs.  The hardcoded
+   series family exists only for 64-bit limbs. */
+#if FLINT_BITS == 64
+void _fixed_exp_rs16(nn_ptr res, nn_srcptr x, slong n);
+#endif
+
 /* Internal: thread-local cached table of L_i = log(1 + 2^-i)
    truncated to _fixed_exp_logs_n fraction limbs, entries
    i = 0.._fixed_exp_logs_r, shared by fixed_exp_bitwise_rs and

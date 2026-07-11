@@ -14,6 +14,7 @@ _fixed_exp_bitwise_rs_1(nn_ptr res, nn_srcptr x, int r)
     ulong ts[1], ys[3], sh[2];
     slong used[1 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 16);
     r = FLINT_MIN((slong) r, FLINT_BITS * 1 - 16);
 
     _fixed_exp_logs_ensure(1, r);
@@ -59,7 +60,10 @@ _fixed_exp_bitwise_rs_1(nn_ptr res, nn_srcptr x, int r)
 
     /* exp of the reduced argument */
     ts[0] = t0;
-    fixed_exp_rs(ys, ts, 1);
+    if (r < 32)
+        _fixed_exp_rs16(ys, ts, 1);
+    else
+        fixed_exp_rs(ys, ts, 1);
     y0 = ys[0];
     y1 = ys[1];
 
@@ -104,6 +108,7 @@ _fixed_exp_bitwise_rs_2(nn_ptr res, nn_srcptr x, int r)
     ulong ts[2], ys[4], sh[3];
     slong used[2 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 16);
     r = FLINT_MIN((slong) r, FLINT_BITS * 2 - 16);
 
     _fixed_exp_logs_ensure(2, r);
@@ -154,7 +159,10 @@ _fixed_exp_bitwise_rs_2(nn_ptr res, nn_srcptr x, int r)
     /* exp of the reduced argument */
     ts[0] = t0;
     ts[1] = t1;
-    fixed_exp_rs(ys, ts, 2);
+    if (r < 32)
+        _fixed_exp_rs16(ys, ts, 2);
+    else
+        fixed_exp_rs(ys, ts, 2);
     y0 = ys[0];
     y1 = ys[1];
     y2 = ys[2];
@@ -203,6 +211,7 @@ _fixed_exp_bitwise_rs_3(nn_ptr res, nn_srcptr x, int r)
     ulong ts[3], ys[5], sh[4];
     slong used[3 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 16);
     r = FLINT_MIN((slong) r, FLINT_BITS * 3 - 16);
 
     _fixed_exp_logs_ensure(3, r);
@@ -297,7 +306,10 @@ _fixed_exp_bitwise_rs_3(nn_ptr res, nn_srcptr x, int r)
     ts[0] = t0;
     ts[1] = t1;
     ts[2] = t2;
-    fixed_exp_rs(ys, ts, 3);
+    if (r < 32)
+        _fixed_exp_rs16(ys, ts, 3);
+    else
+        fixed_exp_rs(ys, ts, 3);
     y0 = ys[0];
     y1 = ys[1];
     y2 = ys[2];
@@ -350,6 +362,7 @@ _fixed_exp_bitwise_rs_4(nn_ptr res, nn_srcptr x, int r)
     ulong ts[4], ys[6], sh[5];
     slong used[4 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 16);
     r = FLINT_MIN((slong) r, FLINT_BITS * 4 - 16);
 
     _fixed_exp_logs_ensure(4, r);
@@ -448,7 +461,10 @@ _fixed_exp_bitwise_rs_4(nn_ptr res, nn_srcptr x, int r)
     ts[1] = t1;
     ts[2] = t2;
     ts[3] = t3;
-    fixed_exp_rs(ys, ts, 4);
+    if (r < 32)
+        _fixed_exp_rs16(ys, ts, 4);
+    else
+        fixed_exp_rs(ys, ts, 4);
     y0 = ys[0];
     y1 = ys[1];
     y2 = ys[2];
@@ -505,6 +521,7 @@ _fixed_exp_bitwise_rs_5(nn_ptr res, nn_srcptr x, int r)
     ulong ts[5], ys[7], sh[6];
     slong used[5 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 16);
     r = FLINT_MIN((slong) r, FLINT_BITS * 5 - 16);
 
     _fixed_exp_logs_ensure(5, r);
@@ -607,7 +624,10 @@ _fixed_exp_bitwise_rs_5(nn_ptr res, nn_srcptr x, int r)
     ts[2] = t2;
     ts[3] = t3;
     ts[4] = t4;
-    fixed_exp_rs(ys, ts, 5);
+    if (r < 32)
+        _fixed_exp_rs16(ys, ts, 5);
+    else
+        fixed_exp_rs(ys, ts, 5);
     y0 = ys[0];
     y1 = ys[1];
     y2 = ys[2];
@@ -668,6 +688,7 @@ _fixed_exp_bitwise_rs_6(nn_ptr res, nn_srcptr x, int r)
     ulong ts[6], ys[8], sh[7];
     slong used[6 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 32);
     r = FLINT_MIN((slong) r, FLINT_BITS * 6 - 16);
 
     _fixed_exp_logs_ensure(6, r);
@@ -839,6 +860,7 @@ _fixed_exp_bitwise_rs_7(nn_ptr res, nn_srcptr x, int r)
     ulong ts[7], ys[9], sh[8];
     slong used[7 * FLINT_BITS + 2];
 
+    r = FLINT_MAX(r, 32);
     r = FLINT_MIN((slong) r, FLINT_BITS * 7 - 16);
 
     _fixed_exp_logs_ensure(7, r);

@@ -441,3 +441,18 @@ fixed_exp_rs(nn_ptr res, nn_srcptr x, slong n)
 #endif
     _fixed_exp_rs_fallback(res, x, n);
 }
+
+/* exp for the wider range x < 2^-16 (internal: used by the small
+   reduction parameters of fixed_exp_bitwise_rs).  The series needs
+   N = 4 n terms, so the hardcoded family reaches n = 5 (N = 20,
+   the largest N the shared 20! denominator supports). */
+#if FLINT_BITS == 64
+void
+_fixed_exp_rs16(nn_ptr res, nn_srcptr x, slong n)
+{
+    FLINT_ASSERT(n >= 1 && n <= 5);
+    FLINT_ASSERT((x[n - 1] >> (FLINT_BITS - 16)) == 0);
+
+    _fixed_exp_rs16_tab[4 * n](res, x);
+}
+#endif

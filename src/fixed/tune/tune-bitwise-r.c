@@ -99,7 +99,9 @@ sin_cos_wrapper(nn_ptr y, nn_srcptr x, slong n, int r)
    generic path up to 32, so r = 16 survives only in its small-n
    register code; the bitwise trigonometric functions route r < 32 to
    the wider-range series in the generic path as well, so there r = 16
-   is effective at every n.  Callers pass that reach as lo_reach. */
+   is effective at every n; fixed_exp_bitwise_rs reaches n = 5, the
+   limit of its wider-range series.  Callers pass that reach as
+   lo_reach. */
 static int
 r_floor(int r_first, slong n, slong lo_reach)
 {
@@ -244,8 +246,8 @@ main(int argc, char * argv[])
     /* lo_reach: how far r < 32 is effective (see r_floor) -- only
        the small-n register code for log1p, every n for the
        trigonometric functions, and not at all for exp */
-    tune_func("fixed_exp_bitwise_rs", fixed_exp_bitwise_rs, 32, 0,
-        nmax, rmax);
+    tune_func("fixed_exp_bitwise_rs", fixed_exp_bitwise_rs, 16,
+        (FLINT_BITS == 64) ? 5 : 0, nmax, rmax);
     tune_func("fixed_log1p_bitwise_rs", fixed_log1p_bitwise_rs, 16,
         (FLINT_BITS == 64) ? 4 : 1, nmax, rmax);
     tune_func("fixed_sin_cos_bitwise_rs", sin_cos_wrapper, 16,

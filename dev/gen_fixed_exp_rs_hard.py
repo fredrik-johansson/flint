@@ -103,20 +103,29 @@ def emit_tables():
 
 class Gen:
     def __init__(self, N, m, zbits, use_divrem=False, name=None):
-        assert zbits in (64, 32)
+        assert zbits in (64, 32, 16)
         assert 1 <= N <= NMAX
         self.N = N
         self.m = m
         self.zbits = zbits
+        self.m_split = (m != 0 and N >= 4
+                        and (zbits == 64 or m % (64 // zbits) == 0))
         self.use_divrem = use_divrem
         self.xn = -(-N * zbits // 64)          # ceil
-        base = "mpn_exp_series" if zbits == 64 else "mpn_exp_series32"
+        base = ("mpn_exp_series" if zbits == 64
+                else "mpn_exp_series%d" % zbits)
         self.name = name or "%s_%d_rs%d%s" % (base, N, m,
                                               "_dr" if use_divrem else "")
-        if N >= 4:
-            assert 2 <= m <= N - 1
-            if zbits == 32:
-                assert m % 2 == 0
+        if N >= 4 and m:
+            assert 2 <= m <= (N if zbits == 16 else N - 1)
+            # block bases need lz(b) - lz(m) = lz(b - m), which for
+            # lz(j) = j * zbits / 64 means m must be a multiple of
+            # 64 / zbits (the number of terms per limb of shrink);
+            # at zbits = 16 no legal m exists below N = 5, so those
+            # sizes use the unsplit series
+            if zbits < 64 and m % (64 // zbits) != 0:
+                raise ValueError("m must be a multiple of %d at "
+                                 "zbits = %d" % (64 // zbits, zbits))
 
     def lz(self, j):
         return (j * self.zbits) // 64
@@ -268,7 +277,10 @@ class Gen:
 
         # final division by 20!
         dlen = alen
-        assert dlen == (xn - 2 if zbits == 64 else xn)
+        if zbits == 64:
+            assert dlen == xn - 2
+        elif zbits == 32:
+            assert dlen == xn
         if self.use_divrem:
             body.append("    mpn_divrem_1(res, 0, %s, %d, exp_series_cs[0]);"
                         % (acc, dlen))
@@ -486,22 +498,37 @@ def header():
 def mrange(N, zbits):
     if N <= 3:
         return [0]                      # m irrelevant
-    ms = range(2, min(N - 1, 10) + 1)
-    if zbits == 32:
-        ms = [m for m in ms if m % 2 == 0]
+    # at zbits = 16 the block size must be a multiple of 4, so allow
+    # m == N as well (a single block: plain Horner over the terms),
+    # otherwise N = 4 would admit no legal splitting at all
+    hi = min(N if zbits == 16 else N - 1, 12)
+    ms = range(2, hi + 1)
+    if zbits < 64:
+        ms = [m for m in ms if m % (64 // zbits) == 0]
     return list(ms) or [0]
 
 
 def nrange(zbits):
+    if zbits == 16:
+        # x < 2^-16 needs N = 4 xn terms, so only these N are ever
+        # dispatched to (xn = 1..5; N = 24 would exceed NMAX)
+        return [4, 8, 12, 16, 20]
     return range(1, NMAX + 1)
 
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
-    zbits = 32 if mode.endswith("32") else 64
-    mode = mode.replace("32", "")
-    basename = "mpn_exp_series" if zbits == 64 else "mpn_exp_series32"
-    allname = "exp_series_all" if zbits == 64 else "exp_series32_all"
+    if mode.endswith("16"):
+        zbits = 16
+    elif mode.endswith("32"):
+        zbits = 32
+    else:
+        zbits = 64
+    mode = mode.replace("32", "").replace("16", "")
+    basename = ("mpn_exp_series" if zbits == 64
+                else "mpn_exp_series%d" % zbits)
+    allname = ("exp_series_all" if zbits == 64
+               else "exp_series%d_all" % zbits)
 
     out = [header(), emit_tables()]
 
@@ -514,7 +541,7 @@ def main():
                 out.append("")
                 entries.append(("mpn_exp_series32_%d_hand" % N, N, 1, eb, 0))
             for m in mrange(N, zbits):
-                if N <= 3:
+                if N <= 3 or m == 0:
                     g = Gen(N, 2 if N >= 4 else 0, zbits,
                             name="%s_%d" % (basename, N))
                     g.m = 0
@@ -602,11 +629,15 @@ import re
 
 WINNERS_64 = {4: (2, 0), 5: (3, 0), 6: (3, 0), 7: (5, 0), 8: (3, 0), 9: (3, 0), 10: (4, 0), 11: (4, 0), 12: (4, 0), 13: (4, 1), 14: (4, 1), 15: (4, 1), 16: (3, 1), 17: (4, 1), 18: (4, 1), 19: (4, 1), 20: (4, 1), 21: (4, 1)}
 
+WINNERS_16 = {4: (4, 0), 8: (4, 0), 12: (4, 0), 16: (4, 0),
+              20: (4, 0)}
+
 WINNERS_32 = {1: (0, 0), 2: (0, 0), 3: (1, 0), 4: (1, 0), 5: (1, 0), 6: (4, 0), 7: (4, 0), 8: (6, 0), 9: (6, 0), 10: (4, 0), 11: (4, 0), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (4, 0), 16: (4, 0), 17: (4, 0), 18: (4, 0), 19: (4, 0), 20: (4, 0), 21: (4, 1)}
 
 
 def generate_best(zbits, best):
-    basename = "mpn_exp_series" if zbits == 64 else "mpn_exp_series32"
+    basename = ("mpn_exp_series" if zbits == 64
+                else "mpn_exp_series%d" % zbits)
     out = [header(), emit_tables()]
     out.append("typedef void (*exp_series_fn)(mp_ptr, mp_srcptr);")
     out.append("")
@@ -638,14 +669,14 @@ def generate_best(zbits, best):
                % (n0, NMAX, zbits))
     out.append("const exp_series_fn %s_tab[%d] = {" % (basename, NMAX + 1))
     for N in range(NMAX + 1):
-        out.append("    %s," % ("NULL" if (N < n0 or N in skipped)
+        out.append("    %s," % ("NULL" if N not in ebs
                                 else "%s_%d" % (basename, N)))
     out.append("};")
     out.append("")
     out.append("/* one-sided ulp error bounds, same indexing */")
     out.append("const int %s_err_tab[%d] = {" % (basename, NMAX + 1))
     for N in range(NMAX + 1):
-        out.append("    %d," % (0 if (N < n0 or N in skipped) else ebs[N]))
+        out.append("    %d," % (0 if N not in ebs else ebs[N]))
     out.append("};")
     return "\n".join(out)
 
@@ -672,18 +703,24 @@ def _statify(s):
 if __name__ == "__main__":
     f64 = generate_best(64, WINNERS_64)
     f32 = generate_best(32, WINNERS_32)
+    f16 = generate_best(16, WINNERS_16)
 
     f64 = f64[f64.index('/* c_k = 20!/k!'):]
     m32 = re.search(r'mpn_exp_series32_\d+\(', f32)
     i32 = f32.rindex('\n', 0, f32.rindex('void', 0, m32.start()))
     f32 = f32[i32:]
+    m16 = re.search(r'mpn_exp_series16_\d+\(', f16)
+    i16 = f16.rindex('\n', 0, f16.rindex('void', 0, m16.start()))
+    f16 = f16[i16:]
 
     out = ("/* Generated by dev/gen_fixed_exp_rs_hard.py -- private static\n"
            "   Taylor series routines for the fixed module -- do not edit"
            " by hand. */\n\n"
            "typedef void (*exp_series_fn)(nn_ptr, nn_srcptr);\n\n"
-           + _statify(f64) + "\n" + _statify(f32))
+           + _statify(f64) + "\n" + _statify(f32)
+           + "\n" + _statify(f16))
     out = _drop_err_tabs(out)
+    out = out.replace('mpn_exp_series16_', '_fixed_exp_rs16_')
     out = out.replace('mpn_exp_series32_', '_fixed_exp_rs32_')
     out = out.replace('mpn_exp_series_', '_fixed_exp_rs_')
     out = _convert_types(out)
