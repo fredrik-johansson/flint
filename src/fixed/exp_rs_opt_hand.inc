@@ -33,50 +33,74 @@
    against an output of hundreds of bits -- absorbs all of this many
    times over; the measured error is a handful of ulp. */
 
-/* top limb of a * b for fractions a, b < 1 (statement form: ISO C has
-   no braced-group expressions) */
-#define FIXED_EXP_MULH1(r, a, b) \
-    do { \
-        ulong __h, __l; \
-        umul_ppmm(__h, __l, (a), (b)); \
-        (void) __l; \
-        (r) = __h; \
-    } while (0)
 
-/* top 2 limbs of (a1:a0) * (b1:b0), dropping the a0*b0 partial */
-#define FIXED_EXP_MULH2(rh, rl, a1, a0, b1, b0) \
-    do { \
-        ulong __c1h, __c1l, __c2h, __c2l, __sh, __sl; \
-        umul_ppmm(rh, rl, a1, b1); \
-        umul_ppmm(__c1h, __c1l, a1, b0); \
-        umul_ppmm(__c2h, __c2l, a0, b1); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __c1h); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __c2h); \
-        add_ssaaaa(__sh, __sl, UWORD(0), __c1l, UWORD(0), __c2l); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __sh); \
-    } while (0)
+/* n_mulhi is newer than FLINT 3.3; define it when building against an
+   older release so that this file stands alone.  (This block can go
+   once the module only targets releases that ship it.) */
+#if __FLINT_RELEASE < __FLINT_RELEASE_NUM(3, 4, 0)
+static inline ulong
+n_mulhi(ulong a, ulong b)
+{
+#if FLINT_BITS == 64 && defined(__GNUC__)
+    return ((__uint128_t) a * (__uint128_t) b) >> 64;
+#else
+    ulong hi, lo;
+    umul_ppmm(hi, lo, a, b);
+    return hi;
+#endif
+}
+#endif
 
-/* top 2 limbs of (a1:a0) * b with b a ONE-limb fraction: the b0 column
-   of the product above vanishes, leaving two multiplies */
-#define FIXED_EXP_MULH2_1(rh, rl, a1, a0, b) \
-    do { \
-        ulong __ch, __cl; \
-        umul_ppmm(rh, rl, a1, b); \
-        umul_ppmm(__ch, __cl, a0, b); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __ch); \
-        (void) __cl; \
-    } while (0)
+/* Top 2 limbs of (a1:a0) * (b1:b0), discarding the low words of both
+   cross products and the a0*b0 partial entirely: three multiplies and
+   two adds.  This mirrors the helper in ulong_extras/ll_is_prime.c,
+   which is file-local there and would be worth promoting to a header. */
+FLINT_FORCE_INLINE void
+_fixed_mulhi_2x2_sloppy(ulong * r1, ulong * r0,
+    ulong a1, ulong a0, ulong b1, ulong b0)
+{
+    ulong s2, u2, v3, v2, r3, r2;
 
-/* top 2 limbs of (a1:a0)^2: the two cross products coincide */
-#define FIXED_EXP_SQRH2(rh, rl, a1, a0) \
-    do { \
-        ulong __ch, __cl; \
-        umul_ppmm(rh, rl, a1, a1); \
-        umul_ppmm(__ch, __cl, a1, a0); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __ch); \
-        add_ssaaaa(rh, rl, rh, rl, UWORD(0), __ch); \
-        (void) __cl; \
-    } while (0)
+    s2 = n_mulhi(a0, b1);
+    u2 = n_mulhi(a1, b0);
+    add_ssaaaa(r3, r2, UWORD(0), s2, UWORD(0), u2);
+    umul_ppmm(v3, v2, a1, b1);
+    add_ssaaaa(r3, r2, r3, r2, v3, v2);
+    *r0 = r2;
+    *r1 = r3;
+}
+
+/* Top 2 limbs of (a1:a0) * b with b a ONE-limb fraction: the b0 column
+   of the product above vanishes, leaving two multiplies. */
+FLINT_FORCE_INLINE void
+_fixed_mulhi_2x1(ulong * r1, ulong * r0, ulong a1, ulong a0, ulong b)
+{
+    ulong rh, rl, ch, cl;
+
+    umul_ppmm(rh, rl, a1, b);
+    umul_ppmm(ch, cl, a0, b);
+    add_ssaaaa(rh, rl, rh, rl, UWORD(0), ch);
+    (void) cl;
+    *r0 = rl;
+    *r1 = rh;
+}
+
+/* Top 2 limbs of (a1:a0)^2: the two cross products coincide, so this
+   takes two multiplies rather than three -- measurably better than
+   routing the squaring through the generic 2x2 form above. */
+FLINT_FORCE_INLINE void
+_fixed_sqrhi_2x2(ulong * r1, ulong * r0, ulong a1, ulong a0)
+{
+    ulong rh, rl, ch, cl;
+
+    umul_ppmm(rh, rl, a1, a1);
+    umul_ppmm(ch, cl, a1, a0);
+    add_ssaaaa(rh, rl, rh, rl, UWORD(0), ch);
+    add_ssaaaa(rh, rl, rh, rl, UWORD(0), ch);
+    (void) cl;
+    *r0 = rl;
+    *r1 = rh;
+}
 
 /* c_k = floor(2^64 / k!), one limb */
 #define FIXED_EXP_E2 UWORD(0x8000000000000000)
@@ -92,6 +116,7 @@
 #define FIXED_EXP_D3_HI UWORD(0x2aaaaaaaaaaaaaaa)
 #define FIXED_EXP_D3_LO UWORD(0xaaaaaaaaaaaaaaaa)
 
+
 /* exp(x), x < 2^-12, one fraction limb.  N = 4 terms: the dropped
    x^5/5! is about 2^-67, below the 2^-64 output ulp.  Written as
    1 + x + x^2 (C2 + x C3 + x^2 C4), reusing x^2 so that the two small
@@ -99,13 +124,12 @@
 void
 _fixed_exp_rs_opt_1(nn_ptr res, nn_srcptr x)
 {
-    ulong X = x[0], x2, p, a, b, h, l;
+    ulong X = x[0], x2, p, h, l;
 
-    FIXED_EXP_MULH1(x2, X, X);
-    FIXED_EXP_MULH1(a, X, FIXED_EXP_E3);
-    FIXED_EXP_MULH1(b, x2, FIXED_EXP_E4);
-    p = FIXED_EXP_E2 + a + b;
-    FIXED_EXP_MULH1(p, x2, p);
+    x2 = n_mulhi(X, X);
+    p = FIXED_EXP_E2 + n_mulhi(X, FIXED_EXP_E3)
+                     + n_mulhi(x2, FIXED_EXP_E4);
+    p = n_mulhi(x2, p);
 
     add_ssaaaa(h, l, UWORD(0), X, UWORD(0), p);
     res[0] = l;
@@ -125,24 +149,21 @@ _fixed_exp_rs_opt_2(nn_ptr res, nn_srcptr x)
     ulong u, s, r, q1, q0, p1, p0, h, l, x2h, x2l;
 
     /* inner tail at one limb */
-    FIXED_EXP_MULH1(u, X1, FIXED_EXP_E7);
-    u += FIXED_EXP_E6;
-    FIXED_EXP_MULH1(s, X1, u);
-    s += FIXED_EXP_E5;
-    FIXED_EXP_MULH1(r, X1, s);
-    r += FIXED_EXP_E4;
+    u = FIXED_EXP_E6 + n_mulhi(X1, FIXED_EXP_E7);
+    s = FIXED_EXP_E5 + n_mulhi(X1, u);
+    r = FIXED_EXP_E4 + n_mulhi(X1, s);
 
     /* Q = C3 + x R (R is a single limb) */
-    FIXED_EXP_MULH2_1(h, l, X1, X0, r);
+    _fixed_mulhi_2x1(&h, &l, X1, X0, r);
     add_ssaaaa(q1, q0, FIXED_EXP_D3_HI, FIXED_EXP_D3_LO, h, l);
 
     /* P = C2 + x Q */
-    FIXED_EXP_MULH2(h, l, X1, X0, q1, q0);
+    _fixed_mulhi_2x2_sloppy(&h, &l, X1, X0, q1, q0);
     add_ssaaaa(p1, p0, FIXED_EXP_D2_HI, FIXED_EXP_D2_LO, h, l);
 
     /* x^2 P, then the fraction x + x^2 P */
-    FIXED_EXP_SQRH2(x2h, x2l, X1, X0);
-    FIXED_EXP_MULH2(h, l, x2h, x2l, p1, p0);
+    _fixed_sqrhi_2x2(&x2h, &x2l, X1, X0);
+    _fixed_mulhi_2x2_sloppy(&h, &l, x2h, x2l, p1, p0);
     add_ssaaaa(h, l, h, l, X1, X0);
 
     res[0] = l;
