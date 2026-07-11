@@ -169,6 +169,16 @@ void _fixed_atanh_rs16(nn_ptr res, nn_srcptr x, slong n);
    the small reduction parameters of the bitwise trigonometric
    functions.  The sin/cos routine requires both outputs. */
 void _fixed_atan_rs16(nn_ptr res, nn_srcptr x, slong n);
+
+/* Internal: hand-written atan series, one per n <= 4, each built for
+   the reduction parameter hardcoded alongside it in
+   fixed_atan_bitwise_rs (64-bit limbs only). */
+#if FLINT_BITS == 64
+void _fixed_atan_rs_opt_1(nn_ptr res, nn_srcptr x);
+void _fixed_atan_rs_opt_2(nn_ptr res, nn_srcptr x);
+void _fixed_atan_rs_opt_3(nn_ptr res, nn_srcptr x);
+void _fixed_atan_rs_opt_4(nn_ptr res, nn_srcptr x);
+#endif
 void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 
 #ifdef __cplusplus

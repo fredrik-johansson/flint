@@ -106,10 +106,22 @@ def vw_shifted(o, n, c, ind):
       % (ind, n - 1 - c, n - 1))
 
 
-def gen_one(o, n):
+# Fully specialized sizes: r is a compile-time constant and the series
+# is the hand-written one built for exactly that r (see
+# src/fixed/trig_rs_opt_hand.inc).  The hand series is so much cheaper
+# than the generated one that the optimal r falls sharply.
+OPT_R = {1: 4, 2: 6, 3: 22, 4: 20}
+
+
+def gen_one(o, n, opt=False):
     o("static void")
-    o("_fixed_atan_bitwise_rs_%d(nn_ptr res, nn_srcptr x, int r)" % n)
+    if opt:
+        o("_fixed_atan_bitwise_rs_opt_%d(nn_ptr res, nn_srcptr x)" % n)
+    else:
+        o("_fixed_atan_bitwise_rs_%d(nn_ptr res, nn_srcptr x, int r)" % n)
     o("{")
+    if opt:
+        o("    const int r = %d;" % OPT_R[n])
     o("    ulong " + ", ".join("x%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("y%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("a%d" % j for j in range(n)) + ";")
@@ -121,8 +133,9 @@ def gen_one(o, n):
     o("    slong i, nc;")
     o("    int nz;")
     o("")
-    o("    r = FLINT_MAX(r, 16);")
-    o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
+    if not opt:
+        o("    r = FLINT_MAX(r, 16);")
+        o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
     o("")
     o("    _fixed_atans_ensure(%d, r);" % n)
     o("    nc = _fixed_atans_n;")
@@ -243,10 +256,13 @@ def gen_one(o, n):
         o("        t[%d] = 0;" % j)
     o("    }")
     o("")
-    o("    if (r >= 32)")
-    o("        fixed_atan_rs(q, t, %d);" % n)
-    o("    else")
-    o("        _fixed_atan_rs16(q, t, %d);" % n)
+    if opt:
+        o("    _fixed_atan_rs_opt_%d(q, t);" % n)
+    else:
+        o("    if (r >= 32)")
+        o("        fixed_atan_rs(q, t, %d);" % n)
+        o("    else")
+        o("        _fixed_atan_rs16(q, t, %d);" % n)
     o("")
     # res = acc + atan(t)
     aa = ["q[%d]" % j for j in range(n)]
@@ -266,6 +282,21 @@ def main():
     o("")
     for n in range(NMIN, NMAX + 1):
         gen_one(o, n)
+    for n in sorted(OPT_R):
+        gen_one(o, n, opt=True)
+    o("/* sizes with a hardcoded reduction parameter (see OPT_R) */")
+    o("static int")
+    o("_fixed_atan_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)")
+    o("{")
+    o("    switch (n)")
+    o("    {")
+    for n in sorted(OPT_R):
+        o("        case %d: _fixed_atan_bitwise_rs_opt_%d(res, x); return 1;"
+          % (n, n))
+    o("        default: return 0;")
+    o("    }")
+    o("}")
+    o("")
     o("static void (* const _fixed_atan_bitwise_rs_small_tab[])"
       "(nn_ptr, nn_srcptr, int) = {")
     o("    NULL,")

@@ -66,6 +66,9 @@ static const short _fixed_atan_bitwise_rs_n_tab[] = {1, 7, 18, 92};
 void
 fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
+#if FLINT_BITS == 64
+    int r0;
+#endif
     slong i, c, wn, nc, num, j, qr, ds;
     nn_ptr X, Y, vx, vy, acc, t, y, nd;
     slong * used;
@@ -73,6 +76,10 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
     FLINT_ASSERT(n >= 1);
     FLINT_ASSERT(r == 0 || r >= 16);
+
+#if FLINT_BITS == 64
+    r0 = r;
+#endif
 
     if (r == 0)
     {
@@ -92,6 +99,12 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
 
 #if FLINT_BITS == 64
+    /* with r = 0 the caller leaves the reduction parameter to us: the
+       specialized sizes then run with a compile-time constant r and
+       the hand-written series built for it */
+    if (n <= 4 && r0 == 0 && _fixed_atan_bitwise_rs_opt(res, x, n))
+        return;
+
     if (n <= 7)
     {
         _fixed_atan_bitwise_rs_small_tab[n](res, x, r);

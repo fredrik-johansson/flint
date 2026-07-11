@@ -40,6 +40,10 @@
 #if FLINT_BITS == 64
 
 #include "trig_rs_hard.inc"
+#if FLINT_BITS == 64
+#include "hand_mulhi.inc"
+#include "trig_rs_opt_hand.inc"
+#endif
 
 #define TMP_ALLOC_LIMBS(size) TMP_ALLOC((size) * sizeof(ulong))
 #define PW(i) (xpow + ((i) - 1) * pslot)
