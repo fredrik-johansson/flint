@@ -42,6 +42,9 @@
 #if FLINT_BITS == 64
 
 #include "exp_rs_hard.inc"
+#if FLINT_BITS == 64
+#include "exp_rs_opt_hand.inc"    /* hand-written _fixed_exp_rs_opt_1, _2 */
+#endif
 
 #define TMP_ALLOC_LIMBS(size) TMP_ALLOC((size) * sizeof(ulong))
 #define GUARD_LIMBS 2

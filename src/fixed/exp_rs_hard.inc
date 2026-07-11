@@ -1430,63 +1430,6 @@ static const exp_series_fn _fixed_exp_rs16_tab[22] = {
 };
 
 void
-_fixed_exp_rs_opt_1(nn_ptr res, nn_srcptr x)
-{
-    ulong x2[1];
-    ulong x3[1];
-    ulong x4[1];
-    ulong s[2];
-    ulong t[2];
-
-    flint_mpn_sqrhigh(x2, x, 1);
-    flint_mpn_mulhigh_n(x3, x, x2, 1);
-    flint_mpn_sqrhigh(x4, x2, 1);
-
-    umul_ppmm(t[1], t[0], x4[0], exp_series_cs[4]);
-    t[1] += mpn_addmul_1(t, x3, 1, exp_series_cs[3]);
-
-    flint_mpn_mulhigh_n(res, t, exp_series_fac20_inv + 18, 2);
-
-    mpn_rshift(s, x2, 1, 1);
-    res[1] += mpn_add_n(res, res, s, 1);
-    res[1] = 1 + mpn_add_n(res, res, x, 1);
-}
-
-/* res[0..2] ~= sum_{k<8} x^k/k!; x: 2 frac limbs,
-   0 <= x < 2^-16; one-sided error <= 8 ulp (2^-128) */
-void
-_fixed_exp_rs_opt_2(nn_ptr res, nn_srcptr x)
-{
-    ulong x2[2];
-    ulong x3[2];
-    ulong x4p[3];
-    ulong s[3];
-    ulong t[3];
-
-    nn_ptr x4 = x4p + 1;
-    x4p[0] = 0;
-
-    flint_mpn_sqrhigh(x2, x, 2);
-    flint_mpn_mulhigh_n(x3, x, x2, 2);
-    flint_mpn_sqrhigh(x4, x2, 2);
-
-    umul_ppmm(t[1], t[0], x3[1], exp_series_cs[7]);
-    t[1] += mpn_addmul_1(t, x2 + 1, 1, exp_series_cs[6]);
-    t[1] += mpn_addmul_1(t, x + 1, 1, exp_series_cs[5]);
-    t[1] += exp_series_cs[4];
-    flint_mpn_mulhigh_n(s, t, x4 - 1, 2);
-    s[2] = mpn_addmul_1(s, x3, 2, exp_series_cs[3]);
-
-    flint_mpn_mulhigh_n(res, s, exp_series_fac20_inv + 17, 3);
-
-    mpn_rshift(t, x2, 2, 1);
-    res[2] += mpn_add_n(res, res, t, 2);
-    res[2] = 1 + mpn_add_n(res, res, x, 2);
-}
-
-/* res[0..3] ~= sum_{k<11} x^k/k!; x: 3 frac limbs,
-   0 <= x < 2^-16; one-sided error <= 8 ulp (2^-192) */
-void
 _fixed_exp_rs_opt_3(nn_ptr res, nn_srcptr x)
 {
     ulong x2[3];

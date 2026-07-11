@@ -654,17 +654,16 @@ WINNERS_16 = {4: (4, 0), 8: (4, 0), 12: (4, 0), 16: (4, 0),
 
 # Fully specialized series for the small sizes, one per n: the
 # reduction parameter r is fixed (and hardcoded into the caller, see
-# dev/gen_fixed_exp_bitwise_small.py), and N is the smallest number of
-# terms with N r + log2(N!) >= 64 n -- that is, the 1/N! of the last
-# coefficient is SPENT on dropping terms rather than banked as slack.
-# r need not divide 64 here; where it does not, rectangular splitting
-# is unavailable (the block bases would need lz(b) - lz(m) = lz(b - m))
-# and the series is a single block, m = N.  Entries are
-# n: (r, N, m, use_divrem), benchmarked end to end.
-# n = 4 is absent on purpose: there r = 32 measured fastest, and at
-# zbits = 32 the term count N = 2 n is ALREADY the factorial-minimal
-# one, so there is nothing to specialize -- that size keeps the
-# ordinary path with its tuned default.
+# dev/gen_fixed_exp_bitwise_small.py) and N is the smallest number of
+# terms with N r + log2(N!) >= 64 n -- the 1/N! of the last
+# coefficient is spent on dropping terms rather than banked as slack.
+# n = 1 and n = 2 are NOT generated here: at those sizes the RS
+# framework's overhead dwarfs the few word multiplies the series
+# needs, so they are hand-written in exp_rs_opt_hand.inc (with N
+# reduced to 4 and 7 respectively, plain Horner, sloppy high
+# products).  n = 4 is absent because there r = 32 is fastest and its
+# N = 2 n is already factorial-minimal.  Entries are n: (r, N, m,
+# use_divrem), benchmarked end to end.
 WINNERS_OPT = {1: (12, 5, 5, 0), 2: (16, 8, 4, 0), 3: (16, 11, 4, 0),
                5: (16, 17, 4, 0)}
 
@@ -746,6 +745,11 @@ if __name__ == "__main__":
     fo.append("typedef void (*exp_series_fn)(mp_ptr, mp_srcptr);")
     fo.append("")
     for n in sorted(WINNERS_OPT):
+        # n = 1 and n = 2 are hand-written (see exp_rs_opt_hand.inc):
+        # at those sizes the generator's framework overhead dominates
+        # the few word multiplies the series needs
+        if n <= 2:
+            continue
         r, N, m, dr = WINNERS_OPT[n]
         g = Gen(N, m, r, use_divrem=bool(dr), xn=n,
                 name="mpn_exp_series_opt_%d" % n)

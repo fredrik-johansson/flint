@@ -139,7 +139,11 @@ Exponential with bitwise argument reduction
     `N r + \log_2(N!) \ge 64 n` -- that is, the `1/N!` of the last
     coefficient is spent on dropping terms rather than kept as slack,
     which at `r = 16` gives `N = 11, 14, 17` for `n = 3, 4, 5` where
-    `4 n` terms would otherwise be used.
+    `4 n` terms would otherwise be used.  For `n = 1` and `n = 2` the
+    series is hand-written rather than generated: at those sizes the
+    framework overhead dominates, so plain Horner in a few word
+    multiplies -- with high products that drop the low partial -- is
+    markedly faster.
 
     Small `r` minimizes table and reduction work, large `r` shortens
     the series; as a rule of thumb on 64-bit machines, `r = 32` is
