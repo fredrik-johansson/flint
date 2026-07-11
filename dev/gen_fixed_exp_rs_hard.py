@@ -745,10 +745,10 @@ if __name__ == "__main__":
     fo.append("typedef void (*exp_series_fn)(mp_ptr, mp_srcptr);")
     fo.append("")
     for n in sorted(WINNERS_OPT):
-        # n = 1 and n = 2 are hand-written (see exp_rs_opt_hand.inc):
-        # at those sizes the generator's framework overhead dominates
-        # the few word multiplies the series needs
-        if n <= 2:
+        # n = 1, 2 and 3 are hand-written (see exp_rs_opt_hand.inc),
+        # where a mixed-precision Horner beats anything the framework
+        # emits at these sizes
+        if n <= 3:
             continue
         r, N, m, dr = WINNERS_OPT[n]
         g = Gen(N, m, r, use_divrem=bool(dr), xn=n,
