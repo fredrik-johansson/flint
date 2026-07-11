@@ -199,6 +199,8 @@ References
 
 .. [Joh2014c] \F. Johansson, "Efficient implementation of elementary functions in the medium-precision range", 22nd IEEE Symposium on Computer Arithmetic (ARITH 22), 83-89 (2015), https://arxiv.org/abs/1410.7176
 
+.. [Joh2022] \F. Johansson, "Computing elementary functions using multi-prime argument reduction", preprint (2022). https://arxiv.org/abs/2207.02501
+
 .. [Joh2015] \F. Johansson, "Computing Bell numbers", https://fredrikj.net/blog/2015/08/computing-bell-numbers/
 
 .. [Joh2015b] \F. Johansson, "A fast algorithm for reversion of power series", Math. Comp. 84 (2015), 475-484, http://doi.org/10.1090/S0025-5718-2014-02857-3

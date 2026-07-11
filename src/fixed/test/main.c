@@ -11,20 +11,24 @@
 
 /* Include functions *********************************************************/
 
+#include "t-atan_bitwise_rs.c"
 #include "t-bitwise_rs_stress.c"
 #include "t-exp_bitwise_rs.c"
 #include "t-exp_rs.c"
 #include "t-log1p_bitwise_rs.c"
+#include "t-sin_cos_bitwise_rs.c"
 #include "t-trig_rs.c"
 
 /* Array of test functions ***************************************************/
 
 test_struct tests[] =
 {
+    TEST_FUNCTION(fixed_atan_bitwise_rs),
     TEST_FUNCTION(fixed_bitwise_rs_stress),
     TEST_FUNCTION(fixed_exp_bitwise_rs),
     TEST_FUNCTION(fixed_exp_rs),
     TEST_FUNCTION(fixed_log1p_bitwise_rs),
+    TEST_FUNCTION(fixed_sin_cos_bitwise_rs),
     TEST_FUNCTION(fixed_trig_rs)
 };
 

@@ -62,7 +62,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         slong n = nmin + n_randint(state, (iter % 5 == 0) ? 40 : 10);
         slong imax = FLINT_MIN(FLINT_BITS * n - 16, 448);
         int r = (iter % 4 == 0) ? 0
-                : 32 + (int) n_randint(state, FLINT_MAX(1, imax - 32));
+                : 16 + (int) n_randint(state, FLINT_MAX(1, imax - 16));
         int reff = (r == 0) ? 32 : r;
         slong nc, j, k, nsum;
         ulong x[52], res[53], cy;
@@ -201,6 +201,160 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
             if (u > (double) FIXED_LOG1P_BITWISE_RS_MAX_ERR(n, rl))
                 TEST_FUNCTION_FAIL("log: n = %wd, r = %d, ulp = %f\n",
                     n, rl, u);
+        }
+
+        /* ---- sin/cos: x = sum of rotation angles 2 atan(2^-i),
+           sparse with possible repeats: the table stores the
+           halves, so sum the entries and double ---- */
+        if (FLINT_BITS == 64 || n >= 2)
+        {
+            ulong ys[53], yc[53];
+            int rt = (iter % 4 == 0) ? 0
+                     : 16 + (int) n_randint(state,
+                        FLINT_MAX(1, imax - 16));
+            int rteff = (rt == 0) ? 32 : rt;
+
+            _fixed_atans_ensure(n, FLINT_MIN((slong) rteff + 2, imax));
+            nc = _fixed_atans_n;
+
+            flint_mpn_zero(x, n);
+            nsum = 1 + n_randint(state, 8);
+            for (j = 0; j < nsum; j++)
+            {
+                slong i = 1 + n_randint(state,
+                    FLINT_MIN((slong) rteff + 2, imax));
+                nn_srcptr Ai = _fixed_atans + i * nc + (nc - n);
+
+                cy = mpn_add_n(x, x, Ai, n);
+                if (cy)
+                    mpn_sub_n(x, x, Ai, n);
+            }
+            /* double to turn the summed half-angles into rotation
+               angles (skip if it would overflow the fraction) */
+            if (x[n - 1] >> (FLINT_BITS - 1) == 0)
+                mpn_lshift(x, x, n, 1);
+
+            k = (slong) n_randint(state, 7) - 3;
+            if (k > 0)
+            {
+                cy = mpn_add_1(x, x, n, (ulong) k);
+                if (cy)
+                    mpn_sub_1(x, x, n, (ulong) k);
+            }
+            else if (k < 0)
+            {
+                cy = mpn_sub_1(x, x, n, (ulong) (-k));
+                if (cy)
+                    mpn_add_1(x, x, n, (ulong) (-k));
+            }
+
+            fixed_sin_cos_bitwise_rs(ys, yc, x, n, rt);
+
+            fmpz_set_ui_array(f, x, n);
+            arb_set_fmpz(xa, f);
+            arb_mul_2exp_si(xa, xa, -FLINT_BITS * n);
+            arb_sin(exact, xa, prec);
+            u = ulp_error_vs_arb(ys, n + 1, exact, n);
+            if (u > (double) FIXED_SIN_COS_BITWISE_RS_MAX_ERR(n, rt))
+                TEST_FUNCTION_FAIL("sin: n = %wd, r = %d, ulp = %f\n",
+                    n, rt, u);
+            arb_cos(exact, xa, prec);
+            u = ulp_error_vs_arb(yc, n + 1, exact, n);
+            if (u > (double) FIXED_SIN_COS_BITWISE_RS_MAX_ERR(n, rt))
+                TEST_FUNCTION_FAIL("cos: n = %wd, r = %d, ulp = %f\n",
+                    n, rt, u);
+        }
+
+        /* ---- atan: t = Y/X of a sparse rotation product
+           prod (1 + i 2^-i) applied to (1, 0), kept below the
+           diagonal (Y < X, i.e. angle < pi/4), so the vectoring
+           must rediscover the factor set ---- */
+        {
+            ulong WX[54], WY[54], va2[53], vb2[53], nd2[107], ya[53];
+            slong wn2 = n + 1, tries;
+            int rt = (iter % 4 == 0) ? 0
+                     : 16 + (int) n_randint(state,
+                        FLINT_MAX(1, imax - 16));
+
+            flint_mpn_zero(WX, n);
+            WX[n] = 1;
+            flint_mpn_zero(WY, wn2);
+
+            tries = 1 + (slong) n_randint(state, 10);
+            for (j = 0; j < tries; j++)
+            {
+                slong i = 1 + n_randint(state, imax);
+                slong qq = i / FLINT_BITS, b = i % FLINT_BITS;
+
+                if (qq >= wn2)
+                    continue;
+                flint_mpn_zero(va2, n);
+                flint_mpn_zero(vb2, n);
+                if (b)
+                {
+                    mpn_rshift(va2, WX + qq, wn2 - qq, (int) b);
+                    mpn_rshift(vb2, WY + qq, wn2 - qq, (int) b);
+                }
+                else
+                {
+                    flint_mpn_copyi(va2, WX + qq, wn2 - qq);
+                    flint_mpn_copyi(vb2, WY + qq, wn2 - qq);
+                }
+                mpn_sub(WX, WX, wn2, vb2, n);
+                mpn_add(WY, WY, wn2, va2, n);
+                if (WY[n] != 0 || mpn_cmp(WY, WX, wn2) >= 0)
+                {
+                    /* crossed the diagonal: revert */
+                    mpn_sub(WY, WY, wn2, va2, n);
+                    mpn_add(WX, WX, wn2, vb2, n);
+                }
+            }
+
+            /* t = floor(WY 2^(b n) / WX): WY < WX so t < 1.  In
+               the ROTATION direction X decreases (|W| grows into
+               the imaginary part), so WX < 1 is possible and its
+               top limb may be zero: normalize the divisor length,
+               since mpn_tdiv_qr requires a nonzero leading limb.
+               (The vectoring loop inside fixed_atan_bitwise_rs has
+               no such issue: there X only grows from 1.) */
+            {
+                slong dn = wn2;
+                ulong qbuf[108];
+
+                while (dn > 1 && WX[dn - 1] == 0)
+                    dn--;
+
+                flint_mpn_zero(nd2, n);
+                flint_mpn_copyi(nd2 + n, WY, wn2);
+                mpn_tdiv_qr(qbuf, nd2, 0, nd2, n + wn2, WX, dn);
+                flint_mpn_zero(x, n);
+                flint_mpn_copyi(x, qbuf, n);
+            }
+
+            k = (slong) n_randint(state, 7) - 3;
+            if (k > 0)
+            {
+                cy = mpn_add_1(x, x, n, (ulong) k);
+                if (cy)
+                    mpn_sub_1(x, x, n, (ulong) k);
+            }
+            else if (k < 0)
+            {
+                cy = mpn_sub_1(x, x, n, (ulong) (-k));
+                if (cy)
+                    mpn_add_1(x, x, n, (ulong) (-k));
+            }
+
+            fixed_atan_bitwise_rs(ya, x, n, rt);
+
+            fmpz_set_ui_array(f, x, n);
+            arb_set_fmpz(xa, f);
+            arb_mul_2exp_si(xa, xa, -FLINT_BITS * n);
+            arb_atan(exact, xa, prec);
+            u = ulp_error_vs_arb(ya, n, exact, n);
+            if (u > (double) FIXED_ATAN_BITWISE_RS_MAX_ERR(n, rt))
+                TEST_FUNCTION_FAIL("atan: n = %wd, r = %d, ulp = %f\n",
+                    n, rt, u);
         }
 
         arb_clear(xa);

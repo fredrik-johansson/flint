@@ -41,6 +41,10 @@ extern "C" {
     (9 * (slong) ((r) ? (r) : 512) + 100)
 #define FIXED_LOG1P_BITWISE_RS_MAX_ERR(n, r) \
     (3 * (slong) ((r) ? (r) : 512) + 64)
+#define FIXED_SIN_COS_BITWISE_RS_MAX_ERR(n, r) \
+    (6 * (slong) ((r) ? (r) : 512) + 128)
+#define FIXED_ATAN_BITWISE_RS_MAX_ERR(n, r) \
+    (4 * (slong) ((r) ? (r) : 512) + 64)
 #define FIXED_SIN_RS_MAX_ERR(n) 15
 #define FIXED_COS_RS_MAX_ERR(n) 15
 #define FIXED_SIN_COS_RS_MAX_ERR(n) 15
@@ -73,6 +77,17 @@ void fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
    effective in the specialized code for n <= 4. */
 void fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 
+/* sin and cos of (x, n) in [0, 1) -> (ysin, n + 1), (ycos, n + 1)
+   (either may be NULL), by greedy reduction with the doubled angles
+   2 atan(2^-i) and unimodular reconstruction; requires n >= 2 on
+   32-bit limbs and r = 0 (tuned default) or r >= 16. */
+void fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
+    slong n, int r);
+
+/* atan((x, n)) -> (res, n) for x in [0, 1), by greedy vectoring;
+   r = 0 selects a tuned default; otherwise r >= 16. */
+void fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
+
 /* sin, cos, sinh, cosh of (x, n) -> (res, n + 1); the combined
    versions allow either output to be NULL */
 void fixed_sin_rs(nn_ptr res, nn_srcptr x, slong n);
@@ -100,6 +115,30 @@ extern FLINT_TLS_PREFIX nn_ptr _fixed_exp_logs;
 extern FLINT_TLS_PREFIX slong _fixed_exp_logs_n;
 extern FLINT_TLS_PREFIX slong _fixed_exp_logs_r;
 void _fixed_exp_logs_ensure(slong nc, slong rc);
+
+/* Internal: number of slots the used array of _fixed_bitwise_reduce
+   must provide: each index i = istart..r is used at most once, plus
+   the window-boundary and final steps, which may repeat an index a
+   bounded number of times to absorb the truncation creep of the
+   table (see exp_bitwise_rs.c). */
+#define FIXED_BITWISE_REDUCE_USED_ALLOC(r) \
+    ((r) + 2 * ((r) / FLINT_BITS) + 12)
+
+/* Internal: shared greedy table-subtraction reduction (see
+   exp_bitwise_rs.c); returns the number of indices recorded in
+   used, which must have room for
+   FIXED_BITWISE_REDUCE_USED_ALLOC(r) entries. */
+slong _fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
+    nn_srcptr tab, slong tabn, slong * used);
+
+/* Internal: thread-local cached table of the doubled angles
+   alpha_i = 2 atan(2^-i) (entry 0 is unused and zeroed: pi/2 does
+   not fit the fraction format), shared by fixed_sin_cos_bitwise_rs
+   and fixed_atan_bitwise_rs. */
+extern FLINT_TLS_PREFIX nn_ptr _fixed_atans;
+extern FLINT_TLS_PREFIX slong _fixed_atans_n;
+extern FLINT_TLS_PREFIX slong _fixed_atans_r;
+void _fixed_atans_ensure(slong nc, slong rc);
 void _fixed_sin_cos_rs_fallback(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int alternating);
 void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n,
@@ -108,6 +147,12 @@ void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n,
 /* Internal: atanh for the wider range x < 2^-16, used by the small
    reduction parameters of fixed_log1p_bitwise_rs. */
 void _fixed_atanh_rs16(nn_ptr res, nn_srcptr x, slong n);
+
+/* Internal: atan and sin/cos for the wider range x < 2^-16, used by
+   the small reduction parameters of the bitwise trigonometric
+   functions.  The sin/cos routine requires both outputs. */
+void _fixed_atan_rs16(nn_ptr res, nn_srcptr x, slong n);
+void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 
 #ifdef __cplusplus
 }

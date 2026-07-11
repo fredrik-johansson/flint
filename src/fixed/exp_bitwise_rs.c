@@ -68,6 +68,7 @@ _fixed_exp_logs_cleanup(void)
 }
 
 #define LOGS_L(i) (_fixed_exp_logs + (i) * _fixed_exp_logs_n)
+#define TAB_E(i) (tab + (i) * nc)
 
 void
 _fixed_exp_logs_ensure(slong nc, slong rc)
@@ -140,9 +141,11 @@ _fixed_exp_logs_ensure(slong nc, slong rc)
    direct series would need many terms, evaluate sinh(t) instead --
    the odd series has half the terms -- and reconstruct
    exp(t) = sinh(t) + sqrt(1 + sinh(t)^2), costing one squaring and
-   one square root.  The sinh error (<= 15 ulp at the guarded
-   precision), the truncated squaring and the floor of the integer
-   square root all sit below one guard ulp of the final result. */
+   one square root.  The sinh error (FIXED_SINH_RS_MAX_ERR = 15 ulp),
+   the truncated squaring and the floored integer square root
+   together contribute some 20 ulp, amplified below e by the
+   reconstruction: this is part of the constant term of
+   FIXED_EXP_BITWISE_RS_MAX_ERR. */
 static void
 _fixed_exp_reduced(nn_ptr y, nn_srcptr t, slong wn, int r, int use_sinh)
 {
@@ -240,26 +243,46 @@ _fixed_exp_recon(nn_ptr y, nn_ptr sh, slong ylen, const slong * used,
    the loop touches one limb per step and the full-width work is
    branch-free.  The decisions agree exactly with the plain
    full-precision greedy. */
-static slong
-_fixed_exp_reduce(nn_ptr t, slong wn, int r, slong * used)
+/* Shared greedy reduction: subtract tab[i] (entries of tabn limbs,
+   value tab_i < 2^-i with tab_{i-1} < 2 tab_i) from (t, wn) for
+   i = istart..r whenever it fits, recording the used indices; used
+   by exp (tab_i = log(1 + 2^-i), istart = 0) and by the rotation
+   reduction of sin/cos (tab_i = atan(2^-i), istart = 1, applied to
+   half the angle -- the entries MUST satisfy tab_i < 2^-i, which
+   the doubled angles 2 atan(2^-i) ~ 2^(1-i) would not). */
+slong
+_fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
+    nn_srcptr tab, slong tabn, slong * used)
 {
-    slong num = 0, bj = 0, nc = _fixed_exp_logs_n;
+    slong num = 0, bj = 0, nc = tabn;
     slong i, c;
 
     for (c = 0; FLINT_BITS * c <= r; c++)
     {
-        slong i0 = FLINT_BITS * c;
+        slong i0 = FLINT_MAX(FLINT_BITS * c, istart);
         slong i1 = FLINT_MIN((slong) r, FLINT_BITS * (c + 1) - 1);
         ulong h, e;
         nn_srcptr Lp;
 
         /* apply pending subtractions from the previous window */
         for (; bj < num; bj++)
-            mpn_sub_n(t, t, LOGS_L(used[bj]) + (nc - wn), wn);
+            mpn_sub_n(t, t, TAB_E(used[bj]) + (nc - wn), wn);
 
-        /* exact step at the window boundary */
-        Lp = LOGS_L(i0) + (nc - wn);
-        if (mpn_cmp(t, Lp, wn) >= 0)
+        /* Exact step at the window boundary.  This must leave
+           t < tab[i0] < 2^-i0, which is precisely the precondition
+           of the single-limb model below (that t[wn - 1 - c] is the
+           leading limb).  A single subtraction is not enough to
+           guarantee it: the table entries are floors, so each
+           accepted index under-subtracts by up to one ulp, and this
+           creep can push t above tab[i0 - 1] -- close to 2 tab[i0]
+           -- whenever the entry's deficit from 2^-i0 is itself
+           below an ulp.  Repeating the subtraction restores the
+           invariant unconditionally; an index used twice simply
+           means its factor is applied twice, which the callers'
+           reconstructions handle (the decomposition stays bounded by
+           the input, not by the table). */
+        Lp = TAB_E(i0) + (nc - wn);
+        while (mpn_cmp(t, Lp, wn) >= 0)
         {
             mpn_sub_n(t, t, Lp, wn);
             used[num++] = i0;
@@ -271,14 +294,14 @@ _fixed_exp_reduce(nn_ptr t, slong wn, int r, slong * used)
 
         for (i = i0 + 1; i <= i1; i++)
         {
-            ulong lt = _fixed_exp_logs[i * nc + (nc - 1 - c)];
+            ulong lt = tab[i * nc + (nc - 1 - c)];
 
             if (h - lt + e <= 2 * e)
             {
                 /* ambiguity band: apply pending and decide exactly */
                 for (; bj < num; bj++)
-                    mpn_sub_n(t, t, LOGS_L(used[bj]) + (nc - wn), wn);
-                Lp = LOGS_L(i) + (nc - wn);
+                    mpn_sub_n(t, t, TAB_E(used[bj]) + (nc - wn), wn);
+                Lp = TAB_E(i) + (nc - wn);
                 if (mpn_cmp(t, Lp, wn) >= 0)
                 {
                     mpn_sub_n(t, t, Lp, wn);
@@ -301,14 +324,14 @@ _fixed_exp_reduce(nn_ptr t, slong wn, int r, slong * used)
     }
 
     for (; bj < num; bj++)
-        mpn_sub_n(t, t, LOGS_L(used[bj]) + (nc - wn), wn);
+        mpn_sub_n(t, t, TAB_E(used[bj]) + (nc - wn), wn);
 
     /* the truncated table lets the remainder creep marginally above
-       L_r; one extra subtraction restores t < L_r < 2^-r */
+       tab[r]; extra subtractions restore t < tab[r] < 2^-r */
     {
-        nn_srcptr Lr = LOGS_L(r) + (nc - wn);
+        nn_srcptr Lr = TAB_E(r) + (nc - wn);
 
-        if (mpn_cmp(t, Lr, wn) >= 0)
+        while (mpn_cmp(t, Lr, wn) >= 0)
         {
             mpn_sub_n(t, t, Lr, wn);
             used[num++] = r;
@@ -374,11 +397,12 @@ fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     t = TMP_ALLOC((wn + 2 * (n + 1)) * sizeof(ulong));
     y = t + wn;
     sh = y + (n + 1);
-    used = TMP_ALLOC((r + 2) * sizeof(slong));
+    used = TMP_ALLOC(FIXED_BITWISE_REDUCE_USED_ALLOC(r) * sizeof(slong));
 
     flint_mpn_copyi(t, x, n);
 
-    num = _fixed_exp_reduce(t, wn, r, used);
+    num = _fixed_bitwise_reduce(t, wn, r, 0, _fixed_exp_logs,
+        _fixed_exp_logs_n, used);
 
     /* exp of the reduced argument */
     _fixed_exp_reduced(y, t, wn, r, EXP_USE_SINH(wn, r));

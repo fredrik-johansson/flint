@@ -534,8 +534,11 @@ _fixed_sin_cos_rs_fallback(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
 
     zb = _fixed_lzb(x, n);
 
+    /* the number of terms is chosen from the actual leading zero
+       bits, so the wider range x < 2^-16 is served too (used by
+       _fixed_sin_cos_rs16 beyond its hardcoded reach) */
     if (zb >= 0)
-        FLINT_ASSERT(zb >= 32);
+        FLINT_ASSERT(zb >= 16);
 
     /* first dropped terms x^(2N)/(2N)!, x^(2N+1)/(2N+1)! below
        2^(-FLINT_BITS (n+1)) */
@@ -935,6 +938,44 @@ void fixed_atan_rs(nn_ptr res, nn_srcptr x, slong n)
 
 void fixed_atanh_rs(nn_ptr res, nn_srcptr x, slong n)
 { _fixed_at_rs(res, x, n, 0); }
+
+/* atan and sin/cos for the wider range x < 2^-16 (internal: used by
+   the small reduction parameters of the bitwise trigonometric
+   functions) */
+void
+_fixed_atan_rs16(nn_ptr res, nn_srcptr x, slong n)
+{
+    FLINT_ASSERT(n >= 1);
+    FLINT_ASSERT((x[n - 1] >> (FLINT_BITS - 16)) == 0);
+
+#if FLINT_BITS == 64
+    if (n <= 7)
+    {
+        _fixed_atan_rs16_tab[n](res, x);
+        return;
+    }
+#endif
+    _fixed_atan_rs_fallback(res, x, n, 1);
+}
+
+void
+_fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n)
+{
+    FLINT_ASSERT(n >= 1);
+    FLINT_ASSERT((x[n - 1] >> (FLINT_BITS - 16)) == 0);
+
+    /* the hardcoded family reaches n = 6: with the shared 20!
+       denominator the series is clamped to SC_NMAX terms, whose
+       first dropped term x^21/21! < 2^-401 covers 64 n <= 384 */
+#if FLINT_BITS == 64
+    if (n <= 6)
+    {
+        _fixed_sin_cos_rs16_tab[n](ysin, ycos, x);
+        return;
+    }
+#endif
+    _fixed_sin_cos_rs_fallback(ysin, ycos, x, n, 1);
+}
 
 /* atanh for the wider range x < 2^-16 (internal: used by the small
    reduction parameters of fixed_log1p_bitwise_rs) */

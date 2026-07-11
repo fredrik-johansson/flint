@@ -132,6 +132,19 @@ def emit_tables():
 #define RS_SUBMUL_Z(a, n, src, c, fl) \\
     do { mp_limb_t __cy = mpn_submul_1(a, src, n, c); \\
          (a)[n] = -__cy; (fl) = -(mp_limb_t) (__cy != 0); } while (0)
+/* Accumulating variants, used where the window is full (g == w, i.e.
+   zbits = 16): the slot a[n] is not fresh -- it already holds the
+   previous term's carry limb -- so the borrow/carry is folded into
+   it rather than assigned over it. */
+#define RS_SUBMUL_ACC(a, n, src, c, fl) \\
+    do { mp_limb_t __cy = mpn_submul_1(a, src, n, c); \\
+         (fl) -= ((a)[n] < __cy); (a)[n] -= __cy; } while (0)
+#define RS_ADDMUL_ACC(a, n, src, c, fl) \\
+    do { mp_limb_t __cy = mpn_addmul_1(a, src, n, c); \\
+         (a)[n] += __cy; (fl) += ((a)[n] < __cy); } while (0)
+#define RS_SUBMUL_Z_ACC(a, n, src, c, fl) \\
+    do { mp_limb_t __cy = mpn_submul_1(a, src, n, c); \\
+         (fl) = -(mp_limb_t) ((a)[n] < __cy); (a)[n] -= __cy; } while (0)
 """)
     return "\n".join(out)
 
@@ -321,9 +334,17 @@ class SGen:
                     if occ is not None and occ == w:
                         # zbits = 16 only: a previous carry limb sits
                         # at the units slot; add instead of assign
-                        # (the window value keeps D < 2^63 headroom)
-                        assert not dyn
+                        # (the window value keeps D < 2^63 headroom).
+                        # This is correct with a live sign extension
+                        # too: in wrapped arithmetic the add commits
+                        # c * 2^(64 w) to the two's-complement value,
+                        # and the discarded carry out of limb w is
+                        # exactly what cancels fl_s = -1.  The block
+                        # value is nonnegative (the units coefficient
+                        # dominates), so the sign extension dies here.
+                        assert not neg      # even m => even units k
                         body.append("    %s[%d] += %s;" % (cur, w, c))
+                        dyn = False
                         continue
                     for i in range((0 if occ is None else occ + 1), w):
                         body.append("    %s[%d] = %s;"
@@ -349,16 +370,20 @@ class SGen:
                 for i in range(occ + 1, g):
                     body.append("    %s[%d] = %s;"
                                 % (cur, i, "fl_s" if dyn else "0"))
+                acc = (occ == g)        # full window: top slot in use
                 if neg and dyn:
-                    body.append("    RS_SUBMUL(%s, %d, %s, %s, fl_s);"
-                                % (cur, g, self.src(p, g), c))
+                    body.append("    RS_SUBMUL%s(%s, %d, %s, %s, fl_s);"
+                                % ("_ACC" if acc else "",
+                                   cur, g, self.src(p, g), c))
                 elif neg:
-                    body.append("    RS_SUBMUL_Z(%s, %d, %s, %s, fl_s);"
-                                % (cur, g, self.src(p, g), c))
+                    body.append("    RS_SUBMUL_Z%s(%s, %d, %s, %s, fl_s);"
+                                % ("_ACC" if acc else "",
+                                   cur, g, self.src(p, g), c))
                     dyn = True
                 elif dyn:
-                    body.append("    RS_ADDMUL(%s, %d, %s, %s, fl_s);"
-                                % (cur, g, self.src(p, g), c))
+                    body.append("    RS_ADDMUL%s(%s, %d, %s, %s, fl_s);"
+                                % ("_ACC" if acc else "",
+                                   cur, g, self.src(p, g), c))
                 elif occ == g:
                     # zbits = 16 only: the previous term's carry limb
                     # occupies cur[g]
@@ -593,6 +618,13 @@ class SGen:
         bt = "\n".join(body)
         if "fl_s" in bt:
             decl.append("    mp_limb_t fl_s;")
+            # With full windows (zbits = 16) the running sign
+            # extension is consumed by the wrapped units addition
+            # rather than read back, so its final value is dead:
+            # say so, or the compiler rightly warns.
+            if ("= fl_s" not in bt) and ("+ fl_s" not in bt):
+                body.append("    (void) fl_s;")
+                bt = "\n".join(body)
         if "cy" in bt:
             decl.append("    mp_limb_t cy;")
         while body and body[-1] == "":
@@ -689,10 +721,20 @@ class SGen:
 
 def xnrange(func, zbits):
     if zbits == 16:
-        # only the non-alternating odd series for now: the
-        # alternating (RS_* macro) paths do not yet handle the
-        # carry-slot collisions of the fractional-limb shrink
-        return range(1, 8) if func == "atanh" else range(1, 1)
+        # The shrink is disabled here (see SGen.zl), so every window
+        # is full; the carry-slot collisions this creates are handled
+        # by the accumulating RS_*_ACC emissions, which lets the
+        # alternating families in as well.
+        #
+        # The reach is limited by the SHARED DENOMINATOR, not by the
+        # emission: the series are clamped to ATAN_NMAX resp. SC_NMAX
+        # terms, while x < 2^-16 needs about 2 xn of them.  The first
+        # dropped term bounds the achievable precision:
+        #   sin/cos: x^21/21! < 2^-401, enough for 64 xn <= 384
+        #   atan:    x^35/35  < 2^-565, enough well past xn = 7
+        # so the sin/cos families stop at xn = 6 (xn = 7 would carry
+        # an error of some 2^46 ulp) and the atan families at xn = 7.
+        return range(1, 8) if func in ("atan", "atanh") else range(1, 7)
     if func in ("atan", "atanh"):
         return range(1, (35 if zbits == 64 else 17) + 1)
     return range(1, (22 if zbits == 64 else 10) + 1)
@@ -727,9 +769,14 @@ BASENAMES = {"atan": "mpn_atan_series", "atanh": "mpn_atanh_series",
 
 def main():
     mode = sys.argv[1] if len(sys.argv) > 1 else "all"
-    zbits = 32 if mode.endswith("32") else 64
-    mode = mode.replace("32", "")
-    sfx = "" if zbits == 64 else "32"
+    if mode.endswith("16"):
+        zbits = 16
+    elif mode.endswith("32"):
+        zbits = 32
+    else:
+        zbits = 64
+    mode = mode.replace("32", "").replace("16", "")
+    sfx = "" if zbits == 64 else str(zbits)
 
     out = [header(), emit_tables()]
     out.append("typedef void (*odd_series_fn)(mp_ptr, mp_srcptr);")
@@ -824,7 +871,13 @@ import re
 WINNERS_64 = {'atanh': {1: (0, 0), 2: (0, 0), 3: (0, 0), 4: (2, 1), 5: (2, 1), 6: (2, 1), 7: (2, 1), 8: (2, 1), 9: (2, 1), 10: (4, 1), 11: (4, 1), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (6, 0), 16: (4, 0), 17: (6, 0), 18: (6, 0), 19: (6, 0), 20: (6, 0), 21: (4, 0), 22: (4, 0), 23: (4, 0), 24: (4, 0), 25: (4, 0), 26: (4, 0), 27: (4, 0), 28: (4, 0), 29: (4, 0), 30: (4, 0), 31: (4, 0), 32: (4, 0), 33: (4, 0), 34: (4, 0), 35: (4, 0)}, 'atan': {1: (0, 0), 2: (0, 0), 3: (0, 0), 4: (2, 1), 5: (2, 1), 6: (2, 1), 7: (2, 1), 8: (2, 1), 9: (2, 0), 10: (4, 0), 11: (4, 0), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (6, 0), 16: (4, 0), 17: (2, 0), 18: (6, 0), 19: (2, 0), 20: (6, 0), 21: (4, 0), 22: (4, 0), 23: (4, 0), 24: (4, 0), 25: (4, 0), 26: (4, 0), 27: (4, 0), 28: (6, 0), 29: (4, 0), 30: (4, 0), 31: (4, 0), 32: (4, 0), 33: (4, 0), 34: (4, 0), 35: (4, 0)}, 'sinhcosh': {1: (0, 0), 2: (0, 0), 3: (0, 0), 4: (2, 1), 5: (2, 1), 6: (2, 1), 7: (2, 1), 8: (2, 1), 9: (4, 1), 10: (4, 1), 11: (4, 1), 12: (4, 1), 13: (6, 0), 14: (6, 0), 15: (6, 0), 16: (6, 0), 17: (8, 0), 18: (8, 0), 19: (8, 0), 20: (8, 0), 21: (8, 0), 22: (8, 0)}, 'sincos': {1: (0, 0), 2: (0, 0), 3: (0, 0), 4: (2, 1), 5: (2, 1), 6: (2, 1), 7: (2, 1), 8: (2, 1), 9: (4, 1), 10: (4, 1), 11: (4, 0), 12: (4, 0), 13: (6, 0), 14: (6, 0), 15: (6, 0), 16: (6, 0), 17: (6, 0), 18: (8, 0), 19: (8, 0), 20: (6, 0), 21: (8, 0), 22: (8, 0)}}
 
 WINNERS_16 = {'atanh': {1: (2, 1), 2: (2, 1), 3: (2, 1), 4: (4, 1),
-              5: (6, 1), 6: (6, 1), 7: (6, 1)}}
+              5: (6, 1), 6: (6, 1), 7: (6, 1)},
+              'atan': {1: (2, 1), 2: (2, 1), 3: (2, 1), 4: (4, 1),
+              5: (4, 1), 6: (4, 1), 7: (4, 1)},
+              'sincos': {1: (2, 1), 2: (2, 1), 3: (2, 1), 4: (4, 1),
+              5: (6, 1), 6: (6, 1)},
+              'sinhcosh': {1: (2, 1), 2: (2, 1), 3: (2, 1), 4: (4, 1),
+              5: (6, 1), 6: (6, 1)}}
 
 WINNERS_32 = {'atanh': {1: (0, 0), 2: (2, 1), 3: (2, 1), 4: (2, 1), 5: (4, 1), 6: (4, 1), 7: (6, 1), 8: (4, 1), 9: (4, 1), 10: (4, 0), 11: (6, 0), 12: (4, 0), 13: (6, 0), 14: (4, 0), 15: (4, 0), 16: (4, 0), 17: (4, 0)}, 'atan': {1: (0, 0), 2: (2, 1), 3: (2, 1), 4: (2, 1), 5: (4, 1), 6: (4, 1), 7: (6, 1), 8: (4, 1), 9: (4, 1), 10: (6, 0), 11: (4, 0), 12: (4, 0), 13: (4, 0), 14: (4, 0), 15: (4, 0), 16: (4, 0), 17: (4, 0)}, 'sinhcosh': {1: (0, 0), 2: (2, 1), 3: (2, 1), 4: (2, 1), 5: (4, 1), 6: (4, 1), 7: (6, 1), 8: (6, 1), 9: (8, 1), 10: (8, 1)}, 'sincos': {1: (0, 0), 2: (2, 1), 3: (2, 1), 4: (2, 1), 5: (4, 1), 6: (4, 1), 7: (6, 1), 8: (6, 1), 9: (8, 1), 10: (8, 0)}}
 
@@ -887,7 +940,7 @@ def _statify(s):
 if __name__ == "__main__":
     f64 = generate_best(64, WINNERS_64)
     f32 = generate_best(32, WINNERS_32)
-    f16 = generate_best(16, WINNERS_16, funcs=("atanh",))
+    f16 = generate_best(16, WINNERS_16, funcs=("atanh", "atan", "sincos"))
 
     f64 = f64[f64.index('/* atan/atanh: c_k'):]
     m = re.search(r'\nvoid\nmpn_\w+_series32_1\(', f32)
@@ -904,6 +957,8 @@ if __name__ == "__main__":
            + "\n" + _statify(f16))
     out = _drop_err_tabs(out)
     for a, b in [('mpn_atanh_series16_', '_fixed_atanh_rs16_'),
+                 ('mpn_atan_series16_', '_fixed_atan_rs16_'),
+                 ('mpn_sin_cos_series16_', '_fixed_sin_cos_rs16_'),
                  ('mpn_atan_series32_', '_fixed_atan_rs32_'),
                  ('mpn_atanh_series32_', '_fixed_atanh_rs32_'),
                  ('mpn_sin_cos_series32_', '_fixed_sin_cos_rs32_'),

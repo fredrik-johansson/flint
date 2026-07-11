@@ -9,8 +9,9 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
-/* Tune the default reduction parameters of fixed_exp_bitwise_rs and
-   fixed_log1p_bitwise_rs (used when they are called with r = 0).
+/* Tune the default reduction parameters of fixed_exp_bitwise_rs,
+   fixed_log1p_bitwise_rs, fixed_sin_cos_bitwise_rs and
+   fixed_atan_bitwise_rs (used when they are called with r = 0).
 
    For each function, the candidate reduction parameters form a
    ladder (16 for log only, then 32, 64, 128, 192, ...: every
@@ -67,13 +68,42 @@ time_call(void (*func)(nn_ptr, nn_srcptr, slong, int), nn_ptr y,
     return best;
 }
 
-/* the smallest reduction parameter that is effective at size n
-   (smaller requests are clamped up internally): r < 32 takes effect
-   only in the n <= 4 code of fixed_log1p_bitwise_rs */
-static int
-r_floor(int r_first, slong n)
+/* fixed_sin_cos_bitwise_rs computes two outputs; adapt it to the
+   common signature by writing the cosine to a scratch buffer (both
+   outputs are always computed internally, so this measures the full
+   cost).  On 32-bit limbs n = 1 is unsupported: the probe is
+   skipped there, which only affects the leading table entry, whose
+   value is the r floor by convention. */
+static nn_ptr sincos_scratch = NULL;
+static slong sincos_scratch_n = 0;
+
+static void
+sin_cos_wrapper(nn_ptr y, nn_srcptr x, slong n, int r)
 {
-    if (r_first < 32 && n <= (FLINT_BITS == 64 ? 4 : 1))
+    if (FLINT_BITS == 32 && n < 2)
+        return;
+
+    if (n + 1 > sincos_scratch_n)
+    {
+        flint_free(sincos_scratch);
+        sincos_scratch = flint_malloc((n + 1) * sizeof(ulong));
+        sincos_scratch_n = n + 1;
+    }
+
+    fixed_sin_cos_bitwise_rs(y, sincos_scratch, x, n, r);
+}
+
+/* The smallest reduction parameter that is effective at size n:
+   smaller requests are clamped up internally, and how far r < 32
+   reaches differs per function.  fixed_log1p_bitwise_rs clamps its
+   generic path up to 32, so r = 16 survives only in its small-n
+   register code; the bitwise trigonometric functions route r < 32 to
+   the wider-range series in the generic path as well, so there r = 16
+   is effective at every n.  Callers pass that reach as lo_reach. */
+static int
+r_floor(int r_first, slong n, slong lo_reach)
+{
+    if (r_first < 32 && n <= lo_reach)
         return r_first;
     return 32;
 }
@@ -85,13 +115,14 @@ r_floor(int r_first, slong n)
    genuinely available and loses. */
 static int
 wins(void (*func)(nn_ptr, nn_srcptr, slong, int), nn_ptr y,
-     nn_srcptr x, slong n, int r_new, int r_old, int r_first)
+     nn_srcptr x, slong n, int r_new, int r_old, int r_first,
+     slong lo_reach)
 {
     double t_new, t_old;
 
     if ((slong) r_new > FLINT_BITS * n - 16)
         return 0;
-    if (r_old < r_floor(r_first, n))
+    if (r_old < r_floor(r_first, n, lo_reach))
         return 1;
 
     t_new = time_call(func, y, x, n, r_new, 3);
@@ -103,7 +134,7 @@ wins(void (*func)(nn_ptr, nn_srcptr, slong, int), nn_ptr y,
 static void
 tune_func(const char * name,
           void (*func)(nn_ptr, nn_srcptr, slong, int),
-          int r_first, slong nmax, slong rmax)
+          int r_first, slong lo_reach, slong nmax, slong rmax)
 {
     slong maxtab = rmax / FLINT_BITS + 3;
     int * r_tab;
@@ -141,7 +172,7 @@ tune_func(const char * name,
 
         /* smallest n in (n_tab[num-1], nmax] where r_new wins;
            the optimum is assumed nondecreasing in n */
-        if (!wins(func, y, x, nmax, r_new, r_old, r_first))
+        if (!wins(func, y, x, nmax, r_new, r_old, r_first, lo_reach))
             break;
 
         lo = n_tab[num - 1];        /* r_new loses (or ties clamped) */
@@ -150,7 +181,7 @@ tune_func(const char * name,
         {
             slong mid = lo + (hi - lo) / 2;
 
-            if (wins(func, y, x, mid, r_new, r_old, r_first))
+            if (wins(func, y, x, mid, r_new, r_old, r_first, lo_reach))
                 hi = mid;
             else
                 lo = mid;
@@ -207,14 +238,24 @@ main(int argc, char * argv[])
         return 1;
     }
 
-    flint_printf("/* tuning fixed_exp_bitwise_rs and"
-        " fixed_log1p_bitwise_rs default r\n   (nmax = %wd,"
-        " rmax = %wd) */\n\n", nmax, rmax);
+    flint_printf("/* tuning the bitwise default r"
+        "\n   (nmax = %wd, rmax = %wd) */\n\n", nmax, rmax);
 
-    tune_func("fixed_exp_bitwise_rs", fixed_exp_bitwise_rs, 32,
+    /* lo_reach: how far r < 32 is effective (see r_floor) -- only
+       the small-n register code for log1p, every n for the
+       trigonometric functions, and not at all for exp */
+    tune_func("fixed_exp_bitwise_rs", fixed_exp_bitwise_rs, 32, 0,
         nmax, rmax);
     tune_func("fixed_log1p_bitwise_rs", fixed_log1p_bitwise_rs, 16,
-        nmax, rmax);
+        (FLINT_BITS == 64) ? 4 : 1, nmax, rmax);
+    tune_func("fixed_sin_cos_bitwise_rs", sin_cos_wrapper, 16,
+        WORD_MAX, nmax, rmax);
+    tune_func("fixed_atan_bitwise_rs", fixed_atan_bitwise_rs, 16,
+        WORD_MAX, nmax, rmax);
+
+    flint_free(sincos_scratch);
+    sincos_scratch = NULL;
+    sincos_scratch_n = 0;
 
     return 0;
 }

@@ -138,6 +138,19 @@ static const ulong sin_cos_series_dinv[23] = {
 #define RS_SUBMUL_Z(a, n, src, c, fl) \
     do { ulong __cy = mpn_submul_1(a, src, n, c); \
          (a)[n] = -__cy; (fl) = -(ulong) (__cy != 0); } while (0)
+/* Accumulating variants, used where the window is full (g == w, i.e.
+   zbits = 16): the slot a[n] is not fresh -- it already holds the
+   previous term's carry limb -- so the borrow/carry is folded into
+   it rather than assigned over it. */
+#define RS_SUBMUL_ACC(a, n, src, c, fl) \
+    do { ulong __cy = mpn_submul_1(a, src, n, c); \
+         (fl) -= ((a)[n] < __cy); (a)[n] -= __cy; } while (0)
+#define RS_ADDMUL_ACC(a, n, src, c, fl) \
+    do { ulong __cy = mpn_addmul_1(a, src, n, c); \
+         (a)[n] += __cy; (fl) += ((a)[n] < __cy); } while (0)
+#define RS_SUBMUL_Z_ACC(a, n, src, c, fl) \
+    do { ulong __cy = mpn_submul_1(a, src, n, c); \
+         (fl) = -(ulong) ((a)[n] < __cy); (a)[n] -= __cy; } while (0)
 
 
 
@@ -8833,4 +8846,658 @@ static const odd_series_fn _fixed_atanh_rs16_tab[8] = {
     _fixed_atanh_rs16_5,
     _fixed_atanh_rs16_6,
     _fixed_atanh_rs16_7,
+};
+/* res[0..0] ~= sum_{k<2} (-1)^k x^(2k+1)/(2k+1);
+   x: 1 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-64) */
+static void
+_fixed_atan_rs16_1(nn_ptr res, nn_srcptr x)
+{
+    ulong z[1];
+    ulong sa[2];
+    ulong ta[2];
+    ulong fl_s;
+    ulong il0, il1;
+
+    umul_ppmm(z[0], il0, x[0], x[0]);
+
+    RS_MUL_NEG(sa, 1, z, atan_series_cs[1], fl_s);
+    sa[1] += atan_series_cs[0];
+    umul_ppmm(ta[1], ta[0], sa[1], (atan_series_dinv + 34)[1]);
+    umul_ppmm(il1, il0, sa[1], (atan_series_dinv + 34)[0]);
+    add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+    umul_ppmm(il1, il0, sa[0], (atan_series_dinv + 34)[1]);
+    add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+    flint_mpn_mulhigh_n(res, ta, x, 1);
+
+    (void) fl_s;
+}
+
+/* res[0..1] ~= sum_{k<4} (-1)^k x^(2k+1)/(2k+1);
+   x: 2 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-128) */
+static void
+_fixed_atan_rs16_2(nn_ptr res, nn_srcptr x)
+{
+    ulong z[2];
+    ulong z2p[3];
+    ulong sa[3];
+    ulong ta[3];
+    ulong fl_s;
+    ulong il0, il1;
+
+    nn_ptr z2 = z2p + 1;
+    z2p[0] = 0;
+
+    umul_ppmm(z[1], z[0], x[1], x[1]);
+    umul_ppmm(il1, il0, x[1], x[0]);
+    add_ssaaaa(z[1], z[0], z[1], z[0], UWORD(0), (il1 << 1) | (il0 >> (FLINT_BITS - 1)));
+    umul_ppmm(z2[1], z2[0], z[1], z[1]);
+    umul_ppmm(il1, il0, z[1], z[0]);
+    add_ssaaaa(z2[1], z2[0], z2[1], z2[0], UWORD(0), (il1 << 1) | (il0 >> (FLINT_BITS - 1)));
+
+    RS_MUL_NEG(sa, 2, z, atan_series_cs[3], fl_s);
+    sa[2] += atan_series_cs[2];
+    umul_ppmm(ta[2], ta[1], sa[2], z2[1]);
+    umul_ppmm(il1, ta[0], sa[1], z2[1]);
+    add_ssaaaa(ta[2], ta[1], ta[2], ta[1], UWORD(0), il1);
+    umul_ppmm(il1, il0, sa[2], z2[0]);
+    add_sssaaaaaa(ta[2], ta[1], ta[0], ta[2], ta[1], ta[0], UWORD(0), il1, il0);
+    umul_ppmm(il1, il0, sa[0], z2[1]);
+    add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+    umul_ppmm(il1, il0, sa[1], z2[0]);
+    add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+    RS_SUBMUL_Z_ACC(ta, 2, z, atan_series_cs[1], fl_s);
+    ta[2] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(sa, ta, atan_series_dinv + 33, 3);
+    flint_mpn_mulhigh_n(res, sa, x, 2);
+
+    (void) fl_s;
+}
+
+/* res[0..2] ~= sum_{k<6} (-1)^k x^(2k+1)/(2k+1);
+   x: 3 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-192) */
+static void
+_fixed_atan_rs16_3(nn_ptr res, nn_srcptr x)
+{
+    ulong z[3];
+    ulong z2p[4];
+    ulong sa[4];
+    ulong ta[4];
+    ulong fl_s;
+
+    nn_ptr z2 = z2p + 1;
+    z2p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 3);
+    flint_mpn_sqrhigh(z2, z, 3);
+
+    RS_MUL_NEG(sa, 3, z, atan_series_cs[5], fl_s);
+    sa[3] += atan_series_cs[4];
+    flint_mpn_mulhigh_n(ta, sa, z2 - 1, 4);
+    RS_SUBMUL_Z_ACC(ta, 3, z, atan_series_cs[3], fl_s);
+    ta[3] += atan_series_cs[2];
+    flint_mpn_mulhigh_n(sa, ta, z2 - 1, 4);
+    RS_SUBMUL_Z_ACC(sa, 3, z, atan_series_cs[1], fl_s);
+    sa[3] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(ta, sa, atan_series_dinv + 32, 4);
+    flint_mpn_mulhigh_n(res, ta, x, 3);
+
+    (void) fl_s;
+}
+
+/* res[0..3] ~= sum_{k<8} (-1)^k x^(2k+1)/(2k+1);
+   x: 4 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-256) */
+static void
+_fixed_atan_rs16_4(nn_ptr res, nn_srcptr x)
+{
+    ulong z[4];
+    ulong z2[4];
+    ulong z3[4];
+    ulong z4p[5];
+    ulong sa[5];
+    ulong ta[5];
+    ulong fl_s;
+
+    nn_ptr z4 = z4p + 1;
+    z4p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 4);
+    flint_mpn_sqrhigh(z2, z, 4);
+    flint_mpn_mulhigh_n(z3, z, z2, 4);
+    flint_mpn_sqrhigh(z4, z2, 4);
+
+    RS_MUL_NEG(sa, 4, z3, atan_series_cs[7], fl_s);
+    RS_ADDMUL_ACC(sa, 4, z2, atan_series_cs[6], fl_s);
+    RS_SUBMUL_ACC(sa, 4, z, atan_series_cs[5], fl_s);
+    sa[4] += atan_series_cs[4];
+    flint_mpn_mulhigh_n(ta, sa, z4 - 1, 5);
+    RS_SUBMUL_Z_ACC(ta, 4, z3, atan_series_cs[3], fl_s);
+    RS_ADDMUL_ACC(ta, 4, z2, atan_series_cs[2], fl_s);
+    RS_SUBMUL_ACC(ta, 4, z, atan_series_cs[1], fl_s);
+    ta[4] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(sa, ta, atan_series_dinv + 31, 5);
+    flint_mpn_mulhigh_n(res, sa, x, 4);
+
+    (void) fl_s;
+}
+
+/* res[0..4] ~= sum_{k<10} (-1)^k x^(2k+1)/(2k+1);
+   x: 5 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-320) */
+static void
+_fixed_atan_rs16_5(nn_ptr res, nn_srcptr x)
+{
+    ulong z[5];
+    ulong z2[5];
+    ulong z3[5];
+    ulong z4p[6];
+    ulong sa[6];
+    ulong ta[6];
+    ulong fl_s;
+
+    nn_ptr z4 = z4p + 1;
+    z4p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 5);
+    flint_mpn_sqrhigh(z2, z, 5);
+    flint_mpn_mulhigh_n(z3, z, z2, 5);
+    flint_mpn_sqrhigh(z4, z2, 5);
+
+    RS_MUL_NEG(sa, 5, z, atan_series_cs[9], fl_s);
+    sa[5] += atan_series_cs[8];
+    flint_mpn_mulhigh_n(ta, sa, z4 - 1, 6);
+    RS_SUBMUL_Z_ACC(ta, 5, z3, atan_series_cs[7], fl_s);
+    RS_ADDMUL_ACC(ta, 5, z2, atan_series_cs[6], fl_s);
+    RS_SUBMUL_ACC(ta, 5, z, atan_series_cs[5], fl_s);
+    ta[5] += atan_series_cs[4];
+    flint_mpn_mulhigh_n(sa, ta, z4 - 1, 6);
+    RS_SUBMUL_Z_ACC(sa, 5, z3, atan_series_cs[3], fl_s);
+    RS_ADDMUL_ACC(sa, 5, z2, atan_series_cs[2], fl_s);
+    RS_SUBMUL_ACC(sa, 5, z, atan_series_cs[1], fl_s);
+    sa[5] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(ta, sa, atan_series_dinv + 30, 6);
+    flint_mpn_mulhigh_n(res, ta, x, 5);
+
+    (void) fl_s;
+}
+
+/* res[0..5] ~= sum_{k<12} (-1)^k x^(2k+1)/(2k+1);
+   x: 6 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-384) */
+static void
+_fixed_atan_rs16_6(nn_ptr res, nn_srcptr x)
+{
+    ulong z[6];
+    ulong z2[6];
+    ulong z3[6];
+    ulong z4p[7];
+    ulong sa[7];
+    ulong ta[7];
+    ulong fl_s;
+
+    nn_ptr z4 = z4p + 1;
+    z4p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 6);
+    flint_mpn_sqrhigh(z2, z, 6);
+    flint_mpn_mulhigh_n(z3, z, z2, 6);
+    flint_mpn_sqrhigh(z4, z2, 6);
+
+    RS_MUL_NEG(sa, 6, z3, atan_series_cs[11], fl_s);
+    RS_ADDMUL_ACC(sa, 6, z2, atan_series_cs[10], fl_s);
+    RS_SUBMUL_ACC(sa, 6, z, atan_series_cs[9], fl_s);
+    sa[6] += atan_series_cs[8];
+    flint_mpn_mulhigh_n(ta, sa, z4 - 1, 7);
+    RS_SUBMUL_Z_ACC(ta, 6, z3, atan_series_cs[7], fl_s);
+    RS_ADDMUL_ACC(ta, 6, z2, atan_series_cs[6], fl_s);
+    RS_SUBMUL_ACC(ta, 6, z, atan_series_cs[5], fl_s);
+    ta[6] += atan_series_cs[4];
+    flint_mpn_mulhigh_n(sa, ta, z4 - 1, 7);
+    RS_SUBMUL_Z_ACC(sa, 6, z3, atan_series_cs[3], fl_s);
+    RS_ADDMUL_ACC(sa, 6, z2, atan_series_cs[2], fl_s);
+    RS_SUBMUL_ACC(sa, 6, z, atan_series_cs[1], fl_s);
+    sa[6] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(ta, sa, atan_series_dinv + 29, 7);
+    flint_mpn_mulhigh_n(res, ta, x, 6);
+
+    (void) fl_s;
+}
+
+/* res[0..6] ~= sum_{k<14} (-1)^k x^(2k+1)/(2k+1);
+   x: 7 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 12 ulp (2^-448) */
+static void
+_fixed_atan_rs16_7(nn_ptr res, nn_srcptr x)
+{
+    ulong z[7];
+    ulong z2[7];
+    ulong z3[7];
+    ulong z4p[8];
+    ulong sa[8];
+    ulong ta[8];
+    ulong fl_s;
+
+    nn_ptr z4 = z4p + 1;
+    z4p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 7);
+    flint_mpn_sqrhigh(z2, z, 7);
+    flint_mpn_mulhigh_n(z3, z, z2, 7);
+    flint_mpn_sqrhigh(z4, z2, 7);
+
+    RS_MUL_NEG(sa, 7, z, atan_series_cs[13], fl_s);
+    sa[7] += atan_series_cs[12];
+    flint_mpn_mulhigh_n(ta, sa, z4 - 1, 8);
+    RS_SUBMUL_Z_ACC(ta, 7, z3, atan_series_cs[11], fl_s);
+    RS_ADDMUL_ACC(ta, 7, z2, atan_series_cs[10], fl_s);
+    RS_SUBMUL_ACC(ta, 7, z, atan_series_cs[9], fl_s);
+    ta[7] += atan_series_cs[8];
+    flint_mpn_mulhigh_n(sa, ta, z4 - 1, 8);
+    RS_SUBMUL_Z_ACC(sa, 7, z3, atan_series_cs[7], fl_s);
+    RS_ADDMUL_ACC(sa, 7, z2, atan_series_cs[6], fl_s);
+    RS_SUBMUL_ACC(sa, 7, z, atan_series_cs[5], fl_s);
+    sa[7] += atan_series_cs[4];
+    flint_mpn_mulhigh_n(ta, sa, z4 - 1, 8);
+    RS_SUBMUL_Z_ACC(ta, 7, z3, atan_series_cs[3], fl_s);
+    RS_ADDMUL_ACC(ta, 7, z2, atan_series_cs[2], fl_s);
+    RS_SUBMUL_ACC(ta, 7, z, atan_series_cs[1], fl_s);
+    ta[7] += atan_series_cs[0];
+    flint_mpn_mulhigh_n(sa, ta, atan_series_dinv + 28, 8);
+    flint_mpn_mulhigh_n(res, sa, x, 7);
+
+    (void) fl_s;
+}
+
+static const odd_series_fn _fixed_atan_rs16_tab[8] = {
+    NULL,
+    _fixed_atan_rs16_1,
+    _fixed_atan_rs16_2,
+    _fixed_atan_rs16_3,
+    _fixed_atan_rs16_4,
+    _fixed_atan_rs16_5,
+    _fixed_atan_rs16_6,
+    _fixed_atan_rs16_7,
+};
+/* ysin[0..1] ~= sum_{k<2} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..1] ~= sum_{k<2} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 1 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-64) */
+static void
+_fixed_sin_cos_rs16_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[1];
+    ulong sa[2];
+    ulong ta[2];
+    ulong th[1];
+    ulong fl_s;
+    ulong cy;
+    ulong il0, il1;
+
+    umul_ppmm(z[0], il0, x[0], x[0]);
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 1, z, sin_series_cs[1], fl_s);
+        sa[1] += sin_series_cs[0];
+        umul_ppmm(ta[1], ta[0], sa[1], (sin_cos_series_dinv + 21)[1]);
+        umul_ppmm(il1, il0, sa[1], (sin_cos_series_dinv + 21)[0]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        umul_ppmm(il1, il0, sa[0], (sin_cos_series_dinv + 21)[1]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        flint_mpn_mulhigh_n(ysin, ta, x, 1);
+        ysin[1] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        mpn_rshift(th, z, 1, 1);
+        cy = mpn_neg(ycos, th, 1);
+        ycos[1] = 1 - cy;
+    }
+
+    (void) fl_s;
+}
+
+/* ysin[0..2] ~= sum_{k<4} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..2] ~= sum_{k<4} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 2 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-128) */
+static void
+_fixed_sin_cos_rs16_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[2];
+    ulong z2p[3];
+    ulong sa[3];
+    ulong ta[3];
+    ulong th[2];
+    ulong fl_s;
+    ulong cy;
+    ulong il0, il1;
+
+    nn_ptr z2 = z2p + 1;
+    z2p[0] = 0;
+
+    umul_ppmm(z[1], z[0], x[1], x[1]);
+    umul_ppmm(il1, il0, x[1], x[0]);
+    add_ssaaaa(z[1], z[0], z[1], z[0], UWORD(0), (il1 << 1) | (il0 >> (FLINT_BITS - 1)));
+    umul_ppmm(z2[1], z2[0], z[1], z[1]);
+    umul_ppmm(il1, il0, z[1], z[0]);
+    add_ssaaaa(z2[1], z2[0], z2[1], z2[0], UWORD(0), (il1 << 1) | (il0 >> (FLINT_BITS - 1)));
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 2, z, sin_series_cs[3], fl_s);
+        sa[2] += sin_series_cs[2];
+        umul_ppmm(ta[2], ta[1], sa[2], z2[1]);
+        umul_ppmm(il1, ta[0], sa[1], z2[1]);
+        add_ssaaaa(ta[2], ta[1], ta[2], ta[1], UWORD(0), il1);
+        umul_ppmm(il1, il0, sa[2], z2[0]);
+        add_sssaaaaaa(ta[2], ta[1], ta[0], ta[2], ta[1], ta[0], UWORD(0), il1, il0);
+        umul_ppmm(il1, il0, sa[0], z2[1]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        umul_ppmm(il1, il0, sa[1], z2[0]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        RS_SUBMUL_Z_ACC(ta, 2, z, sin_series_cs[1], fl_s);
+        ta[2] += sin_series_cs[0];
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 20, 3);
+        flint_mpn_mulhigh_n(ysin, sa, x, 2);
+        ysin[2] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        RS_MUL_NEG(sa, 2, z, cos_series_cs[3], fl_s);
+        sa[2] += cos_series_cs[2];
+        umul_ppmm(ta[2], ta[1], sa[2], z2[1]);
+        umul_ppmm(il1, ta[0], sa[1], z2[1]);
+        add_ssaaaa(ta[2], ta[1], ta[2], ta[1], UWORD(0), il1);
+        umul_ppmm(il1, il0, sa[2], z2[0]);
+        add_sssaaaaaa(ta[2], ta[1], ta[0], ta[2], ta[1], ta[0], UWORD(0), il1, il0);
+        umul_ppmm(il1, il0, sa[0], z2[1]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        umul_ppmm(il1, il0, sa[1], z2[0]);
+        add_ssaaaa(ta[1], ta[0], ta[1], ta[0], UWORD(0), il1);
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 20, 3);
+        mpn_rshift(th, z, 2, 1);
+        cy = mpn_neg(ycos, th, 2);
+        ycos[2] = 1 - cy;
+        cy = mpn_add_n(ycos, ycos, sa, 2);
+        mpn_add_1(ycos + 2, ycos + 2, 0, cy);
+    }
+
+    (void) fl_s;
+}
+
+/* ysin[0..3] ~= sum_{k<6} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..3] ~= sum_{k<6} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 3 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-192) */
+static void
+_fixed_sin_cos_rs16_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[3];
+    ulong z2p[4];
+    ulong sa[4];
+    ulong ta[4];
+    ulong th[3];
+    ulong fl_s;
+    ulong cy;
+
+    nn_ptr z2 = z2p + 1;
+    z2p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 3);
+    flint_mpn_sqrhigh(z2, z, 3);
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 3, z, sin_series_cs[5], fl_s);
+        sa[3] += sin_series_cs[4];
+        flint_mpn_mulhigh_n(ta, sa, z2 - 1, 4);
+        RS_SUBMUL_Z_ACC(ta, 3, z, sin_series_cs[3], fl_s);
+        ta[3] += sin_series_cs[2];
+        flint_mpn_mulhigh_n(sa, ta, z2 - 1, 4);
+        RS_SUBMUL_Z_ACC(sa, 3, z, sin_series_cs[1], fl_s);
+        sa[3] += sin_series_cs[0];
+        flint_mpn_mulhigh_n(ta, sa, sin_cos_series_dinv + 19, 4);
+        flint_mpn_mulhigh_n(ysin, ta, x, 3);
+        ysin[3] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        RS_MUL_NEG(sa, 3, z, cos_series_cs[5], fl_s);
+        sa[3] += cos_series_cs[4];
+        flint_mpn_mulhigh_n(ta, sa, z2 - 1, 4);
+        RS_SUBMUL_Z_ACC(ta, 3, z, cos_series_cs[3], fl_s);
+        ta[3] += cos_series_cs[2];
+        flint_mpn_mulhigh_n(sa, ta, z2 - 1, 4);
+        flint_mpn_mulhigh_n(ta, sa, sin_cos_series_dinv + 19, 4);
+        mpn_rshift(th, z, 3, 1);
+        cy = mpn_neg(ycos, th, 3);
+        ycos[3] = 1 - cy;
+        cy = mpn_add_n(ycos, ycos, ta, 3);
+        mpn_add_1(ycos + 3, ycos + 3, 0, cy);
+    }
+
+    (void) fl_s;
+}
+
+/* ysin[0..4] ~= sum_{k<8} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..4] ~= sum_{k<8} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 4 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-256) */
+static void
+_fixed_sin_cos_rs16_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[4];
+    ulong z2[4];
+    ulong z3[4];
+    ulong z4p[5];
+    ulong sa[5];
+    ulong ta[5];
+    ulong th[4];
+    ulong fl_s;
+    ulong cy;
+
+    nn_ptr z4 = z4p + 1;
+    z4p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 4);
+    flint_mpn_sqrhigh(z2, z, 4);
+    flint_mpn_mulhigh_n(z3, z, z2, 4);
+    flint_mpn_sqrhigh(z4, z2, 4);
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 4, z3, sin_series_cs[7], fl_s);
+        RS_ADDMUL_ACC(sa, 4, z2, sin_series_cs[6], fl_s);
+        RS_SUBMUL_ACC(sa, 4, z, sin_series_cs[5], fl_s);
+        sa[4] += sin_series_cs[4];
+        flint_mpn_mulhigh_n(ta, sa, z4 - 1, 5);
+        RS_SUBMUL_Z_ACC(ta, 4, z3, sin_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 4, z2, sin_series_cs[2], fl_s);
+        RS_SUBMUL_ACC(ta, 4, z, sin_series_cs[1], fl_s);
+        ta[4] += sin_series_cs[0];
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 18, 5);
+        flint_mpn_mulhigh_n(ysin, sa, x, 4);
+        ysin[4] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        RS_MUL_NEG(sa, 4, z3, cos_series_cs[7], fl_s);
+        RS_ADDMUL_ACC(sa, 4, z2, cos_series_cs[6], fl_s);
+        RS_SUBMUL_ACC(sa, 4, z, cos_series_cs[5], fl_s);
+        sa[4] += cos_series_cs[4];
+        flint_mpn_mulhigh_n(ta, sa, z4 - 1, 5);
+        RS_SUBMUL_Z_ACC(ta, 4, z3, cos_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 4, z2, cos_series_cs[2], fl_s);
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 18, 5);
+        mpn_rshift(th, z, 4, 1);
+        cy = mpn_neg(ycos, th, 4);
+        ycos[4] = 1 - cy;
+        cy = mpn_add_n(ycos, ycos, sa, 4);
+        mpn_add_1(ycos + 4, ycos + 4, 0, cy);
+    }
+
+    (void) fl_s;
+}
+
+/* ysin[0..5] ~= sum_{k<10} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..5] ~= sum_{k<10} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 5 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-320) */
+static void
+_fixed_sin_cos_rs16_5(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[5];
+    ulong z2[5];
+    ulong z3[5];
+    ulong z4[5];
+    ulong z5[5];
+    ulong z6p[6];
+    ulong sa[6];
+    ulong ta[6];
+    ulong th[5];
+    ulong fl_s;
+    ulong cy;
+
+    nn_ptr z6 = z6p + 1;
+    z6p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 5);
+    flint_mpn_sqrhigh(z2, z, 5);
+    flint_mpn_mulhigh_n(z3, z, z2, 5);
+    flint_mpn_sqrhigh(z4, z2, 5);
+    flint_mpn_mulhigh_n(z5, z2, z3, 5);
+    flint_mpn_sqrhigh(z6, z3, 5);
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 5, z3, sin_series_cs[9], fl_s);
+        RS_ADDMUL_ACC(sa, 5, z2, sin_series_cs[8], fl_s);
+        RS_SUBMUL_ACC(sa, 5, z, sin_series_cs[7], fl_s);
+        sa[5] += sin_series_cs[6];
+        flint_mpn_mulhigh_n(ta, sa, z6 - 1, 6);
+        RS_SUBMUL_Z_ACC(ta, 5, z5, sin_series_cs[5], fl_s);
+        RS_ADDMUL_ACC(ta, 5, z4, sin_series_cs[4], fl_s);
+        RS_SUBMUL_ACC(ta, 5, z3, sin_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 5, z2, sin_series_cs[2], fl_s);
+        RS_SUBMUL_ACC(ta, 5, z, sin_series_cs[1], fl_s);
+        ta[5] += sin_series_cs[0];
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 17, 6);
+        flint_mpn_mulhigh_n(ysin, sa, x, 5);
+        ysin[5] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        RS_MUL_NEG(sa, 5, z3, cos_series_cs[9], fl_s);
+        RS_ADDMUL_ACC(sa, 5, z2, cos_series_cs[8], fl_s);
+        RS_SUBMUL_ACC(sa, 5, z, cos_series_cs[7], fl_s);
+        sa[5] += cos_series_cs[6];
+        flint_mpn_mulhigh_n(ta, sa, z6 - 1, 6);
+        RS_SUBMUL_Z_ACC(ta, 5, z5, cos_series_cs[5], fl_s);
+        RS_ADDMUL_ACC(ta, 5, z4, cos_series_cs[4], fl_s);
+        RS_SUBMUL_ACC(ta, 5, z3, cos_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 5, z2, cos_series_cs[2], fl_s);
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 17, 6);
+        mpn_rshift(th, z, 5, 1);
+        cy = mpn_neg(ycos, th, 5);
+        ycos[5] = 1 - cy;
+        cy = mpn_add_n(ycos, ycos, sa, 5);
+        mpn_add_1(ycos + 5, ycos + 5, 0, cy);
+    }
+
+    (void) fl_s;
+}
+
+/* ysin[0..6] ~= sum_{k<10} (-1)^k x^(2k+1)/(2k+1)!,
+   ycos[0..6] ~= sum_{k<11} (-1)^k x^(2k)/(2k)!;
+   either output may be NULL;
+   x: 6 frac limbs, 0 <= x < 2^-16;
+   two-sided error <= 10 ulp (2^-384) */
+static void
+_fixed_sin_cos_rs16_6(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[6];
+    ulong z2[6];
+    ulong z3[6];
+    ulong z4[6];
+    ulong z5[6];
+    ulong z6p[7];
+    ulong sa[7];
+    ulong ta[7];
+    ulong th[6];
+    ulong fl_s;
+    ulong cy;
+
+    nn_ptr z6 = z6p + 1;
+    z6p[0] = 0;
+
+    flint_mpn_sqrhigh(z, x, 6);
+    flint_mpn_sqrhigh(z2, z, 6);
+    flint_mpn_mulhigh_n(z3, z, z2, 6);
+    flint_mpn_sqrhigh(z4, z2, 6);
+    flint_mpn_mulhigh_n(z5, z2, z3, 6);
+    flint_mpn_sqrhigh(z6, z3, 6);
+
+    if (ysin != NULL)
+    {
+        RS_MUL_NEG(sa, 6, z3, sin_series_cs[9], fl_s);
+        RS_ADDMUL_ACC(sa, 6, z2, sin_series_cs[8], fl_s);
+        RS_SUBMUL_ACC(sa, 6, z, sin_series_cs[7], fl_s);
+        sa[6] += sin_series_cs[6];
+        flint_mpn_mulhigh_n(ta, sa, z6 - 1, 7);
+        RS_SUBMUL_Z_ACC(ta, 6, z5, sin_series_cs[5], fl_s);
+        RS_ADDMUL_ACC(ta, 6, z4, sin_series_cs[4], fl_s);
+        RS_SUBMUL_ACC(ta, 6, z3, sin_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 6, z2, sin_series_cs[2], fl_s);
+        RS_SUBMUL_ACC(ta, 6, z, sin_series_cs[1], fl_s);
+        ta[6] += sin_series_cs[0];
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 16, 7);
+        flint_mpn_mulhigh_n(ysin, sa, x, 6);
+        ysin[6] = 0;
+    }
+
+    if (ycos != NULL)
+    {
+        sa[6] = mpn_mul_1(sa, z4, 6, cos_series_cs[10]);
+        RS_SUBMUL_Z_ACC(sa, 6, z3, cos_series_cs[9], fl_s);
+        RS_ADDMUL_ACC(sa, 6, z2, cos_series_cs[8], fl_s);
+        RS_SUBMUL_ACC(sa, 6, z, cos_series_cs[7], fl_s);
+        sa[6] += cos_series_cs[6];
+        flint_mpn_mulhigh_n(ta, sa, z6 - 1, 7);
+        RS_SUBMUL_Z_ACC(ta, 6, z5, cos_series_cs[5], fl_s);
+        RS_ADDMUL_ACC(ta, 6, z4, cos_series_cs[4], fl_s);
+        RS_SUBMUL_ACC(ta, 6, z3, cos_series_cs[3], fl_s);
+        RS_ADDMUL_ACC(ta, 6, z2, cos_series_cs[2], fl_s);
+        flint_mpn_mulhigh_n(sa, ta, sin_cos_series_dinv + 16, 7);
+        mpn_rshift(th, z, 6, 1);
+        cy = mpn_neg(ycos, th, 6);
+        ycos[6] = 1 - cy;
+        cy = mpn_add_n(ycos, ycos, sa, 6);
+        mpn_add_1(ycos + 6, ycos + 6, 0, cy);
+    }
+
+    (void) fl_s;
+}
+
+static const odd_even_series_fn _fixed_sin_cos_rs16_tab[7] = {
+    NULL,
+    _fixed_sin_cos_rs16_1,
+    _fixed_sin_cos_rs16_2,
+    _fixed_sin_cos_rs16_3,
+    _fixed_sin_cos_rs16_4,
+    _fixed_sin_cos_rs16_5,
+    _fixed_sin_cos_rs16_6,
 };
