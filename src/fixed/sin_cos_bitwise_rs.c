@@ -156,9 +156,12 @@ _fixed_tab_addshift(nn_ptr acc, nn_srcptr t, slong nc, slong s,
        atan(1/8) = theta_1 - theta_2          (8 + i = -i(1+2i)(3+2i))
 
    and beyond that arb_atan_frac_bsplit sums the series of 1/2^i
-   directly.  TODO: reimplement the binary splitting natively with
-   mpn arithmetic; arb is fine for now, and this tier is not the
-   bottleneck.
+   directly.  (The faster arb_atan1_frac_bsplit of frac_bsplit.inc
+   currently implements only the hyperbolic, p = 1 case -- its
+   worker ignores the alternate flag -- so the alternating series
+   here stays on the stock arb routine.)  TODO: reimplement the
+   binary splitting natively with mpn arithmetic; arb is fine for
+   now, and this tier is not the bottleneck.
 
    Large i: fixed-point multi-summation of
 

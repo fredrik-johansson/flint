@@ -178,11 +178,13 @@ dividing them -- cos t' cancels.  See the last three README entries.)
 3. **Precomputation: reimplement the binary splitting with mpn.**
    The tables are now built in two tiers (bsplit for small i,
    fixed-point mpn multi-summation in the target storage for large
-   i; 2-16x faster overall) but the bsplit tier still goes through
-   arb.  A native mpn implementation, and the prototype's direct
-   log(1 + p/q) series form for very high precision, are the
-   remaining wins; TODO notes sit in exp_bitwise_rs.c and
-   sin_cos_bitwise_rs.c.
+   i; 2-16x faster overall, and the prototype's atan1/log1 bsplit
+   helpers now serve the logarithm tier verbatim, another ~34% at
+   65536 bits) but the bsplit tier still goes through arb/fmpz.  A
+   native mpn implementation is the remaining win, and extending
+   atan1_bsplit's leaves with alternating signs would let the atan
+   table share the fast helper; TODO notes sit in
+   exp_bitwise_rs.c, sin_cos_bitwise_rs.c and frac_bsplit.inc.
 
 4. **Retune with the new tuner.**  Every shipped r was carried over
    by --pin; a fresh sweep per (function, size) through

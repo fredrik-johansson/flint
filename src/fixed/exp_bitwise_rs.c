@@ -73,6 +73,8 @@ _fixed_exp_logs_cleanup(void)
     _fixed_exp_logs_cleanup_registered = 0;
 }
 
+#include "frac_bsplit.inc"
+
 #define LOGS_L(i) (_fixed_exp_logs + (i) * _fixed_exp_logs_n)
 #define TAB_E(i) (tab + (i) * nc)
 
@@ -147,11 +149,12 @@ _fixed_tab_subbit(nn_ptr acc, slong nc, slong e)
    long): binary splitting.  For i <= 6 the arguments (2^i + 1)/2^i
    factor over the primes up to 17, so seven bsplit logarithms serve
    all of them; beyond that, log(1 + 2^-i) = 2 atanh(1/(2^(i+1) + 1))
-   through arb_atan_frac_bsplit.  TODO: reimplement the binary
-   splitting natively with mpn arithmetic (and restore the direct
-   log(1 + p/q) series form of the prototype for very high
-   precision); arb is fine for now, and this tier is not the
-   bottleneck.
+   through arb_atan1_frac_bsplit (frac_bsplit.inc), switching to the
+   direct log(1 + 2^-i) series of arb_log1_frac_bsplit once the
+   precision passes 6000 bits and i passes 30, where its plainer
+   recursion wins.  TODO: reimplement the binary splitting natively
+   with mpn arithmetic; arb is fine for now, and this tier is not
+   the bottleneck.
 
    Large i: fixed-point multi-summation of
 
@@ -239,13 +242,24 @@ _fixed_exp_logs_ensure(slong nv, slong rc)
                     arb_submul_ui(x, lp + 0, 6, wp);
                     break;
                 default:
-                    /* log(1 + 2^-i) = 2 atanh(1 / (2^(i+1) + 1)) */
-                    fmpz_one(p);
-                    fmpz_one(q);
-                    fmpz_mul_2exp(q, q, i + 1);
-                    fmpz_add_ui(q, q, 1);
-                    arb_atan_frac_bsplit(x, p, q, 1, wp);
-                    arb_mul_2exp_si(x, x, 1);
+                    if (prec >= 6000 && i >= 30)
+                    {
+                        /* direct log(1 + 1/2^i) series */
+                        fmpz_one(p);
+                        fmpz_one(q);
+                        fmpz_mul_2exp(q, q, i);
+                        arb_log1_frac_bsplit(x, p, q, wp);
+                    }
+                    else
+                    {
+                        /* log(1 + 2^-i) = 2 atanh(1 / (2^(i+1) + 1)) */
+                        fmpz_one(p);
+                        fmpz_one(q);
+                        fmpz_mul_2exp(q, q, i + 1);
+                        fmpz_add_ui(q, q, 1);
+                        arb_atan1_frac_bsplit(x, p, q, 1, wp);
+                        arb_mul_2exp_si(x, x, 1);
+                    }
                     break;
             }
 

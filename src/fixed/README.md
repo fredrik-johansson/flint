@@ -2286,3 +2286,29 @@ precision.  Verified: table entries against arb (floor or floor-1,
 one-sided) to rc = 176; 8/8 tests at multiplier 25 on both word
 sizes; canary; MPFR product check; explicit-r path timing unchanged
 (852 vs 858 ns, atan n = 3 r = 48, old vs new library).
+
+### prototype bsplit helpers carried over verbatim
+
+arb_atan1_frac_bsplit and arb_log1_frac_bsplit from the newfastexp2
+prototype now live in src/fixed/frac_bsplit.inc as static helpers
+(verbatim: the only edits are static linkage and a renamed LOG2
+macro).  Compared with arb_atan_frac_bsplit they fold pairs of terms
+at the leaves and strip two-powers from the denominators as they go.
+The logarithm table's bsplit tier uses them exactly as prolog_1 did:
+2 atanh(1/(2^(i+1)+1)) through atan1, switching to the direct
+log(1 + 2^-i) series of log1 once the precision passes 6000 bits and
+i passes 30.  At (nv, rc) = (1024, 768) -- 65536-bit entries, the
+all-bsplit regime -- the logs build drops from ~211 ms to ~140 ms
+(three-run average).
+
+One reading note: atan1_bsplit ignores its alternate parameter and
+its leaves assume p = 1, so the helper is currently valid only for
+the hyperbolic p = 1 case it serves; the ALTERNATING atan table
+entries therefore stay on the stock arb_atan_frac_bsplit (a comment
+in sin_cos_bitwise_rs.c records this).  Extending the leaves with
+the (-1)^a signs would let the atan table share the optimization.
+
+Verified: both tables against arb (exact floor or one ulp below,
+one-sided) at (3,176) and at (128,100) -- the latter exercises the
+log1 path from i = 30 -- plus 8/8 tests at multiplier 25 on both
+word sizes and the canary.
