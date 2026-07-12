@@ -144,11 +144,17 @@ cos = 1 - 2C/(B+C), tan = 2A/(B-C), one reciprocal per output, and the
 n > 8 fallback forms TT and DE from sin/cos of the residual WITHOUT
 dividing them -- cos t' cancels.  See the last three README entries.)
 
-1. **n = 8 register rotation** needs 9-wide add/sub chains that
-   `longlong.h` stops short of (NN_ADD_8/NN_SUB_8 are the widest).
-   Either add the two macros, or emit the unit limb's borrow by a
-   comparison; the n = 7 -> 8 sin_cos step (701 -> 955 ns) says the
-   generic rotation loop costs ~150 ns there.
+1. **n = 8..12 register rotation** needs 9-wide and wider add/sub
+   chains that `longlong.h` stops short of (NN_ADD_8/NN_SUB_8 are the
+   widest).  Either add the macros, or emit the unit limb's borrow by
+   a comparison; the n = 7 -> 8 sin_cos step (+38% for one limb, when
+   9 -> 10 costs ~18%) says the generic rotation loop is worth ~150 ns
+   at n = 8.  Tangent series now run through n = 12 (r = 16, 19, 23,
+   25 for 9..12); n = 13 is the fallback boundary (+63%, ratio 1.13
+   against arb, recovering to 1.28 by n = 16).  Extending the series
+   further is mechanical if ever wanted -- the _TAN table holds 65
+   coefficients and the generator's add/sub emitter handles any width
+   -- but past 12 the returns thin as arb's own overhead amortizes.
 
 2. **`mpn_tdiv_qr` itself can be beaten** (Fredrik's note) -- after
    this session exactly ONE tdiv_qr per requested reciprocal remains,

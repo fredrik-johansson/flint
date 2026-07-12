@@ -164,12 +164,20 @@ def emit_mulhigh(o, dst, a, b, L):
 
 
 def emit_addsub(o, sub, dst, u, v, L):
-    """dst = u -+ v over L limbs"""
+    """dst = u -+ v over L limbs.  The longlong chains stop at width 8;
+    wider sums fall back to one mpn call (their functions are dozens of
+    mulhigh rows long -- one dispatched add is noise there)."""
     if L == 1:
         o("    %s[0] = %s[0] %s %s[0];" % (dst, u, "-" if sub else "+", v))
-    else:
+    elif L <= 8:
         o("    NN_%s_%d(%s, %s, %s);"
           % ("SUB" if sub else "ADD", L, dst, u, v))
+    elif dst == u:
+        o("    mpn_%s_n(%s, %s, %s, %d);"
+          % ("sub" if sub else "add", dst, u, v, L))
+    else:
+        o("    mpn_%s_n(%s, %s, %s, %d);"
+          % ("sub" if sub else "add", dst, u, v, L))
 
 
 def emit(o, func, n, r, name):

@@ -2031,3 +2031,38 @@ MEASURED, whole call (one process, ratio = arb / fixed):
 adversarial points: sin <= 33, cos <= 40, tan <= 70 ulp against
 budgets 416/640 at r = 0.  Both word sizes 8/8; canary clean over
 200k cases.
+
+### tan series to n = 12: the fallback cliff pushed out
+
+With the reconstruction settled, the drop past n = 8 had two causes:
+the tangent series ended there, and fixed_sin_cos_rs's hand routines
+end at n = 10, so the fallback paid its generic path from n = 11 --
+one process measured sin_cos ratios against arb of 1.43 / 1.37 /
+1.10 / 1.15 at n = 9..12, with a +48% step at 10 -> 11.  Emitting
+tangent series through n = 12 removes BOTH (the half-angle path stops
+touching fixed_sin_cos_rs below n = 13):
+
+    n            8     9    10    11    12    13    14    15    16
+    sin_cos ns 875  1028  1210  1388  1621  2650  2774  3015  3345
+    sin_cos   1.64  1.62  1.58  1.61  1.66  1.13  1.20  1.22  1.28
+    tan       2.02  1.92  1.86  1.88  1.92  1.29  1.36  1.37  1.44
+
+Per-limb steps of 15-20% through n = 12, no cliff; n = 12 -> 13 is
+the new fallback boundary (+63%), past which the ratio recovers on
+its own as arb's overhead amortizes.  The remaining outsized step,
+n = 7 -> 8 (+38%), is the register rotation ending at 7 (9-wide
+longlong chains; deliberately left).
+
+r for the new sizes: {16, 19, 23, 25}, big-sample validated as
+always -- and the validation again vetoed the sweep's fastest picks:
+n = 9 r = 18 reaches 90% of the tan budget at 6000 points, n = 12
+r = 22 blows it outright (469 > 432).  The emitted widths stay
+honest: 14-16 levels each, trig_rs_opt_hand.inc grows to ~2500
+lines.  gen_fixed_trig_hand_mixed.py's add/sub emitter now falls
+back to one mpn call for widths past NN_ADD_8/NN_SUB_8, which is
+what unlocked n > 8 (their functions are dozens of mulhigh rows;
+one dispatched add is noise).
+
+Errors at 2000 adversarial points, n = 9..12: sin <= 42, cos <= 17,
+tan <= 59 ulp against budgets 416/640.  Both word sizes 8/8; canary
+clean.

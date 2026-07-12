@@ -207,7 +207,7 @@ void _fixed_sin_cos_rs_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 void _fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 
 /* Internal: tan series for the half-angle reconstruction, one per
-   n <= 8, each built for the reduction parameter hardcoded alongside
+   n <= 12, each built for the reduction parameter hardcoded alongside
    it in tan_bitwise_rs.c. */
 void _fixed_tan_rs_opt_1(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x);
@@ -217,6 +217,10 @@ void _fixed_tan_rs_opt_5(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_7(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_8(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_9(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_10(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_11(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_12(nn_ptr res, nn_srcptr x);
 #endif
 void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 

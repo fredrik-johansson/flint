@@ -70,16 +70,18 @@
    adversarial points before being locked: the sweep's 300-point error
    estimate MISSES spikes (r = 17 at n = 5 and r = 15 at n = 7 measured
    fastest but blow the tan budget at scale). */
-static const int _fixed_tan_opt_r[] = { 0, 4, 5, 9, 14, 15, 18, 16, 16 };
+static const int _fixed_tan_opt_r[] =
+    { 0, 4, 5, 9, 14, 15, 18, 16, 16, 16, 19, 23, 25 };
 
 static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
     NULL,
     _fixed_tan_rs_opt_1, _fixed_tan_rs_opt_2, _fixed_tan_rs_opt_3,
     _fixed_tan_rs_opt_4, _fixed_tan_rs_opt_5, _fixed_tan_rs_opt_6,
-    _fixed_tan_rs_opt_7, _fixed_tan_rs_opt_8
+    _fixed_tan_rs_opt_7, _fixed_tan_rs_opt_8, _fixed_tan_rs_opt_9,
+    _fixed_tan_rs_opt_10, _fixed_tan_rs_opt_11, _fixed_tan_rs_opt_12
 };
 
-#define FIXED_TAN_NMAX 8
+#define FIXED_TAN_NMAX 12
 
 #include "hand_mulhi.inc"
 #include "tan_halfangle_small.inc"
