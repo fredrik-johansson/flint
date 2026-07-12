@@ -181,10 +181,10 @@ dividing them -- cos t' cancels.  See the last three README entries.)
    i; 2-16x faster overall, and the prototype's atan1/log1 bsplit
    helpers now serve the logarithm tier verbatim, another ~34% at
    65536 bits) but the bsplit tier still goes through arb/fmpz.  A
-   native mpn implementation is the remaining win, and extending
-   atan1_bsplit's leaves with alternating signs would let the atan
-   table share the fast helper; TODO notes sit in
-   exp_bitwise_rs.c, sin_cos_bitwise_rs.c and frac_bsplit.inc.
+   native mpn implementation is the remaining win (the alternating
+   mode of atan1_bsplit is fixed and the atan table shares the
+   helper now); TODO notes sit in exp_bitwise_rs.c,
+   sin_cos_bitwise_rs.c and frac_bsplit.inc.
 
 4. **Retune with the new tuner.**  Every shipped r was carried over
    by --pin; a fresh sweep per (function, size) through

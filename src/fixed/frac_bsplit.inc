@@ -9,13 +9,14 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
-/* Binary splitting for atanh(p/q) (arb_atan1_frac_bsplit, currently
-   valid for p = 1 and hyperbolic = 1 only: the worker reads neither
-   ppow2 nor alternate) and for log(1 + p/q) (arb_log1_frac_bsplit),
-   carried verbatim from the newfastexp2 prototype.  Compared with
-   arb_atan_frac_bsplit these fold pairs of terms at the leaves and
-   strip two-powers from the denominators as they go.  TODO:
-   reimplement natively with mpn arithmetic. */
+/* Binary splitting for atan(p/q) and atanh(p/q)
+   (arb_atan1_frac_bsplit, valid for p = 1: the leaves build the
+   terms from q alone) and for log(1 + p/q) (arb_log1_frac_bsplit),
+   carried from the newfastexp2 prototype; the alternating
+   (non-hyperbolic) leaf signs were added here, everything else is
+   verbatim.  Compared with arb_atan_frac_bsplit these fold pairs of
+   terms at the leaves and strip two-powers from the denominators as
+   they go.  TODO: reimplement natively with mpn arithmetic. */
 
 #ifndef FIXED_FRAC_BSPLIT_INC
 #define FIXED_FRAC_BSPLIT_INC
@@ -35,14 +36,26 @@ atan1_bsplit(fmpz_t p1, fmpz_t q1, fmpz_t r1,
 {
     if (b - a == 1)
     {
-        fmpz_one(p1);
+        /* alternating: the terms carry (-1)^a absolutely, so the
+           merges below need no sign logic */
+        if (alternate && (a & 1))
+            fmpz_set_si(p1, -1);
+        else
+            fmpz_one(p1);
         fmpz_mul_ui(q1, a == 0 ? q : qpow2, 2*a+1);
         fmpz_set_ui(r1, 2*a+1);
     }
     else if (b - a == 2 && a < (WORD(1) << (FLINT_BITS / 2 - 2)))
     {
         fmpz_mul_ui(p1, qpow2, 2 * a + 3);
-        fmpz_add_ui(p1, p1, 2 * a + 1);
+        if (alternate)
+        {
+            fmpz_sub_ui(p1, p1, 2 * a + 1);
+            if (a & 1)
+                fmpz_neg(p1, p1);
+        }
+        else
+            fmpz_add_ui(p1, p1, 2 * a + 1);
 
         if (a == 0)
         {
@@ -166,6 +179,8 @@ arb_atan1_frac_bsplit(arb_t s, const fmpz_t p, const fmpz_t q, int hyperbolic, s
     mag_clear(err);
 }
 
+#ifndef FIXED_FRAC_BSPLIT_NO_LOG1
+
 static void
 log1_bsplit(fmpz_t p1, fmpz_t q1, slong * q1exp, fmpz_t r1,
         const fmpz_t p, const fmpz_t q,
@@ -261,5 +276,7 @@ arb_log1_frac_bsplit(arb_t s, const fmpz_t p, const fmpz_t q, slong prec)
     fmpz_clear(R);
     mag_clear(err);
 }
+
+#endif /* FIXED_FRAC_BSPLIT_NO_LOG1 */
 
 #endif /* FIXED_FRAC_BSPLIT_INC */

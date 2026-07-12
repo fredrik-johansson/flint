@@ -22,8 +22,17 @@ and fallback code paths, which compile cleanly but have not been
 exercised on 32-bit hardware; :func:`fixed_exp_bitwise_rs`
 additionally requires `n \ge 2` there.
 
-Taylor series evaluation
+Elementary functions
 -------------------------------------------------------------------------------
+
+The evaluation of an elementary function at full precision
+proceeds in two stages: a bitwise argument reduction brings the
+argument below a tuned threshold `2^{-r}`, and a short Taylor
+series evaluated by rectangular splitting handles the residual.
+The functions of the two stages are documented in turn.
+
+Series evaluation
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 The series evaluation functions require an argument reduced below
 `2^{-32}` (checked with a ``FLINT_ASSERT``) and dispatch internally on
@@ -70,10 +79,8 @@ true value), for the alternating functions two-sided.
     Sets `(res, n)` to an approximation of `\operatorname{atan}((x, n))`
     resp. `\operatorname{atanh}((x, n))`, requiring `x < 2^{-32}`.
 
-Fallbacks
--------------------------------------------------------------------------------
-
-The following fallbacks run at constant full precision with
+The series functions above are backed by portable fallbacks, which
+run at constant full precision with
 coefficients generated on the fly, so they support arbitrary `n`; they
 serve out-of-table sizes, 32-bit machines, and the test code (which
 compares the optimized functions against the fallbacks called with one
@@ -88,8 +95,8 @@ extra limb of precision).
     number of terms is chosen from the actual leading zero bits of
     `x`).
 
-Exponential with bitwise argument reduction
--------------------------------------------------------------------------------
+Bitwise argument reduction
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
 .. macro:: FIXED_EXP_BITWISE_RS_MAX_ERR(n, r)
 
@@ -144,9 +151,6 @@ Exponential with bitwise argument reduction
     best up to about 8 limbs, `r = 64` up to about 32 limbs, and
     `r = 128` or `192` beyond.  See ``profile/p-exp_bitwise_rs.c``.
 
-Logarithm with bitwise argument reduction
--------------------------------------------------------------------------------
-
 .. macro:: FIXED_LOG1P_BITWISE_RS_MAX_ERR(n, r)
 
     Bound, in ulp, for the error of :func:`fixed_log1p_bitwise_rs`,
@@ -184,9 +188,6 @@ Logarithm with bitwise argument reduction
     accepted factor), so the per-factor work starts out at a single
     limb and `P` is only ever truncated once its exact length exceeds
     `n` limbs.
-
-Sine and cosine with bitwise argument reduction
--------------------------------------------------------------------------------
 
 .. macro:: FIXED_SIN_COS_BITWISE_RS_MAX_ERR(n, r)
 
@@ -250,9 +251,6 @@ Sine and cosine with bitwise argument reduction
     Requires `n \ge 2` when ``FLINT_BITS == 32``.  The angle table is
     shared with :func:`fixed_atan_bitwise_rs`.
 
-Inverse tangent with bitwise argument reduction
--------------------------------------------------------------------------------
-
 .. macro:: FIXED_ATAN_BITWISE_RS_MAX_ERR(n, r)
 
     Bound, in ulp, for the error of :func:`fixed_atan_bitwise_rs`,
@@ -267,7 +265,7 @@ Inverse tangent with bitwise argument reduction
     :func:`fixed_exp_bitwise_rs`).  The vector `(X, Y) = (1, x)` is
     rotated towards the real axis by the factors `1 - i 2^{-i}`,
     `i = 1, \ldots, r`, applying a factor -- two shifts and two
-    add/subtracts on the old components -- whenever it keeps
+    add/subtracts on the unrotated components -- whenever it keeps
     `Y \ge 0`, that is whenever `Y \ge X 2^{-i}`.  This is a greedy
     on the angle with steps `A_i = \operatorname{atan}(2^{-i})`, so
     afterwards `\operatorname{atan}(Y/X) < 2^{-r}` and a single
@@ -291,9 +289,6 @@ Inverse tangent with bitwise argument reduction
     compile-time `r`, and the series built for it).  Explicit values
     require `r \ge 32`.
 
-Tangent with bitwise argument reduction
--------------------------------------------------------------------------------
-
 .. macro:: FIXED_TAN_BITWISE_RS_MAX_ERR(n, r)
 
     Bound, in ulp, for the error of :func:`fixed_tan_bitwise_rs`,
@@ -305,15 +300,15 @@ Tangent with bitwise argument reduction
     `0 \le x < 1`.  Since `\tan(1) < 1.56` the result carries a unit
     limb.
 
-    For the sizes with a tangent series of their own this uses the
-    TANGENT HALF-ANGLE reconstruction, which also serves
-    :func:`fixed_sin_cos_bitwise_rs` there.  The angle is reduced
-    exactly as before, and the rotation `W = \prod (1 + i 2^{-i})` is
-    built as before; but since `\arg W = \sum A_i`, one has
-    `\tan(\sum A_i) = w_y / w_x`, and because the tangent is a RATIO
-    the growth of `|W|` cancels.  No `|W|^2`, no normalization, no
-    unimodular correction is needed.  With `u = \tan(t')` the addition
-    formula gives the half-angle tangent in a single division,
+    Shares the tangent half-angle path of
+    :func:`fixed_sin_cos_bitwise_rs`: the angle `x/2` is reduced by
+    the same greedy rotation, accumulating
+    `W = \prod (1 + i 2^{-i})` over the accepted factors.  Since
+    `\arg W = \sum A_i`, one has `\tan(\sum A_i) = w_y / w_x`, and
+    because the tangent is a RATIO the growth of `|W|` cancels: no
+    `|W|^2`, no normalization, no unimodular correction appears
+    anywhere on this path.  With `u = \tan(t')` the addition formula
+    gives the half-angle tangent in a single division,
 
     .. math ::
 
@@ -336,12 +331,11 @@ Tangent with bitwise argument reduction
         \cos x = 1 - \frac{2C}{B + C}, \quad
         \tan x = \frac{2A}{B - C},
 
-    one reciprocal division and one mulhigh per output.  This measures
-    a third to a half faster than the conjugate-ratio reconstruction,
-    and it yields each function separately instead of computing two
-    and discarding one.  Beyond the sizes with a tangent series the
-    residual contributes through `\sin` and `\cos` of `t'` WITHOUT
-    their quotient being formed: writing `\cos t' = 1 - g`,
+    one reciprocal division and one mulhigh per output, and each of
+    the three functions is obtained separately.  For sizes without a
+    tabulated tangent series the residual contributes through `\sin`
+    and `\cos` of `t'` WITHOUT their quotient being formed: writing
+    `\cos t' = 1 - g`,
 
     .. math ::
 
@@ -351,8 +345,6 @@ Tangent with bitwise argument reduction
     four small multiplications, and `\cos t'` cancels in every ratio
     just as `|W|` does.
 
-Tuning and profiling
--------------------------------------------------------------------------------
 
 The reduction parameter selected by `r = 0` is tuned in two tiers.
 

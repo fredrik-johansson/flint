@@ -2312,3 +2312,27 @@ Verified: both tables against arb (exact floor or one ulp below,
 one-sided) at (3,176) and at (128,100) -- the latter exercises the
 log1 path from i = 30 -- plus 8/8 tests at multiplier 25 on both
 word sizes and the canary.
+
+### alternating flag fixed in atan1_bsplit; fixed.rst restructured
+
+atan1_bsplit ignored its alternate parameter (fine for the
+hyperbolic logarithm use, wrong for atan).  The signs now enter
+ABSOLUTELY at the leaves -- the single leaf carries (-1)^a and the
+paired leaf becomes (2a+3) qpow2 - (2a+1) with the (-1)^a sign --
+so the merges need no sign logic at all; everything else stays
+verbatim.  Verified against arb_atan/arb_atanh over i = 1..12 at
+200..20000 bits, both modes, power-of-two and odd denominators.
+The atan table's bsplit tier now uses the helper in alternating
+mode; at 65536-bit entries the build time is unchanged within noise
+(for q = 2^i the two-power stripping is nearly free in fmpz, so the
+log1 series was where the gain lived), but the tables share one
+code path.
+
+doc/source/fixed.rst was restructured: after the introduction, one
+section "Elementary functions" with subsections "Series evaluation"
+(absorbing the fallbacks) and "Bitwise argument reduction"
+(absorbing the five per-function sections and the tuning/profiling
+text).  The tangent documentation lost its references to past
+iterations of the code ("as before", the comparison against the
+conjugate-ratio reconstruction) and now describes only what is
+implemented.

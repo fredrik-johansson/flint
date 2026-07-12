@@ -87,6 +87,9 @@ _fixed_atans_cleanup(void)
     _fixed_atans_cleanup_registered = 0;
 }
 
+#define FIXED_FRAC_BSPLIT_NO_LOG1
+#include "frac_bsplit.inc"
+
 #define ATANS_A(i) (_fixed_atans + (i) * _fixed_atans_n)
 
 /* floor(x 2^(FLINT_BITS nc)) of a nonnegative arb into nc limbs */
@@ -155,13 +158,10 @@ _fixed_tab_addshift(nn_ptr acc, nn_srcptr t, slong nc, slong s,
        atan(1/4) = 2 theta_0 - theta_3        (complement of atan 4)
        atan(1/8) = theta_1 - theta_2          (8 + i = -i(1+2i)(3+2i))
 
-   and beyond that arb_atan_frac_bsplit sums the series of 1/2^i
-   directly.  (The faster arb_atan1_frac_bsplit of frac_bsplit.inc
-   currently implements only the hyperbolic, p = 1 case -- its
-   worker ignores the alternate flag -- so the alternating series
-   here stays on the stock arb routine.)  TODO: reimplement the
-   binary splitting natively with mpn arithmetic; arb is fine for
-   now, and this tier is not the bottleneck.
+   and beyond that arb_atan1_frac_bsplit (frac_bsplit.inc, in its
+   alternating mode) sums the series of 1/2^i directly.  TODO:
+   reimplement the binary splitting natively with mpn arithmetic;
+   arb is fine for now, and this tier is not the bottleneck.
 
    Large i: fixed-point multi-summation of
 
@@ -237,7 +237,7 @@ _fixed_atans_ensure(slong nv, slong rc)
                     fmpz_one(p);
                     fmpz_one(q);
                     fmpz_mul_2exp(q, q, i);
-                    arb_atan_frac_bsplit(x, p, q, 0, wp);
+                    arb_atan1_frac_bsplit(x, p, q, 0, wp);
                     break;
             }
 
