@@ -175,19 +175,25 @@ dividing them -- cos t' cancels.  See the last three README entries.)
    preinverse might still shave the call overhead at n = 2..4, where
    the division is now the majority of the tail.
 
-3. **Retune with the new tuner.**  Every shipped r was carried over
+3. **Precomputation time.**  The angle and logarithm tables are
+   built lazily on first use per (n, r); the tuner and profiler now
+   deliberately warm them before measuring, which also means nobody
+   is watching their cost.  Worth profiling and optimizing at some
+   point (they are quadratic-ish in the table depth).
+
+4. **Retune with the new tuner.**  Every shipped r was carried over
    by --pin; a fresh sweep per (function, size) through
    dev/tune_fixed.py may move a few of them (the tuner's margin and
    tie-break are stricter than some of the older choices).
 
-4. **The atan/log1p residual divisions still feed mpn_tdiv_qr an
+5. **The atan/log1p residual divisions still feed mpn_tdiv_qr an
    (n+1)-limb divisor with a unit limb** (S = 1.x in the generated
    small bodies).  The tan tail's normalization trick (halve or shift
    numerator and denominator together so the divisor is n limbs, top
    bit set) has not been applied there; it was worth a few percent
    per division on the tan side.
 
-5. Cosmetic: patch 0002's commit message still describes the
+6. Cosmetic: patch 0002's commit message still describes the
    conjugate-ratio construction (a rebase, so left).
 
 ---

@@ -350,3 +350,53 @@ Tangent with bitwise argument reduction
 
     four small multiplications, and `\cos t'` cancels in every ratio
     just as `|W|` does.
+
+Tuning and profiling
+-------------------------------------------------------------------------------
+
+The reduction parameter selected by `r = 0` is tuned in two tiers.
+
+**Small sizes** are tuned per (function, size) at arbitrary `r` by
+``dev/tune_fixed.py``: it generates an out-of-tree source with one
+fully specialized candidate per reduction parameter -- the same
+bodies production uses -- builds it against the in-tree library,
+validates every candidate against MPFR and times it, and selects the
+fastest whose measured error stays within a margin of the documented
+budget (near-ties resolve to the cleanest error, since sweep-sized
+samples underestimate the maximum).  With ``--emit`` it writes the
+production file ``src/fixed/FUNC_opt_<n>.c``; ``--pin R`` at the
+shipped `r` reproduces the shipped file byte for byte.
+
+**Large sizes** take `r` from a ladder of 32 and the multiples of 64,
+where the general series evaluation is available in the library, via
+per-function crossover tables.  ``src/fixed/tune/tune-bitwise-r``
+regenerates the tables: for each consecutive pair of ladder values it
+binary-searches the smallest `n` at which the larger parameter stops
+losing (the optimum is nondecreasing in `n` to within noise), warming
+the shared angle/logarithm tables before every measurement, and
+prints the ``r_tab``/``n_tab`` pairs to paste into the dispatch
+files.  The shipped tables run to `r = 768`.
+:func:`fixed_sin_cos_bitwise_rs` and :func:`fixed_tan_bitwise_rs`
+share the half-angle path and hence a single table, tuned on the
+sine/cosine call with the tangent run printed as a cross-check.
+
+The selection is queryable:
+
+.. function:: int fixed_exp_bitwise_rs_default_r(slong n)
+              int fixed_log1p_bitwise_rs_default_r(slong n)
+              int fixed_atan_bitwise_rs_default_r(slong n)
+              int fixed_trig_bitwise_rs_default_r(slong n)
+
+    The reduction parameter that `r = 0` selects at size `n`: the
+    compile-time constant of the specialized per-size implementation
+    where one exists, the tuned ladder value beyond.
+
+``src/fixed/profile/p-fixed FUNC [nmax]`` prints, for
+`n = 1, \ldots, 12` and then geometric steps of about `4/3`, the
+precision in bits and digits, the selected `r`, the per-call times of
+arb and of the fixed function, and the speedup ratio, stopping at
+``nmax`` or once arb has been at least as fast twice in a row.  Each
+size is called once before timing so that table precomputation stays
+out of the measurement, and the timing loop cycles over an array of
+random inputs so that the branchy reductions pay their real
+misprediction costs.

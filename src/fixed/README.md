@@ -2188,3 +2188,38 @@ began.  Object code is unchanged by construction -- the pruned
 branches were compiler-dead -- and the full verification (tests at
 multiplier 25 on both word sizes, canary, MPFR validation, benchmark
 parity) agrees.
+
+### large-n tuning to r = 768; the profile directory rebuilt
+
+The tuning process now has two documented tiers.  Small sizes:
+dev/tune_fixed.py, per (function, size), arbitrary r, emitting the
+*_opt_<n>.c files.  Large sizes: src/fixed/tune/tune-bitwise-r,
+choosing from the ladder of 32 and the multiples of 64 where the
+general series evaluation exists, by binary-searching each
+crossover.  The tuner lost its dead r = 16 machinery, gained an
+untimed warm-up call before every measurement (the angle/log tables
+used to leak into the first pass), and now also covers the
+trigonometric functions: sin_cos and tan share the half-angle path,
+so they share one new table (_fixed_trig_bitwise_rs_r_tab, tuned on
+sin_cos with a tangent cross-check run whose crossovers agree at the
+low rungs) -- the generic half-angle path previously HARDWIRED
+r = 32 at every size, and the tuned ladder lifts the n = 13+
+fallback region visibly (n = 16 sin_cos: 1.32x -> 1.40x over arb).
+
+Freshly generated tables to r = 768 (nmax 640) are installed in all
+four dispatch files; exp tops out at r = 448 from n = 343, log1p
+uses the full ladder to 768 by n = 578, atan reaches 320 by n = 322,
+trig 448 by n = 395.  The r = 0 selection is queryable through
+fixed_<func>_bitwise_rs_default_r(n), which the dispatch itself, the
+tuner and the profiler all share (the small-n constants are mirrored
+there from the *_opt_<n>.c pins, with a keep-in-sync comment).
+
+src/fixed/profile: the two stale per-function programs are replaced
+by one p-fixed taking the function as argument, running n = 1..12
+and then geometric ~4/3 steps until nmax or until arb wins twice in
+a row, printing n, bits, digits, the selected r, both times and the
+ratio.  One warm-up call per size keeps precomputation out of the
+measurement, and the timing loop cycles over 64 random inputs so the
+branchy reductions pay their real misprediction costs.  A full exp
+run holds 2.0-4.0x over arb through n = 477 (30528 bits, 9190
+digits) without arb ever winning.

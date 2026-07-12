@@ -149,6 +149,15 @@ void _fixed_exp_recon(nn_ptr y, nn_ptr sh, slong ylen, const slong * used,
 void _fixed_tan_halfangle_mid(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     nn_srcptr x, slong n, int r, void (*series)(nn_ptr, nn_srcptr));
 
+/* the reduction parameter that r = 0 selects at size n: the
+   compile-time constant of the specialized per-size implementation
+   where one exists, the tuned large-n ladder beyond (multiples of 64
+   chosen by src/fixed/tune/tune-bitwise-r.c) */
+int fixed_exp_bitwise_rs_default_r(slong n);
+int fixed_log1p_bitwise_rs_default_r(slong n);
+int fixed_atan_bitwise_rs_default_r(slong n);
+int fixed_trig_bitwise_rs_default_r(slong n);
+
 /* log(1 + (x, n)) -> (res, n) for any 0 <= x < 1, by the dual
    reduction: greedily multiply P by factors 1 + 2^-i (each one
    shift-and-add) while P (1 + 2^-i) <= 1 + x, then
