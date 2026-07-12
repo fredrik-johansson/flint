@@ -134,7 +134,10 @@ one process, on an idle machine; the arb ratio is the durable metric.
 
 ## 4. Open work, in the order I would do it
 
-(Old items 1 and 2 shipped this session: register reconstruction runs
+(Also since: fully specialized atan runs to n = 7 and log1p to
+n = 6 -- OPT_R extensions with matching hand series; exp measured a
+1-3% tier delta at 5..7 and was deliberately NOT extended.  Old items
+1 and 2 shipped this session: register reconstruction runs
 through n = 4 -- `dev/gen_fixed_tan_halfangle_small.py` ->
 `tan_halfangle_small.inc`, dispatched at r = 0 -- and n = 7 has its
 own tangent series plus register rotation, with n = 8 getting a series
@@ -162,7 +165,14 @@ dividing them -- cos t' cancels.  See the last three README entries.)
    preinverse might still shave the call overhead at n = 2..4, where
    the division is now the majority of the tail.
 
-3. Cosmetic: patch 0002's commit message still describes the
+3. **The atan/log1p residual divisions still feed mpn_tdiv_qr an
+   (n+1)-limb divisor with a unit limb** (S = 1.x in the generated
+   small bodies).  The tan tail's normalization trick (halve or shift
+   numerator and denominator together so the divisor is n limbs, top
+   bit set) has not been applied there; it was worth a few percent
+   per division on the tan side.
+
+4. Cosmetic: patch 0002's commit message still describes the
    conjugate-ratio construction (a rebase, so left).
 
 ---

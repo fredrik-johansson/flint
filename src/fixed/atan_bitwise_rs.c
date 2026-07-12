@@ -102,7 +102,7 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     /* with r = 0 the caller leaves the reduction parameter to us: the
        specialized sizes then run with a compile-time constant r and
        the hand-written series built for it */
-    if (n <= 4 && r0 == 0 && _fixed_atan_bitwise_rs_opt(res, x, n))
+    if (n <= 7 && r0 == 0 && _fixed_atan_bitwise_rs_opt(res, x, n))
         return;
 
     if (n <= 7)

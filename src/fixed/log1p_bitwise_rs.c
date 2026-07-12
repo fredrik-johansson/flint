@@ -264,7 +264,7 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
        and the hand-written atanh series built for it.  n = 1 and n = 2
        keep their own register code, whose atanh evaluation is already
        inline. */
-    if (n <= 4 && r0 == 0 && _fixed_log1p_bitwise_rs_opt(res, x, n))
+    if (n <= 6 && r0 == 0 && _fixed_log1p_bitwise_rs_opt(res, x, n))
         return;
 #endif
 

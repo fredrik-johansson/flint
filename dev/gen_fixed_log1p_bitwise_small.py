@@ -72,7 +72,7 @@ def masked_step(o, n, c, vt):
     o("            %s);" % ", ".join(la))
 
 
-OPT_R = {3: 10, 4: 26}
+OPT_R = {3: 10, 4: 26, 5: 31, 6: 30}
 
 
 def gen_one(o, n, opt=False):

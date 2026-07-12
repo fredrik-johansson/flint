@@ -110,7 +110,7 @@ def vw_shifted(o, n, c, ind):
 # is the hand-written one built for exactly that r (see
 # src/fixed/trig_rs_opt_hand.inc).  The hand series is so much cheaper
 # than the generated one that the optimal r falls sharply.
-OPT_R = {1: 4, 2: 6, 3: 22, 4: 20}
+OPT_R = {1: 4, 2: 6, 3: 22, 4: 20, 5: 18, 6: 20, 7: 19}
 
 
 def gen_one(o, n, opt=False):

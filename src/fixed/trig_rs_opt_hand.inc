@@ -209,6 +209,320 @@ _fixed_atan_rs_opt_4(nn_ptr res, nn_srcptr x)
 /* --- atanh, for the bitwise logarithm (same structure: a series in
    z = x^2, atanh(x) = x + x^3 V_0 with V_0 = 1/3 + z(1/5 + ...)) --- */
 
+/* atan, n = 5, r = 18: 8 levels, widths [5, 4, 3, 3, 2, 2, 1, 1] */
+void
+_fixed_atan_rs_opt_5(nn_ptr res, nn_srcptr x)
+{
+    ulong z[5], V[5], T[5], P[5], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 5);
+
+    v = UWORD(0x0f0f0f0f0f0f0f0f);
+
+    /* V_6 = c - z V_7   (1 x 1 limbs) */
+    v = n_mulhi(z[4], v);
+    v = UWORD(0x1111111111111111) - v;
+
+    /* V_5 = c - z V_6   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[4], z[3], v);
+    sub_ddmmss(w1, w0, UWORD(0x13b13b13b13b13b1), UWORD(0x3b13b13b13b13b13), h, l);
+
+    /* V_4 = c - z V_5   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[4], z[3], w1, w0);
+    sub_ddmmss(w1, w0, UWORD(0x1745d1745d1745d1), UWORD(0x745d1745d1745d17), h, l);
+
+    /* V_3 = c - z V_4   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 2, P, 3);
+    P[0] = UWORD(0x71c71c71c71c71c7);
+    P[1] = UWORD(0xc71c71c71c71c71c);
+    P[2] = UWORD(0x1c71c71c71c71c71);
+    NN_SUB_3(V, P, T);
+
+    /* V_2 = c - z V_3   (3 x 3 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z + 2, P, 3);
+    P[0] = UWORD(0x9249249249249249);
+    P[1] = UWORD(0x4924924924924924);
+    P[2] = UWORD(0x2492492492492492);
+    NN_SUB_3(V, P, T);
+
+    /* V_1 = c - z V_2   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 1, P, 4);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    P[3] = UWORD(0x3333333333333333);
+    NN_SUB_4(V, P, T);
+
+    /* V_0 = c - z V_1   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 0, P, 5);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    NN_SUB_5(V, P, T);
+
+    /* atan = x - x^3 V_0 */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    flint_mpn_mulhigh_n(T, z, x, 5);
+    flint_mpn_mulhigh_n(V, T, P, 5);
+    NN_SUB_5(res, x, V);
+}
+
+/* atan, n = 6, r = 20: 8 levels, widths [5, 5, 4, 4, 3, 2, 2, 1] */
+void
+_fixed_atan_rs_opt_6(nn_ptr res, nn_srcptr x)
+{
+    ulong z[6], V[6], T[6], P[6], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 6);
+
+    v = UWORD(0x0f0f0f0f0f0f0f0f);
+
+    /* V_6 = c - z V_7   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[5], z[4], v);
+    sub_ddmmss(w1, w0, UWORD(0x1111111111111111), UWORD(0x1111111111111111), h, l);
+
+    /* V_5 = c - z V_6   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[5], z[4], w1, w0);
+    sub_ddmmss(w1, w0, UWORD(0x13b13b13b13b13b1), UWORD(0x3b13b13b13b13b13), h, l);
+
+    /* V_4 = c - z V_5   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 3, P, 3);
+    P[0] = UWORD(0x45d1745d1745d174);
+    P[1] = UWORD(0x745d1745d1745d17);
+    P[2] = UWORD(0x1745d1745d1745d1);
+    NN_SUB_3(V, P, T);
+
+    /* V_3 = c - z V_4   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 2, P, 4);
+    P[0] = UWORD(0x1c71c71c71c71c71);
+    P[1] = UWORD(0x71c71c71c71c71c7);
+    P[2] = UWORD(0xc71c71c71c71c71c);
+    P[3] = UWORD(0x1c71c71c71c71c71);
+    NN_SUB_4(V, P, T);
+
+    /* V_2 = c - z V_3   (4 x 4 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    flint_mpn_mulhigh_n(T, z + 2, P, 4);
+    P[0] = UWORD(0x2492492492492492);
+    P[1] = UWORD(0x9249249249249249);
+    P[2] = UWORD(0x4924924924924924);
+    P[3] = UWORD(0x2492492492492492);
+    NN_SUB_4(V, P, T);
+
+    /* V_1 = c - z V_2   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 1, P, 5);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    P[3] = UWORD(0x3333333333333333);
+    P[4] = UWORD(0x3333333333333333);
+    NN_SUB_5(V, P, T);
+
+    /* V_0 = c - z V_1   (5 x 5 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    flint_mpn_mulhigh_n(T, z + 1, P, 5);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    NN_SUB_5(V, P, T);
+
+    /* atan = x - x^3 V_0 */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    flint_mpn_mulhigh_n(T, z, x, 6);
+    flint_mpn_mulhigh_n(V, T, P, 6);
+    NN_SUB_6(res, x, V);
+}
+
+/* atan, n = 7, r = 19: 11 levels, widths [7, 6, 5, 5, 4, 4, 3, 2, 2, 1, 1] */
+void
+_fixed_atan_rs_opt_7(nn_ptr res, nn_srcptr x)
+{
+    ulong z[7], V[7], T[7], P[7], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 7);
+
+    v = UWORD(0x0b21642c8590b216);
+
+    /* V_9 = c - z V_10   (1 x 1 limbs) */
+    v = n_mulhi(z[6], v);
+    v = UWORD(0x0c30c30c30c30c30) - v;
+
+    /* V_8 = c - z V_9   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[6], z[5], v);
+    sub_ddmmss(w1, w0, UWORD(0x0d79435e50d79435), UWORD(0xe50d79435e50d794), h, l);
+
+    /* V_7 = c - z V_8   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[6], z[5], w1, w0);
+    sub_ddmmss(w1, w0, UWORD(0x0f0f0f0f0f0f0f0f), UWORD(0x0f0f0f0f0f0f0f0f), h, l);
+
+    /* V_6 = c - z V_7   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 4, P, 3);
+    P[0] = UWORD(0x1111111111111111);
+    P[1] = UWORD(0x1111111111111111);
+    P[2] = UWORD(0x1111111111111111);
+    NN_SUB_3(V, P, T);
+
+    /* V_5 = c - z V_6   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 3, P, 4);
+    P[0] = UWORD(0x13b13b13b13b13b1);
+    P[1] = UWORD(0xb13b13b13b13b13b);
+    P[2] = UWORD(0x3b13b13b13b13b13);
+    P[3] = UWORD(0x13b13b13b13b13b1);
+    NN_SUB_4(V, P, T);
+
+    /* V_4 = c - z V_5   (4 x 4 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    flint_mpn_mulhigh_n(T, z + 3, P, 4);
+    P[0] = UWORD(0x5d1745d1745d1745);
+    P[1] = UWORD(0x45d1745d1745d174);
+    P[2] = UWORD(0x745d1745d1745d17);
+    P[3] = UWORD(0x1745d1745d1745d1);
+    NN_SUB_4(V, P, T);
+
+    /* V_3 = c - z V_4   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 2, P, 5);
+    P[0] = UWORD(0xc71c71c71c71c71c);
+    P[1] = UWORD(0x1c71c71c71c71c71);
+    P[2] = UWORD(0x71c71c71c71c71c7);
+    P[3] = UWORD(0xc71c71c71c71c71c);
+    P[4] = UWORD(0x1c71c71c71c71c71);
+    NN_SUB_5(V, P, T);
+
+    /* V_2 = c - z V_3   (5 x 5 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    flint_mpn_mulhigh_n(T, z + 2, P, 5);
+    P[0] = UWORD(0x4924924924924924);
+    P[1] = UWORD(0x2492492492492492);
+    P[2] = UWORD(0x9249249249249249);
+    P[3] = UWORD(0x4924924924924924);
+    P[4] = UWORD(0x2492492492492492);
+    NN_SUB_5(V, P, T);
+
+    /* V_1 = c - z V_2   (6 x 5 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    flint_mpn_mulhigh_n(T, z + 1, P, 6);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    P[3] = UWORD(0x3333333333333333);
+    P[4] = UWORD(0x3333333333333333);
+    P[5] = UWORD(0x3333333333333333);
+    NN_SUB_6(V, P, T);
+
+    /* V_0 = c - z V_1   (7 x 6 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    P[6] = V[5];
+    flint_mpn_mulhigh_n(T, z + 0, P, 7);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    P[5] = UWORD(0x5555555555555555);
+    P[6] = UWORD(0x5555555555555555);
+    NN_SUB_7(V, P, T);
+
+    /* atan = x - x^3 V_0 */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    P[6] = V[6];
+    flint_mpn_mulhigh_n(T, z, x, 7);
+    flint_mpn_mulhigh_n(V, T, P, 7);
+    NN_SUB_7(res, x, V);
+}
+
 /* atanh, n = 2, r = 6: 9 levels, widths [2, 2, 2, 2, 1, 1, 1, 1, 1] */
 void
 _fixed_atanh_rs_opt_2(nn_ptr res, nn_srcptr x)
@@ -736,6 +1050,123 @@ _fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
    recurrence, which makes this a poor choice at high precision, but at
    these sizes only a handful of coefficients are needed and they are
    simply tabulated. --- */
+
+/* atanh, n = 5, r = 31: 4 levels, widths [4, 3, 2, 1] */
+void
+_fixed_atanh_rs_opt_5(nn_ptr res, nn_srcptr x)
+{
+    ulong z[5], V[5], T[5], P[5], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 5);
+
+    v = UWORD(0x1c71c71c71c71c71);
+
+    /* V_2 = c + z V_3   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[4], z[3], v);
+    add_ssaaaa(w1, w0, UWORD(0x2492492492492492), UWORD(0x4924924924924924), h, l);
+
+    /* V_1 = c + z V_2   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 2, P, 3);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    NN_ADD_3(V, P, T);
+
+    /* V_0 = c + z V_1   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 1, P, 4);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    NN_ADD_4(V, P, T);
+
+    /* atanh = x + x^3 V_0 */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z, x, 5);
+    flint_mpn_mulhigh_n(V, T, P, 5);
+    NN_ADD_5(res, x, V);
+}
+
+/* atanh, n = 6, r = 30: 5 levels, widths [5, 4, 3, 2, 1] */
+void
+_fixed_atanh_rs_opt_6(nn_ptr res, nn_srcptr x)
+{
+    ulong z[6], V[6], T[6], P[6], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 6);
+
+    v = UWORD(0x1745d1745d1745d1);
+
+    /* V_3 = c + z V_4   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[5], z[4], v);
+    add_ssaaaa(w1, w0, UWORD(0x1c71c71c71c71c71), UWORD(0xc71c71c71c71c71c), h, l);
+
+    /* V_2 = c + z V_3   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 3, P, 3);
+    P[0] = UWORD(0x9249249249249249);
+    P[1] = UWORD(0x4924924924924924);
+    P[2] = UWORD(0x2492492492492492);
+    NN_ADD_3(V, P, T);
+
+    /* V_1 = c + z V_2   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 2, P, 4);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    P[3] = UWORD(0x3333333333333333);
+    NN_ADD_4(V, P, T);
+
+    /* V_0 = c + z V_1   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 1, P, 5);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    NN_ADD_5(V, P, T);
+
+    /* atanh = x + x^3 V_0 */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    flint_mpn_mulhigh_n(T, z, x, 6);
+    flint_mpn_mulhigh_n(V, T, P, 6);
+    NN_ADD_6(res, x, V);
+}
 
 /* tan, n = 1, r = 4: 6 levels, widths [1, 1, 1, 1, 1, 1] */
 void

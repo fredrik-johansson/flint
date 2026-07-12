@@ -2066,3 +2066,45 @@ one dispatched add is noise).
 Errors at 2000 adversarial points, n = 9..12: sin <= 42, cos <= 17,
 tan <= 59 ulp against budgets 416/640.  Both word sizes 8/8; canary
 clean.
+
+### fully specialized atan to n = 7, log1p to n = 6
+
+The register survey after the tan work: every bitwise function already
+runs its reduction in registers to n = 7 (the _small variants), but
+the FULLY specialized tier -- compile-time r plus the hand series
+built for exactly that r, the tier the tan half-angle paths live in --
+stopped at exp <= 5, atan <= 4, log1p <= 4.  Measuring the tier delta
+per size (r = 0 dispatch against the same call with r passed
+explicitly, which forces the _small path):
+
+    n           1    2    3    4    5    6    7
+    exp        30%  26%  15%   7%   3%   1%   1%
+    atan       34%  42%  23%  23%   -    -    -
+    log1p       2%  31%  22%  13%   -    -    -
+
+exp's curve has decayed to nothing by its last specialized size --
+extending it buys ~1-3% and is NOT done.  atan's had NOT (23% at
+n = 4), and log1p's not quite (13%).  Extended: atan OPT_R += {5: 18,
+6: 20, 7: 19}, log1p OPT_R += {5: 31, 6: 30}, with the matching
+_fixed_atan_rs_opt_5..7 / _fixed_atanh_rs_opt_5..6 hand series.
+log1p at n = 7 measured a 0% tier delta in the sweep proxy and is
+left alone; likewise the sweep vetoed nothing this time but the
+big-sample rule was applied anyway (all picks <= 30 ulp at 8000
+points against budgets of 136-157).
+
+Measured (one process, ratio = arb / fixed):
+
+    n              5      6      7
+    atan   345 (1.78) 428 (1.72) 574 (1.61)   was 1.49 / 1.44 / 1.41
+    log1p  342 (1.83) 402 (1.82)              was 1.69 / 1.61
+
+The n = 7 -> 8 cliff (+64-73%) remains across exp, log1p and atan for
+the same reason as sin/cos/tan: the register _small paths end where
+the 8-wide longlong chains do.
+
+Harness note: the sweep drives the SAME generator bodies as
+production (gen_one with the series call swapped for a function
+pointer), so the sweep's r optimum transfers directly; the residual
+divisor in the atan/log1p bodies still carries its unit limb into
+mpn_tdiv_qr (the pre-normalization trick from the tan tail has not
+been applied there -- a possible next nibble).
