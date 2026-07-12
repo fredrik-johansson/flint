@@ -1,13 +1,11 @@
 .. _fixed:
 
-**fixed.h** -- efficient low-level fixed-point real arithmetic
+**fixed.h** -- fixed-point real arithmetic
 ===============================================================================
 
 This module provides low-level, low-overhead functions for
 fixed-point real arithmetic, intended as kernels for
-arbitrary-precision floating-point arithmetic and ball arithmetic.
-The scope currently includes routines for elementary function
-evaluation following [HJ2024]_ and [Joh2014c]_.
+arbitrary-precision numerical algorithms.
 
 A fixed-point number `(x, n)` is an unsigned `n`-limb fraction
 ``x[0], ..., x[n-1]`` representing
@@ -16,22 +14,15 @@ with unit in the last place (ulp) `2^{-\mathrm{FLINT\_BITS}\, n}`.
 Outputs of size `n + 1` additionally carry an integer (units) limb at
 index `n`.
 
-On 32-bit limbs, all generated straight-line and register
-implementations are disabled and evaluation goes through the generic
-and fallback code paths, which compile cleanly but have not been
-exercised on 32-bit hardware.  The bitwise functions additionally
-require `n \ge 2` there: the reduction parameter is capped at
-`\mathrm{FLINT\_BITS}\, n - 16`, which at `n = 1` would fall below
-the `r \ge 32` contract of the residual series.
+On 32-bit limbs, most generated straight-line and register
+implementations are disabled and evaluation goes through generic
+and fallback code paths.
 
 Elementary functions
 -------------------------------------------------------------------------------
 
-The evaluation of an elementary function at full precision
-proceeds in two stages: a bitwise argument reduction brings the
-argument below a tuned threshold `2^{-r}`, and a short Taylor
-series evaluated by rectangular splitting handles the residual.
-The functions of the two stages are documented in turn.
+The following routines implement evaluation of elementary functions
+following [HJ2024]_ and [Joh2014c]_.
 
 Series evaluation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
@@ -82,31 +73,31 @@ true value), for the alternating functions two-sided.
     resp. `\operatorname{atanh}((x, n))`, requiring `x < 2^{-32}`.
 
 The series functions above are backed by portable fallbacks, which
-run at constant full precision with
-coefficients generated on the fly, so they support arbitrary `n`; they
-serve out-of-table sizes, 32-bit machines, and the test code (which
-compares the optimized functions against the fallbacks called with one
-extra limb of precision).
+run at constant full precision with coefficients generated on the fly, so
+they support arbitrary `n`; they serve out-of-table sizes, 32-bit machines, and
+the test code.
 
 .. function:: void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n)
               void _fixed_sin_cos_rs_fallback(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n, int alternating)
               void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n, int alternating)
 
-    As the corresponding functions above, requiring only
-    `x < 2^{-32}` (the
-    number of terms is chosen from the actual leading zero bits of
-    `x`).
+    As the corresponding functions above, requiring `x < 2^{-32}` (the number
+    of terms is chosen from the actual leading zero bits of `x`).
 
 Bitwise argument reduction
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+The following functions compute the elementary functions on the unit interval
+using bitwise (BKM-style) argument reduction to bring the argument below a
+tuned threshold `2^{-r}` followed by series evaluation and reconstruction.
+On 32-bit systems, the following functions require `n \ge 2`.
 
 .. macro:: FIXED_EXP_BITWISE_RS_MAX_ERR(n, r)
 
     Bound, in ulp, for the error of :func:`fixed_exp_bitwise_rs`,
     currently `9 r + 100`.  The bound grows linearly with `r` because
     all work happens at the output precision; callers wanting sub-ulp
-    accuracy should pad the precision by one limb themselves, which
-    absorbs the bound with more than 50 bits to spare.
+    accuracy should pad the precision by one limb themselves.
 
 .. function:: void fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
@@ -138,14 +129,8 @@ Bitwise argument reduction
     compile-time constant and the series is built for exactly that
     `r`, with the
     smallest number of terms `N` satisfying
-    `N r + \log_2(N!) \ge 64 n` -- that is, the `1/N!` of the last
-    coefficient is spent on dropping terms rather than kept as slack,
-    which at `r = 16` gives `N = 11, 14, 17` for `n = 3, 4, 5` where
-    `4 n` terms would otherwise be used.  For `n = 1` and `n = 2` the
-    series is hand-written rather than generated: at those sizes the
-    framework overhead dominates, so plain Horner in a few word
-    multiplies -- with high products that drop the low partial -- is
-    markedly faster.
+    `N r + \log_2(N!) \ge 64 n`. For `n = 1` and `n = 2` the
+    series is hand-written rather than generated.
 
     Small `r` minimizes table and reduction work, large `r` shortens
     the series; as a rule of thumb on 64-bit machines, `r = 32` is
@@ -181,8 +166,8 @@ Bitwise argument reduction
     (``log1p_opt_<n>.c``, emitted and tuned by ``dev/tune_fixed.py``;
     decisions and updates in straight-line masked carry chains, with a
     compile-time `r` and the atanh series built for it -- the
-    hand-written `n \le 2` paths run at `r = 16`, below the public
-    contract, which their inline series support).  Explicit values
+    hand-written `n \le 2` paths run at `r = 16` with custom series
+    evaluation routines.  Explicit values
     require `r \ge 32`, the :func:`fixed_atanh_rs` contract.
 
     The significant length of `P` grows gradually (by `i` bits per
@@ -305,9 +290,8 @@ Bitwise argument reduction
     the same greedy rotation, accumulating
     `W = \prod (1 + i 2^{-i})` over the accepted factors.  Since
     `\arg W = \sum A_i`, one has `\tan(\sum A_i) = w_y / w_x`, and
-    because the tangent is a RATIO the growth of `|W|` cancels: no
-    `|W|^2`, no normalization, no unimodular correction appears
-    anywhere on this path.  With `u = \tan(t')` the addition formula
+    because the tangent is a ratio the growth of `|W|` cancels.
+    With `u = \tan(t')` the addition formula
     gives the half-angle tangent in a single division,
 
     .. math ::
@@ -322,7 +306,7 @@ Bitwise argument reduction
         \cos x = \frac{1 - t^2}{1 + t^2}, \quad
         \tan x = \frac{2t}{1 - t^2},
 
-    where `t` itself is NEVER divided out: with `T = w_y + w_x u`,
+    where `t` itself is never divided out: with `T = w_y + w_x u`,
     `D = w_x - w_y u`, `A = TD`, `B = D^2` and `C = T^2` these are
 
     .. math ::
@@ -334,7 +318,7 @@ Bitwise argument reduction
     one reciprocal division and one mulhigh per output, and each of
     the three functions is obtained separately.  For sizes without a
     tabulated tangent series the residual contributes through `\sin`
-    and `\cos` of `t'` WITHOUT their quotient being formed: writing
+    and `\cos` of `t'` without their quotient being formed: writing
     `\cos t' = 1 - g`,
 
     .. math ::
