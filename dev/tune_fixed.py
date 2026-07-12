@@ -74,7 +74,8 @@ class Func:
 
     def includes(self):
         return ['#include "flint.h"', '#include "longlong.h"',
-                '#include "mpn_extras.h"', '#include "fixed.h"']
+                '#include "mpn_extras.h"', '#include "fixed.h"',
+                '#include "fixed_tables.h"']
 
 
 class ExpFunc(Func):
@@ -151,6 +152,36 @@ class Log1pFunc(GenOneFunc):
                             "atanh")
     def budget(self, r):
         return 3 * r + 64
+    def body(self, o, n, r, fn_name, series_name, static):
+        if n > 2:
+            GenOneFunc.body(self, o, n, r, fn_name, series_name,
+                            static)
+            return
+
+        # n <= 2 predate the body generator: the hand-written register
+        # bodies live in dev/log1p_hand.inc and are carried verbatim
+        if r != 16:
+            raise SystemExit("log1p n <= 2 exists only at r = 16 "
+                             "(hand-written; see dev/log1p_hand.inc)")
+
+        src = open(os.path.join(HERE, "log1p_hand.inc")).read()
+        i = src.index("/* n = %d:" % n)
+        j = src.index("/* n = %d:" % (n + 1)) if n == 1 else len(src)
+        body = src[i:j].rstrip("\n")
+        body = body.replace("@FN@", fn_name)
+        body = body.replace("@SERIES@", series_name)
+        if static:
+            body = body.replace("void\n" + fn_name,
+                                "static void\n" + fn_name)
+        for line in body.split("\n"):
+            o(line)
+
+    def series(self, o, n, r, name):
+        # the n = 2 hand body carries its own inline atanh series
+        if n == 2:
+            self.hs.emit(o, "atanh", 2, 16, name)
+        elif n >= 3:
+            GenOneFunc.series(self, o, n, r, name)
 
 
 class TrigFunc(Func):

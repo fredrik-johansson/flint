@@ -13,6 +13,7 @@
 #include "longlong.h"
 #include "mpn_extras.h"
 #include "fixed.h"
+#include "fixed_tables.h"
 
 #include "tan_rotate.inc"
 
@@ -397,6 +398,11 @@ fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
     int ok;
     FLINT_ASSERT(n >= 1);
+    FLINT_ASSERT(r == 0 || r >= 32);
+    /* n = 1 is unsupported on 32-bit limbs: the clamp in the
+       half-angle path would drop r under the r >= 32 contract of the
+       residual series */
+    FLINT_ASSERT(FLINT_BITS == 64 || n >= 2);
 
     /* the half-angle machinery covers every size on both word sizes
        (beyond the tabulated tangent series it takes sin and cos of the

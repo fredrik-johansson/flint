@@ -64,7 +64,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         int r = (iter % 4 == 0) ? 0
                 : 32 + (int) n_randint(state, FLINT_MAX(1, imax - 32));
         int reff = (r == 0) ? 32 : r;
-        slong nc, j, k, nsum;
+        slong j, k, nsum;
         ulong x[52], res[53], cy;
         arb_t xa, exact;
         fmpz_t f;
@@ -73,7 +73,6 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
 
         /* make sure the table covers the indices we want to use */
         _fixed_exp_logs_ensure(n, FLINT_MIN((slong) reff + 2, imax));
-        nc = _fixed_exp_logs_n;
 
         /* ---- exp: x = sum of tabulated L_i, sparse and possibly
            with repeats (every fifth iteration duplicates the index
@@ -84,7 +83,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         {
             slong i = 1 + n_randint(state, FLINT_MIN((slong) reff + 2,
                 imax));
-            nn_srcptr Li = _fixed_exp_logs + i * nc + (nc - n);
+            nn_srcptr Li = _fixed_exp_logs_entry(i, n);
 
             cy = mpn_add_n(x, x, Li, n);
             if (cy)
@@ -93,9 +92,8 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         if (iter % 5 == 0 && reff <= imax)
         {
             /* duplicate L_r (twice on top of whatever is there) */
-            nn_srcptr Lr = _fixed_exp_logs
-                + FLINT_MIN((slong) reff, _fixed_exp_logs_r) * nc
-                + (nc - n);
+            nn_srcptr Lr = _fixed_exp_logs_entry(
+                FLINT_MIN((slong) reff, _fixed_exp_logs_max_index()), n);
 
             for (k = 0; k < 2; k++)
             {
@@ -210,12 +208,11 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         {
             ulong ys[53], yc[53];
             int rt = (iter % 4 == 0) ? 0
-                     : 16 + (int) n_randint(state,
-                        FLINT_MAX(1, imax - 16));
+                     : 32 + (int) n_randint(state,
+                        FLINT_MAX(1, imax - 32));
             int rteff = (rt == 0) ? 32 : rt;
 
             _fixed_atans_ensure(n, FLINT_MIN((slong) rteff + 2, imax));
-            nc = _fixed_atans_n;
 
             flint_mpn_zero(x, n);
             nsum = 1 + n_randint(state, 8);
@@ -223,7 +220,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
             {
                 slong i = 1 + n_randint(state,
                     FLINT_MIN((slong) rteff + 2, imax));
-                nn_srcptr Ai = _fixed_atans + i * nc + (nc - n);
+                nn_srcptr Ai = _fixed_atans_entry(i, n);
 
                 cy = mpn_add_n(x, x, Ai, n);
                 if (cy)
@@ -273,8 +270,8 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
             ulong WX[54], WY[54], va2[53], vb2[53], nd2[107], ya[53];
             slong wn2 = n + 1, tries;
             int rt = (iter % 4 == 0) ? 0
-                     : 16 + (int) n_randint(state,
-                        FLINT_MAX(1, imax - 16));
+                     : 32 + (int) n_randint(state,
+                        FLINT_MAX(1, imax - 32));
 
             flint_mpn_zero(WX, n);
             WX[n] = 1;

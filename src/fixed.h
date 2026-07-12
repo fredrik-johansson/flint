@@ -222,14 +222,22 @@ void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n);
    N r + log2(N!) >= 64 n. */
 #endif
 
-/* Internal: thread-local cached table of L_i = log(1 + 2^-i)
-   truncated to _fixed_exp_logs_n fraction limbs, entries
-   i = 0.._fixed_exp_logs_r, shared by fixed_exp_bitwise_rs and
-   fixed_log1p_bitwise_rs. */
-extern FLINT_TLS_PREFIX nn_ptr _fixed_exp_logs;
-extern FLINT_TLS_PREFIX slong _fixed_exp_logs_n;
-extern FLINT_TLS_PREFIX slong _fixed_exp_logs_r;
-void _fixed_exp_logs_ensure(slong nc, slong rc);
+/* Internal: thread-local cached table of L_i = log(1 + 2^-i), one
+   entry per index i = 0..r, shared by fixed_exp_bitwise_rs and
+   fixed_log1p_bitwise_rs.  _ensure(nv, r) makes the table cover the
+   indices 0..r with at least nv value limbs each (plus a guard limb
+   below them).
+
+   The storage itself is thread-local and is deliberately NOT
+   declared here: Windows DLLs cannot export thread-local data, so
+   library-external code (the test suite) reads entries through the
+   accessors below, while the module's own translation units see the
+   definitions via src/fixed/fixed_tables.h.  _entry(i, n) returns
+   the top n limbs of entry i, valid until the next _ensure call on
+   this thread. */
+void _fixed_exp_logs_ensure(slong nv, slong rc);
+nn_srcptr _fixed_exp_logs_entry(slong i, slong n);
+slong _fixed_exp_logs_max_index(void);
 
 /* Internal: number of slots the used array of _fixed_bitwise_reduce
    must provide: each index i = istart..r is used at most once, plus
@@ -250,11 +258,11 @@ slong _fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
    A_i = atan(2^-i) (entry 0, A_0 = pi/4, is unused by the
    reductions, which start at i = 1, but fits the fraction format
    and is tabulated anyway), shared by fixed_sin_cos_bitwise_rs,
-   fixed_tan_bitwise_rs and fixed_atan_bitwise_rs. */
-extern FLINT_TLS_PREFIX nn_ptr _fixed_atans;
-extern FLINT_TLS_PREFIX slong _fixed_atans_n;
-extern FLINT_TLS_PREFIX slong _fixed_atans_r;
-void _fixed_atans_ensure(slong nc, slong rc);
+   fixed_tan_bitwise_rs and fixed_atan_bitwise_rs.  Storage and
+   accessors work exactly as for the logarithm table above. */
+void _fixed_atans_ensure(slong nv, slong rc);
+nn_srcptr _fixed_atans_entry(slong i, slong n);
+slong _fixed_atans_max_index(void);
 void _fixed_sin_cos_rs_fallback(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int alternating);
 void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n,

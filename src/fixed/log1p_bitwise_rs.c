@@ -12,6 +12,7 @@
 #include "flint.h"
 #include "mpn_extras.h"
 #include "fixed.h"
+#include "fixed_tables.h"
 
 /* log(1 + x) by the dual of the bitwise exp reduction (the L-mode
    BKM recurrence): greedily multiply P (starting from 1) by factors
@@ -104,6 +105,9 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
     FLINT_ASSERT(n >= 1);
     FLINT_ASSERT(r == 0 || r >= 32);
+    /* n = 1 is unsupported on 32-bit limbs: the clamp below would
+       drop r under the r >= 32 contract of the residual series */
+    FLINT_ASSERT(FLINT_BITS == 64 || n >= 2);
 
 #if FLINT_BITS == 64
     r0 = r;

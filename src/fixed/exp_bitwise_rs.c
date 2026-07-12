@@ -13,6 +13,7 @@
 #include "mpn_extras.h"
 #include "arb.h"
 #include "fixed.h"
+#include "fixed_tables.h"
 
 /* exp via bitwise argument reduction: subtract in turn each
    L_i = log(1 + 2^-i), i = 0, 1, ..., r, for which L_i <= x, evaluate
@@ -330,6 +331,27 @@ _fixed_exp_logs_ensure(slong nv, slong rc)
         flint_register_cleanup_function(_fixed_exp_logs_cleanup);
         _fixed_exp_logs_cleanup_registered = 1;
     }
+}
+
+
+/* Read-only view of the table for code outside the library (the
+   thread-local storage itself is not exported; see fixed_tables.h):
+   the top n limbs of entry i, valid until the next ensure call on
+   this thread. */
+nn_srcptr
+_fixed_exp_logs_entry(slong i, slong n)
+{
+    FLINT_ASSERT(i >= 0 && i <= _fixed_exp_logs_r);
+    FLINT_ASSERT(n >= 1 && n <= _fixed_exp_logs_n - 1);
+    return _fixed_exp_logs + i * _fixed_exp_logs_n
+        + (_fixed_exp_logs_n - n);
+}
+
+/* the largest index the cached table currently covers */
+slong
+_fixed_exp_logs_max_index(void)
+{
+    return _fixed_exp_logs_r;
 }
 
 

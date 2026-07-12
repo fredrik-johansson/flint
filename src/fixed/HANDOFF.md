@@ -132,6 +132,17 @@ one process, on an idle machine; the arb ratio is the durable metric.
 
 ---
 
+### Traps added by the CI round
+
+- **Thread-local data cannot cross a DLL boundary on Windows.**  The
+  cached tables are internal (`src/fixed/fixed_tables.h`); anything
+  outside the library uses `_fixed_exp_logs_entry` /
+  `_fixed_atans_entry`.  Do not re-export them.
+- **The r >= 32 contract binds the TESTS too.**  Random r must start
+  at 32, and on 32-bit limbs n = 1 is illegal for every bitwise
+  function (the clamp r <= FLINT_BITS n - 16 would drop below 32);
+  use `nmin = (FLINT_BITS == 64) ? 1 : 2`.
+
 ## 4. Open work, in the order I would do it
 
 (Also since: THE MODULE WAS RESTRUCTURED -- one file per fully
@@ -206,10 +217,25 @@ dividing them -- cos t' cancels.  See the last three README entries.)
 
 ## 5. Verification recipe (run every time)
 
+**Assertions are OFF in a plain build, and that let three bugs reach
+CI.**  The library compiles with `-DBUILDING_FLINT`, so it reads
+`src/config.h` -- not `src/flint-config.h` -- and `FLINT_WANT_ASSERT`
+is undefined there: every `FLINT_ASSERT` in the module vanishes.  Link
+the module sources INTO the test binary with the macro on, and run
+that too (it reproduces all three CI failures on the unfixed tree):
+
+    # assertion-enabled: THE run that catches contract violations
+    gcc -O2 -march=native -DFLINT_WANT_ASSERT=1 -I src -I . -I src/fixed \
+        -o tA src/fixed/*.c src/fixed/test/main.c \
+        -L. -Wl,-rpath,$(pwd) -lflint -lmpfr -lgmp -lm
+    FLINT_TEST_MULTIPLIER=25 ./tA         # expect 8 PASS
+    # and the same with gcc -m32 in the 32-bit tree: the r clamp
+    # (r <= FLINT_BITS n - 16) behaves differently at small n there
+
     # every module .c must compile STANDALONE -- the build GLOBS them
     for f in src/fixed/*.c; do gcc -O2 -Wall -I src -I . -I src/fixed -c $f -o /tmp/o.o || echo "FAILS: $f"; done
 
-    # 64-bit
+    # 64-bit, against the built library
     gcc -O2 -march=native -Wall -I src -I . -I src/fixed -o t \
         src/fixed/test/main.c -L. -Wl,-rpath,$(pwd) -lflint -lmpfr -lgmp -lm
     FLINT_TEST_MULTIPLIER=10 ./t          # expect 8 PASS

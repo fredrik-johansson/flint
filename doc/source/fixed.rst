@@ -19,8 +19,10 @@ index `n`.
 On 32-bit limbs, all generated straight-line and register
 implementations are disabled and evaluation goes through the generic
 and fallback code paths, which compile cleanly but have not been
-exercised on 32-bit hardware; :func:`fixed_exp_bitwise_rs`
-additionally requires `n \ge 2` there.
+exercised on 32-bit hardware.  The bitwise functions additionally
+require `n \ge 2` there: the reduction parameter is capped at
+`\mathrm{FLINT\_BITS}\, n - 16`, which at `n = 1` would fall below
+the `r \ge 32` contract of the residual series.
 
 Elementary functions
 -------------------------------------------------------------------------------
@@ -109,8 +111,7 @@ Bitwise argument reduction
 .. function:: void fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
     Sets `(res, n + 1)` to an approximation of `\exp((x, n))` for any
-    `0 \le x < 1` (`n \ge 2` on 32-bit limbs, where `n = 1` would
-    clamp `r` below the series contract).  Passing `r = 0` selects a
+    `0 \le x < 1`.  Passing `r = 0` selects a
     tuned default from a built-in table of crossovers (the largest
     tabulated value serving all larger `n`); the table can be
     regenerated for a given machine with
@@ -247,9 +248,8 @@ Bitwise argument reduction
     (``trig_opt_<n>.c``, emitted and tuned by ``dev/tune_fixed.py``,
     each with a compile-time `r` and the tangent series built for
     it).  Explicit values require `r \ge 32`, the contract of
-    :func:`fixed_sin_cos_rs`, which supplies the residual there.
-    Requires `n \ge 2` when ``FLINT_BITS == 32``.  The angle table is
-    shared with :func:`fixed_atan_bitwise_rs`.
+    :func:`fixed_sin_cos_rs`, which supplies the residual there.  The
+    angle table is shared with :func:`fixed_atan_bitwise_rs`.
 
 .. macro:: FIXED_ATAN_BITWISE_RS_MAX_ERR(n, r)
 

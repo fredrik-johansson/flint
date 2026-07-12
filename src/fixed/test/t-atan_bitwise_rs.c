@@ -31,8 +31,12 @@ TEST_FUNCTION_START(fixed_atan_bitwise_rs, state)
                   : (det_k == 17) ? 0
                   : (int) (FLINT_BITS * det_n - 16 - (det_k - 18));
         int det = (iter < 24 * 9);
-        slong n = det ? det_n
-            : 1 + n_randint(state, (iter % 5 == 0) ? 80 : 16);
+
+        /* n = 1 is unsupported on 32-bit limbs (r would clamp below
+           the series contract) */
+        slong nmin = (FLINT_BITS == 64) ? 1 : 2;
+        slong n = det ? FLINT_MAX(det_n, nmin)
+            : nmin + n_randint(state, (iter % 5 == 0) ? 80 : 16);
         int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 32))
             : (iter % 4 == 0) ? 0 :
             (iter % 9 == 3) ? 32 + (int) n_randint(state, 17) :

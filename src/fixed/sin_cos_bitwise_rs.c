@@ -13,6 +13,7 @@
 #include "mpn_extras.h"
 #include "arb.h"
 #include "fixed.h"
+#include "fixed_tables.h"
 
 /* sin and cos on [0, 1) by the rotation analog of the bitwise exp
    algorithm, following the identity of [Joh2022]: with
@@ -298,12 +299,35 @@ _fixed_atans_ensure(slong nv, slong rc)
     }
 }
 
+/* Read-only view of the table for code outside the library (the
+   thread-local storage itself is not exported; see fixed_tables.h):
+   the top n limbs of entry i, valid until the next ensure call on
+   this thread. */
+nn_srcptr
+_fixed_atans_entry(slong i, slong n)
+{
+    FLINT_ASSERT(i >= 0 && i <= _fixed_atans_r);
+    FLINT_ASSERT(n >= 1 && n <= _fixed_atans_n - 1);
+    return _fixed_atans + i * _fixed_atans_n + (_fixed_atans_n - n);
+}
+
+/* the largest index the cached table currently covers */
+slong
+_fixed_atans_max_index(void)
+{
+    return _fixed_atans_r;
+}
+
 void
 fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int r)
 {
     FLINT_ASSERT(n >= 1);
     FLINT_ASSERT(r == 0 || r >= 32);
+    /* n = 1 is unsupported on 32-bit limbs: the clamp in the
+       half-angle path would drop r under the r >= 32 contract of the
+       residual series */
+    FLINT_ASSERT(FLINT_BITS == 64 || n >= 2);
 
     /* Everything is done by the tangent half-angle reconstruction (see
        tan_bitwise_rs.c), which measured faster at every size tried,

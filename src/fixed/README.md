@@ -2336,3 +2336,58 @@ text).  The tangent documentation lost its references to past
 iterations of the code ("as before", the comparison against the
 conjugate-ratio reconstruction) and now describes only what is
 implemented.
+
+### CI fixes: three real bugs, and the reason they were missed
+
+All three CI failures were genuine, and all three were invisible in
+this container because THE LOCAL BUILD HAD ASSERTIONS OFF.  FLINT
+compiles the library with -DBUILDING_FLINT, which reads src/config.h
+(not src/flint-config.h); FLINT_WANT_ASSERT is undefined there, so
+every FLINT_ASSERT in the module compiled to nothing all session.
+The fix for the process: verification now includes an
+assertion-enabled binary, built by compiling the module sources into
+the test program,
+
+  gcc -O2 -DFLINT_WANT_ASSERT=1 -I src -I . -I src/fixed \
+      -o ttestA src/fixed/*.c src/fixed/test/main.c -lflint ...
+
+which reproduces all three CI failures on the unfixed tree, message
+for message.  (A whole-library assertion build also works but takes
+~25 minutes here and leaves the shared object inconsistent unless
+fully rebuilt.)
+
+1. MinGW link failure ("undefined reference to _fixed_exp_logs").
+   The stress test read the cached tables through their thread-local
+   pointers, and Windows DLLs cannot export thread-local data.  The
+   globals are no longer declared in fixed.h; they live in the new
+   library-internal src/fixed/fixed_tables.h, which every module TU
+   includes, and external code goes through two new accessors,
+   _fixed_exp_logs_entry(i, n) / _fixed_atans_entry(i, n) (plus
+   _..._max_index()), which return the top n limbs of an entry.  The
+   emitters emit the new include, so re-emission still reproduces
+   the shipped files byte for byte.
+
+2. 64-bit assertion "r == 0 || r >= 32" in fixed_atan_bitwise_rs.
+   t-bitwise_rs_stress still drew the trigonometric r from
+   16 + n_randint(...) -- the floor from before the r >= 32 contract
+   -- so it passed r in 16..31 to sin_cos and atan.  Now 32 + ....
+   (t-log1p_bitwise_rs likewise still probed r = 16 in its
+   deterministic sweep.)
+
+3. 32-bit assertion in _fixed_at_rs (residual not below 2^-32).  The
+   clamp r <= FLINT_BITS n - 16 yields r = 16 at n = 1 on 32-bit,
+   below the residual series contract -- exp had carried an
+   n >= 2 assertion for exactly this since it was written, but
+   log1p, atan, sin_cos and tan never got one, and their tests
+   happily ran n = 1.  All four now assert it, the four tests use
+   the nmin = (FLINT_BITS == 64) ? 1 : 2 pattern the exp test
+   already had, and fixed.rst states the rule once for all the
+   bitwise functions instead of only for exp.
+
+Also fixed while here: dev/tune_fixed.py could not actually emit
+log1p_opt_1.c / log1p_opt_2.c (--pin 16 --emit raised KeyError; the
+hand bodies had been installed by hand and the tuner never learned
+to carry them, contradicting the documented contract).  Log1pFunc
+now carries them from dev/log1p_hand.inc, which is parametrized with
+@FN@/@SERIES@ markers like the trig one, and --pin 16 --emit
+reproduces both files.

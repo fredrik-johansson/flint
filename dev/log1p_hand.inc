@@ -1,7 +1,9 @@
 /* hand-written fixed_log1p_opt_1 / _2 bodies, SPECIALIZED to
    r = 16 (the runtime-r branches of the originals for
-   r >= 64 were pruned as unreachable); the tuner copies
-   these on --pin 16 --emit */
+   r >= 64 were pruned as unreachable).  dev/tune_fixed.py
+   substitutes @FN@ and @SERIES@ and copies each body into
+   log1p_opt_<n>.c on --pin 16 --emit, delimiting them by the
+   section comments that open each one. */
 
 /* n = 1: everything in registers.  With r <= 48 there is a single
    reduction window; each step is a funnel shift of P's top limbs, a
@@ -11,7 +13,7 @@
    atanh series collapses to t + t^3/3 (the t^5 term is below the
    64-bit ulp already for r = 16). */
 void
-fixed_log1p_opt_1(nn_ptr res, nn_srcptr x)
+@FN@(nn_ptr res, nn_srcptr x)
 {
     const int r = 16;
     ulong p0 = 0, d0 = x[0], a0 = 0;
@@ -73,7 +75,7 @@ fixed_log1p_opt_1(nn_ptr res, nn_srcptr x)
    significant limb.  The division falls back to mpn_tdiv_qr and the
    atanh series runs four terms (enough down to r = 16). */
 void
-fixed_log1p_opt_2(nn_ptr res, nn_srcptr x)
+@FN@(nn_ptr res, nn_srcptr x)
 {
     const int r = 16;
     ulong p1 = 0, p0 = 0, d1 = x[1], d0 = x[0], a1 = 0, a0 = 0;
@@ -126,7 +128,7 @@ fixed_log1p_opt_2(nn_ptr res, nn_srcptr x)
 
     /* generated atanh series for t < 2^-16 (single denominator
        division by truncated-inverse multiplication) */
-    _fixed_log1p_series_2(w, t2);
+    @SERIES@(w, t2);
 
     /* res = acc + 2 atanh(t) */
     add_ssaaaa(res[1], res[0], a1, a0,
