@@ -1827,3 +1827,112 @@ exercises the glob.  Now verified with:
     for f in src/fixed/*.c; do gcc ... -c $f || echo FAILS; done
 All 7 module .c files compile standalone.  Audited every file the 15 patches
 touch: no other strays.
+
+## Divisor normalization SHIPPED (the ytan bug was a quotient-length bug)
+
+The reverted ~20% idea from 0015 is now in, and the ytan failure is
+explained: it was never about the normalization.  The old tan division
+fed a (2n+1)-limb numerator (2t) to a divisor TRIMMED to n limbs
+(1 - t^2 < 1 has a zero top limb), and mpn_tdiv_qr writes exactly
+nn - dn + 1 = n + 2 quotient limbs -- ONE PAST the documented
+(res, n + 1) contract.  The tests never saw it (they allocate res[66]);
+a canary at res[n + 1] trips on the old code and is clean on the new.
+The same latent overwrite sat in the large-n fallback (sin/cos then
+divide).
+
+The fix and the speedup are the same change: HALVE numerator and
+denominator so that every divisor is a normalized n-limb value and
+every quotient fits n + 1 limbs by construction:
+
+    sin = t/D,  cos = ((1 - t^2)/2)/D,   D = (1 + t^2)/2 in [0.5, 0.6492)
+    tan = 2 (t/(1 - t^2))                1 - t^2 in (0.7015, 1)
+
+- D has its TOP BIT SET: no trimming, no normalization shifts inside
+  mpn_tdiv_qr, one limb shorter than 1 + t^2.
+- numerators become n-limb (t < 0.5464, (1 - t^2)/2 <= 1/2), so nn = 2n
+  and nn - dn + 1 = n + 1 exactly.
+- tan divides t/(1 - t^2) = tan/2 < 0.78 and doubles by a final 1-bit
+  shift of the (n+1)-limb quotient (costs <= 1 ulp extra, budget 8r+256).
+- t^2 = 0 at working precision: cos numerator is 1/2 exactly (cos comes
+  out exactly 1, no special-cased division), tan short-circuits to 2t.
+- fallback tan = sin/cos: numerator n limbs (sin < 0.842 never uses its
+  unit limb); when cos rounds to 1 the divisor keeps its unit limb, the
+  quotient is n limbs, and res[n] is pre-zeroed.
+
+8/8 tests, 25x multiplier on the trig ones; 200k-case canary clean.
+
+## r RE-SWEPT for the tangent half-angle (all n = 1..6)
+
+With the register rotation (0014) and the normalized tail both cheaper
+than what the old parameters were tuned for, the optima moved DOWN, as
+they always have ("a cheaper tail wants a shorter reduction"):
+
+    n            1    2    3    4    5    6
+    r (old)      5    6   15   27   27   30
+    r (new)      4    6    9   14   15   16
+
+Sweep: /tmp/rsw_tan.c pattern (parametrized copy of _fixed_tan_halfangle
++ generated hs_tan_n_r series for n <= 6, r = 4..48; best-of-5 timing,
+two independent processes agreeing on the ranking).  n = 6 tied between
+r = 15 and 16; 16 taken for its cleaner measured error (9/9 vs 65/43
+ulp).  Errors validated at 12000 adversarial-biased points per size:
+sin <= 26, cos <= 18, tan <= 56 ulp, budgets 6r+128 / 8r+256.
+
+MEASURED (one process, best-of-5, ratio = arb time / fixed time):
+    n            1     2     3     4     5     6     7     8
+    sin_cos   2.06  1.65  1.29  1.33  1.42  1.40  0.85  1.03
+    tan       3.39  2.98  2.06  2.04  2.12  2.02  1.13  1.32
+(previous session, different machine: sin_cos 1.26 1.15 0.86 0.67 1.03
+1.03 -- cross-machine ratios are only indicative, but n = 3, 4 were the
+only sizes below arb and are now comfortably above, and every specialized
+size beats arb for both functions.)  n = 7 is the first fallback size
+(no tan series, generic rotation) and is the remaining soft spot.
+
+## One reciprocal + two mulhighs beats two divisions for sin/cos
+
+Open item 3 measured and shipped.  Three tails compared in isolation
+(from t and t^2 to sin and cos, /tmp/tailbench.c pattern):
+
+    n          1     2     3     4     5     6     8    10    12
+    2 x tdiv  95   141   231   283   377   448   621   833  1068
+    reciprocal 34    99   169   174   231   317   386   622   848
+    preinvn   220   291   336   436   496   556   675  1148  1468
+
+The reciprocal route computes R = 1/(1 + t^2) = 1/(2D) with ONE
+division, then sin = 2 t R and cos = (1 - t^2) R are each a single
+mulhigh: a third to a half off the tail at every size, at most 2 ulp
+from the division results.  flint_mpn_preinvn + divrem_preinvn loses
+even to two plain divisions here -- the Newton setup only amortizes
+over many divisions by one divisor.
+
+Two traps found by the harness itself:
+  - the reciprocal numerator must be 2^(128n-1) - 1, not 2^(128n-1):
+    when t^2 is one ulp, D = 2^(64n-1) EXACTLY and the quotient hits
+    2^(64n), overflowing the n limbs the mulhighs read.  (All-ones
+    numerator caps R at 2^(64n) - 1.)
+  - a first version zeroed only n limbs of the numerator buffer and
+    left stale limbs in the middle -- the errors looked like a broken
+    identity until exact arithmetic confirmed the algebra was fine and
+    pointed back at the buffer.
+
+The reciprocal is used only when BOTH outputs are wanted (that is the
+common call); a single output keeps its one direct division.  The
+t^2 = 0 pair case now short-circuits to sin = 2t, cos = 1 with no
+division at all.  R lives in Q + n (t occupies Q[0..n-1], the buffer
+has 2n + 2).
+
+MEASURED, whole call, one process (ratio = arb / fixed):
+    n            1     2     3     4     5     6     7     8
+    sin_cos   2.25  1.93  1.45  1.56  1.65  1.53  0.89  1.15
+    tan       3.36  2.99  2.14  2.18  2.14  2.01  1.15  1.37
+
+## 32-bit: 8/8 with asserts (plus two environment notes)
+
+The full suite passes on an ABI=32 tree with FLINT_WANT_ASSERT.  Two
+issues in the ENVIRONMENT, not the module, for whoever repeats this:
+Ubuntu's fat (cpu-dispatched) i386 libgmp exports __gmpn_add_nc etc.
+only with CPU suffixes, but configure's AC_SEARCH_LIBS misdetects them
+as present ("none required") -- comment the corresponding
+FLINT_HAVE_NATIVE_mpn_* lines out of src/config.h (NOT
+src/flint-config.h, which does not carry these).  And the merged-object
+ld -r step needs make LD="ld -m elf_i386" or it emits elf64 stubs.
