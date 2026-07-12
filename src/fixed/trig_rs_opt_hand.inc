@@ -779,7 +779,7 @@ _fixed_tan_rs_opt_1(nn_ptr res, nn_srcptr x)
     res[0] = x[0] + V[0];
 }
 
-/* tan, n = 2, r = 6: 9 levels, widths [2, 2, 2, 2, 1, 1, 1, 1, 1] */
+/* tan, n = 2, r = 5: 10 levels, widths [2, 2, 2, 2, 2, 1, 1, 1, 1, 1] */
 void
 _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x)
 {
@@ -792,7 +792,11 @@ _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x)
 
     _fixed_sqrhi_2x2(&z[1], &z[0], x[1], x[0]);
 
-    v = UWORD(0x000fabebb9a68b32);
+    v = UWORD(0x000659f862bf2beb);
+
+    /* V_8 = c + z V_9   (1 x 1 limbs) */
+    v = n_mulhi(z[1], v);
+    v = UWORD(0x000fabebb9a68b32) + v;
 
     /* V_7 = c + z V_8   (1 x 1 limbs) */
     v = n_mulhi(z[1], v);
@@ -806,12 +810,12 @@ _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x)
     v = n_mulhi(z[1], v);
     v = UWORD(0x00eb69e870abeefd) + v;
 
-    /* V_4 = c + z V_5   (1 x 1 limbs) */
-    v = n_mulhi(z[1], v);
-    v = UWORD(0x0244dc6abcd84791) + v;
-
-    /* V_3 = c + z V_4   (2 x 1 limbs) */
+    /* V_4 = c + z V_5   (2 x 1 limbs) */
     _fixed_mulhi_2x1(&h, &l, z[1], z[0], v);
+    add_ssaaaa(w1, w0, UWORD(0x0244dc6abcd84791), UWORD(0xeb6a3872e9f6403b), h, l);
+
+    /* V_3 = c + z V_4   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], w1, w0);
     add_ssaaaa(w1, w0, UWORD(0x05993d220b043e7c), UWORD(0xcb5aee9277605993), h, l);
 
     /* V_2 = c + z V_3   (2 x 2 limbs) */
@@ -1067,7 +1071,7 @@ _fixed_tan_rs_opt_5(nn_ptr res, nn_srcptr x)
     NN_ADD_5(res, x, V);
 }
 
-/* tan, n = 6, r = 16: 11 levels, widths [6, 5, 5, 4, 4, 3, 3, 2, 2, 1, 1] */
+/* tan, n = 6, r = 18: 9 levels, widths [6, 5, 4, 4, 3, 3, 2, 2, 1] */
 void
 _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x)
 {
@@ -1080,56 +1084,40 @@ _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x)
 
     flint_mpn_sqrhigh(z, x, 6);
 
-    v = UWORD(0x000292fb1dd44a4b);
+    v = UWORD(0x000fabebb9a68b32);
 
-    /* V_9 = c + z V_10   (1 x 1 limbs) */
-    v = n_mulhi(z[5], v);
-    v = UWORD(0x000659f862bf2beb) + v;
-
-    /* V_8 = c + z V_9   (2 x 1 limbs) */
+    /* V_7 = c + z V_8   (2 x 1 limbs) */
     _fixed_mulhi_2x1(&h, &l, z[5], z[4], v);
-    add_ssaaaa(w1, w0, UWORD(0x000fabebb9a68b32), UWORD(0x10d55a913ccb500a), h, l);
-
-    /* V_7 = c + z V_8   (2 x 2 limbs) */
-    _fixed_mulhi_2x2_sloppy(&h, &l, z[5], z[4], w1, w0);
     add_ssaaaa(w1, w0, UWORD(0x0026ab049006ce88), UWORD(0xa446cab1f8f9189f), h, l);
 
-    /* V_6 = c + z V_7   (3 x 2 limbs) */
+    /* V_6 = c + z V_7   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[5], z[4], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x005f68d914add78a), UWORD(0xda8764d7a2d130cc), h, l);
+
+    /* V_5 = c + z V_6   (3 x 2 limbs) */
     P[0] = UWORD(0);
     P[1] = w0; P[2] = w1;
-    flint_mpn_mulhigh_n(T, z + 3, P, 3);
-    P[0] = UWORD(0xb8a033a6c8c055d8);
-    P[1] = UWORD(0xda8764d7a2d130cc);
-    P[2] = UWORD(0x005f68d914add78a);
-    NN_ADD_3(V, P, T);
-
-    /* V_5 = c + z V_6   (3 x 3 limbs) */
-    P[0] = V[0];
-    P[1] = V[1];
-    P[2] = V[2];
     flint_mpn_mulhigh_n(T, z + 3, P, 3);
     P[0] = UWORD(0xbc019c9698f878f2);
     P[1] = UWORD(0xafe606d2e4d1e65f);
     P[2] = UWORD(0x00eb69e870abeefd);
     NN_ADD_3(V, P, T);
 
-    /* V_4 = c + z V_5   (4 x 3 limbs) */
+    /* V_4 = c + z V_5   (3 x 3 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z + 3, P, 3);
+    P[0] = UWORD(0x286aa3a066807579);
+    P[1] = UWORD(0xeb6a3872e9f6403b);
+    P[2] = UWORD(0x0244dc6abcd84791);
+    NN_ADD_3(V, P, T);
+
+    /* V_3 = c + z V_4   (4 x 3 limbs) */
     P[0] = UWORD(0);
     P[1] = V[0];
     P[2] = V[1];
     P[3] = V[2];
-    flint_mpn_mulhigh_n(T, z + 2, P, 4);
-    P[0] = UWORD(0xa31c0122d9ce740b);
-    P[1] = UWORD(0x286aa3a066807579);
-    P[2] = UWORD(0xeb6a3872e9f6403b);
-    P[3] = UWORD(0x0244dc6abcd84791);
-    NN_ADD_4(V, P, T);
-
-    /* V_3 = c + z V_4   (4 x 4 limbs) */
-    P[0] = V[0];
-    P[1] = V[1];
-    P[2] = V[2];
-    P[3] = V[3];
     flint_mpn_mulhigh_n(T, z + 2, P, 4);
     P[0] = UWORD(0xe9277605993d220b);
     P[1] = UWORD(0xd220b043e7ccb5ae);
@@ -1137,26 +1125,24 @@ _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x)
     P[3] = UWORD(0x05993d220b043e7c);
     NN_ADD_4(V, P, T);
 
-    /* V_2 = c + z V_3   (5 x 4 limbs) */
+    /* V_2 = c + z V_3   (4 x 4 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    flint_mpn_mulhigh_n(T, z + 2, P, 4);
+    P[0] = UWORD(0x0dd0dd0dd0dd0dd0);
+    P[1] = UWORD(0xd0dd0dd0dd0dd0dd);
+    P[2] = UWORD(0xdd0dd0dd0dd0dd0d);
+    P[3] = UWORD(0x0dd0dd0dd0dd0dd0);
+    NN_ADD_4(V, P, T);
+
+    /* V_1 = c + z V_2   (5 x 4 limbs) */
     P[0] = UWORD(0);
     P[1] = V[0];
     P[2] = V[1];
     P[3] = V[2];
     P[4] = V[3];
-    flint_mpn_mulhigh_n(T, z + 1, P, 5);
-    P[0] = UWORD(0xdd0dd0dd0dd0dd0d);
-    P[1] = UWORD(0x0dd0dd0dd0dd0dd0);
-    P[2] = UWORD(0xd0dd0dd0dd0dd0dd);
-    P[3] = UWORD(0xdd0dd0dd0dd0dd0d);
-    P[4] = UWORD(0x0dd0dd0dd0dd0dd0);
-    NN_ADD_5(V, P, T);
-
-    /* V_1 = c + z V_2   (5 x 5 limbs) */
-    P[0] = V[0];
-    P[1] = V[1];
-    P[2] = V[2];
-    P[3] = V[3];
-    P[4] = V[4];
     flint_mpn_mulhigh_n(T, z + 1, P, 5);
     P[0] = UWORD(0x2222222222222222);
     P[1] = UWORD(0x2222222222222222);
@@ -1191,4 +1177,357 @@ _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x)
     flint_mpn_mulhigh_n(T, z, x, 6);
     flint_mpn_mulhigh_n(V, T, P, 6);
     NN_ADD_6(res, x, V);
+}
+
+/* tan, n = 7, r = 16: 12 levels, widths [7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1] */
+void
+_fixed_tan_rs_opt_7(nn_ptr res, nn_srcptr x)
+{
+    ulong z[7], V[7], T[7], P[7], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 7);
+
+    v = UWORD(0x00010b132d39a605);
+
+    /* V_10 = c + z V_11   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[6], z[5], v);
+    add_ssaaaa(w1, w0, UWORD(0x000292fb1dd44a4b), UWORD(0x267cb40b934a18c8), h, l);
+
+    /* V_9 = c + z V_10   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[6], z[5], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x000659f862bf2beb), UWORD(0x2289eb5bd2bb19f2), h, l);
+
+    /* V_8 = c + z V_9   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 4, P, 3);
+    P[0] = UWORD(0x7719a99cabd2a5a3);
+    P[1] = UWORD(0x10d55a913ccb500a);
+    P[2] = UWORD(0x000fabebb9a68b32);
+    NN_ADD_3(V, P, T);
+
+    /* V_7 = c + z V_8   (3 x 3 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z + 4, P, 3);
+    P[0] = UWORD(0x4263dc8f4ddf6b79);
+    P[1] = UWORD(0xa446cab1f8f9189f);
+    P[2] = UWORD(0x0026ab049006ce88);
+    NN_ADD_3(V, P, T);
+
+    /* V_6 = c + z V_7   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 3, P, 4);
+    P[0] = UWORD(0xfe68b9a80df6602e);
+    P[1] = UWORD(0xb8a033a6c8c055d8);
+    P[2] = UWORD(0xda8764d7a2d130cc);
+    P[3] = UWORD(0x005f68d914add78a);
+    NN_ADD_4(V, P, T);
+
+    /* V_5 = c + z V_6   (4 x 4 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    flint_mpn_mulhigh_n(T, z + 3, P, 4);
+    P[0] = UWORD(0x44d76a98f7d36937);
+    P[1] = UWORD(0xbc019c9698f878f2);
+    P[2] = UWORD(0xafe606d2e4d1e65f);
+    P[3] = UWORD(0x00eb69e870abeefd);
+    NN_ADD_4(V, P, T);
+
+    /* V_4 = c + z V_5   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 2, P, 5);
+    P[0] = UWORD(0xf8dc83f4b95907db);
+    P[1] = UWORD(0xa31c0122d9ce740b);
+    P[2] = UWORD(0x286aa3a066807579);
+    P[3] = UWORD(0xeb6a3872e9f6403b);
+    P[4] = UWORD(0x0244dc6abcd84791);
+    NN_ADD_5(V, P, T);
+
+    /* V_3 = c + z V_4   (5 x 5 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    flint_mpn_mulhigh_n(T, z + 2, P, 5);
+    P[0] = UWORD(0x043e7ccb5aee9277);
+    P[1] = UWORD(0xe9277605993d220b);
+    P[2] = UWORD(0xd220b043e7ccb5ae);
+    P[3] = UWORD(0xcb5aee9277605993);
+    P[4] = UWORD(0x05993d220b043e7c);
+    NN_ADD_5(V, P, T);
+
+    /* V_2 = c + z V_3   (6 x 5 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    flint_mpn_mulhigh_n(T, z + 1, P, 6);
+    P[0] = UWORD(0xd0dd0dd0dd0dd0dd);
+    P[1] = UWORD(0xdd0dd0dd0dd0dd0d);
+    P[2] = UWORD(0x0dd0dd0dd0dd0dd0);
+    P[3] = UWORD(0xd0dd0dd0dd0dd0dd);
+    P[4] = UWORD(0xdd0dd0dd0dd0dd0d);
+    P[5] = UWORD(0x0dd0dd0dd0dd0dd0);
+    NN_ADD_6(V, P, T);
+
+    /* V_1 = c + z V_2   (6 x 6 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    flint_mpn_mulhigh_n(T, z + 1, P, 6);
+    P[0] = UWORD(0x2222222222222222);
+    P[1] = UWORD(0x2222222222222222);
+    P[2] = UWORD(0x2222222222222222);
+    P[3] = UWORD(0x2222222222222222);
+    P[4] = UWORD(0x2222222222222222);
+    P[5] = UWORD(0x2222222222222222);
+    NN_ADD_6(V, P, T);
+
+    /* V_0 = c + z V_1   (7 x 6 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    P[6] = V[5];
+    flint_mpn_mulhigh_n(T, z + 0, P, 7);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    P[5] = UWORD(0x5555555555555555);
+    P[6] = UWORD(0x5555555555555555);
+    NN_ADD_7(V, P, T);
+
+    /* tan = x + x^3 V_0 */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    P[6] = V[6];
+    flint_mpn_mulhigh_n(T, z, x, 7);
+    flint_mpn_mulhigh_n(V, T, P, 7);
+    NN_ADD_7(res, x, V);
+}
+
+/* tan, n = 8, r = 16: 14 levels, widths [8, 7, 7, 6, 6, 5, 5, 4, 4, 3, 3, 2, 2, 1] */
+void
+_fixed_tan_rs_opt_8(nn_ptr res, nn_srcptr x)
+{
+    ulong z[8], V[8], T[8], P[8], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 8);
+
+    v = UWORD(0x00002bde5b48e9cb);
+
+    /* V_12 = c + z V_13   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[7], z[6], v);
+    add_ssaaaa(w1, w0, UWORD(0x00006c3dcb4fb893), UWORD(0xa48b446eeacab047), h, l);
+
+    /* V_11 = c + z V_12   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[7], z[6], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x00010b132d39a605), UWORD(0x04ec9d30b0658500), h, l);
+
+    /* V_10 = c + z V_11   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 5, P, 3);
+    P[0] = UWORD(0x422735db56ce2059);
+    P[1] = UWORD(0x267cb40b934a18c8);
+    P[2] = UWORD(0x000292fb1dd44a4b);
+    NN_ADD_3(V, P, T);
+
+    /* V_9 = c + z V_10   (3 x 3 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z + 5, P, 3);
+    P[0] = UWORD(0x62054c890ce75954);
+    P[1] = UWORD(0x2289eb5bd2bb19f2);
+    P[2] = UWORD(0x000659f862bf2beb);
+    NN_ADD_3(V, P, T);
+
+    /* V_8 = c + z V_9   (4 x 3 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z + 4, P, 4);
+    P[0] = UWORD(0x2b9c11f13312f31a);
+    P[1] = UWORD(0x7719a99cabd2a5a3);
+    P[2] = UWORD(0x10d55a913ccb500a);
+    P[3] = UWORD(0x000fabebb9a68b32);
+    NN_ADD_4(V, P, T);
+
+    /* V_7 = c + z V_8   (4 x 4 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    flint_mpn_mulhigh_n(T, z + 4, P, 4);
+    P[0] = UWORD(0x9091157ba30a5acf);
+    P[1] = UWORD(0x4263dc8f4ddf6b79);
+    P[2] = UWORD(0xa446cab1f8f9189f);
+    P[3] = UWORD(0x0026ab049006ce88);
+    NN_ADD_4(V, P, T);
+
+    /* V_6 = c + z V_7   (5 x 4 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    flint_mpn_mulhigh_n(T, z + 3, P, 5);
+    P[0] = UWORD(0x49555555703d493c);
+    P[1] = UWORD(0xfe68b9a80df6602e);
+    P[2] = UWORD(0xb8a033a6c8c055d8);
+    P[3] = UWORD(0xda8764d7a2d130cc);
+    P[4] = UWORD(0x005f68d914add78a);
+    NN_ADD_5(V, P, T);
+
+    /* V_5 = c + z V_6   (5 x 5 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    flint_mpn_mulhigh_n(T, z + 3, P, 5);
+    P[0] = UWORD(0x43fb6730ac9edf4e);
+    P[1] = UWORD(0x44d76a98f7d36937);
+    P[2] = UWORD(0xbc019c9698f878f2);
+    P[3] = UWORD(0xafe606d2e4d1e65f);
+    P[4] = UWORD(0x00eb69e870abeefd);
+    NN_ADD_5(V, P, T);
+
+    /* V_4 = c + z V_5   (6 x 5 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    flint_mpn_mulhigh_n(T, z + 2, P, 6);
+    P[0] = UWORD(0xff8f5bbd5cacef87);
+    P[1] = UWORD(0xf8dc83f4b95907db);
+    P[2] = UWORD(0xa31c0122d9ce740b);
+    P[3] = UWORD(0x286aa3a066807579);
+    P[4] = UWORD(0xeb6a3872e9f6403b);
+    P[5] = UWORD(0x0244dc6abcd84791);
+    NN_ADD_6(V, P, T);
+
+    /* V_3 = c + z V_4   (6 x 6 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    flint_mpn_mulhigh_n(T, z + 2, P, 6);
+    P[0] = UWORD(0x605993d220b043e7);
+    P[1] = UWORD(0x043e7ccb5aee9277);
+    P[2] = UWORD(0xe9277605993d220b);
+    P[3] = UWORD(0xd220b043e7ccb5ae);
+    P[4] = UWORD(0xcb5aee9277605993);
+    P[5] = UWORD(0x05993d220b043e7c);
+    NN_ADD_6(V, P, T);
+
+    /* V_2 = c + z V_3   (7 x 6 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    P[6] = V[5];
+    flint_mpn_mulhigh_n(T, z + 1, P, 7);
+    P[0] = UWORD(0x0dd0dd0dd0dd0dd0);
+    P[1] = UWORD(0xd0dd0dd0dd0dd0dd);
+    P[2] = UWORD(0xdd0dd0dd0dd0dd0d);
+    P[3] = UWORD(0x0dd0dd0dd0dd0dd0);
+    P[4] = UWORD(0xd0dd0dd0dd0dd0dd);
+    P[5] = UWORD(0xdd0dd0dd0dd0dd0d);
+    P[6] = UWORD(0x0dd0dd0dd0dd0dd0);
+    NN_ADD_7(V, P, T);
+
+    /* V_1 = c + z V_2   (7 x 7 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    P[6] = V[6];
+    flint_mpn_mulhigh_n(T, z + 1, P, 7);
+    P[0] = UWORD(0x2222222222222222);
+    P[1] = UWORD(0x2222222222222222);
+    P[2] = UWORD(0x2222222222222222);
+    P[3] = UWORD(0x2222222222222222);
+    P[4] = UWORD(0x2222222222222222);
+    P[5] = UWORD(0x2222222222222222);
+    P[6] = UWORD(0x2222222222222222);
+    NN_ADD_7(V, P, T);
+
+    /* V_0 = c + z V_1   (8 x 7 limbs) */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    P[4] = V[3];
+    P[5] = V[4];
+    P[6] = V[5];
+    P[7] = V[6];
+    flint_mpn_mulhigh_n(T, z + 0, P, 8);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    P[3] = UWORD(0x5555555555555555);
+    P[4] = UWORD(0x5555555555555555);
+    P[5] = UWORD(0x5555555555555555);
+    P[6] = UWORD(0x5555555555555555);
+    P[7] = UWORD(0x5555555555555555);
+    NN_ADD_8(V, P, T);
+
+    /* tan = x + x^3 V_0 */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    P[3] = V[3];
+    P[4] = V[4];
+    P[5] = V[5];
+    P[6] = V[6];
+    P[7] = V[7];
+    flint_mpn_mulhigh_n(T, z, x, 8);
+    flint_mpn_mulhigh_n(V, T, P, 8);
+    NN_ADD_8(res, x, V);
 }

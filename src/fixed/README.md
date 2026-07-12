@@ -1970,3 +1970,64 @@ using the 2x2/3x3 forms of hand_mulhi.inc and preinv 3/2 division
 steps) is the natural next step; the n = 1 result bounds what it is
 worth.  8/8 both word sizes; canary clean; production errors at
 n = 1..6 measured 5..72 ulp at 20k points per size.
+
+### one reciprocal per output: the tangent never materializes
+
+The reconstruction used to compute t = TT/DE, square it, and divide
+again per output.  With A = TT DE, B = DE^2, C = TT^2, S = B + C the
+outputs are
+
+    sin = 2A/S,   cos = 1 - 2C/S,   tan = 2A/(B - C)
+
+-- each ONE reciprocal division (the divisor normalizes to n limbs
+with its top bit set by a shift of at most two bits, whose exponent
+folds into the final doubling shift) and one mulhigh.  Every special
+case (t = 0, t^2 = 0) dissolves; cos comes out exactly 1 through the
+generic path.  The doubling shifts amplify the last mulhigh's
+truncation by at most 8 (sin/cos) resp. 16 (tan) ulp -- noise against
+the 6r + 128 and 8r + 256 budgets.
+
+The fallback's u-division is gone too.  For n beyond the tangent
+series, u = tan(t') = ss/cc was one more division; writing
+cos t' = 1 - g with g < 2^(-2r-1),
+
+    TT = wy + wx ss - wy g,    DE = wx - wx g - wy ss,
+
+four mulhighs against the tiny ss and g -- cc cancels in every ratio.
+No difference can go negative (wy g < wy; DE's two subtrahends are
+below wx).  The old chain spent FOUR divisions per sin_cos call at
+n = 7 (u, t, one per output); now one, and n = 7 sin_cos went
+1020 -> 811 ns on this alone.  _fixed_divide and the dead
+sin/cos-then-divide fallback in fixed_tan_bitwise_rs are deleted: the
+half-angle path handles every n >= 1 on both word sizes.
+
+### r re-swept (third time), tan series to n = 8, rotation to n = 7
+
+Every cheaper tail moves the optimum: final
+r = {4, 5, 9, 14, 15, 18, 16, 16} for n = 1..8.  The sweep's fastest
+candidates at n = 5 (r = 17) and n = 7 (r = 15) measured fine at 300
+points and BLOW THE TAN BUDGET at 8000 (431 > 392, 440 > 376): the
+sweep's error column is an estimate, not a certificate -- always
+big-sample validate before locking.  n = 8's register rotation would
+need 9-wide add/sub chains that longlong.h doesn't have; it keeps the
+generic loop, and the n = 7 -> 8 step shows it (691 -> 937 ns).
+
+### register reconstruction for n = 2..4
+
+dev/gen_fixed_tan_halfangle_small.py -> tan_halfangle_small.inc: the
+whole tail in registers -- hand 2x2 sloppy forms at n = 2,
+assembly-backed mulhigh dispatch at n = 3, 4, NN_ADD/NN_SUB chains and
+unrolled funnel shifts -- except the one mpn_tdiv_qr per reciprocal.
+The n = 1 scalar path was rewritten to the same A/B/C form (one
+udiv_qrnnd per reciprocal).  n = 2: 157 -> 116 ns.
+
+MEASURED, whole call (one process, ratio = arb / fixed):
+    n            1     2     3     4     5     6     7     8
+    sin_cos ns  51.2 116.3 240.5 313.9 448.7 558.4 701.4 954.8
+    sin_cos     4.97  3.02  1.89  2.00  1.88  1.81  1.70  1.71
+    tan         7.52  4.90  2.82  2.90  2.53  2.39  2.23  2.16
+
+(The session opened with n = 7 at 0.85-0.91x.)  Errors at 3000
+adversarial points: sin <= 33, cos <= 40, tan <= 70 ulp against
+budgets 416/640 at r = 0.  Both word sizes 8/8; canary clean over
+200k cases.

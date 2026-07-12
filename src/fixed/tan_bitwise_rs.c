@@ -17,7 +17,7 @@
 #include "tan_rotate.inc"
 
 /* the sizes for which the rotation is emitted in registers */
-#define FIXED_TAN_ROTATE_NMAX 6
+#define FIXED_TAN_ROTATE_NMAX 7
 
 /* The tangent half-angle reconstruction.
 
@@ -62,19 +62,27 @@
 
 #if FLINT_BITS == 64
 
-/* the reduction parameter each series was built for, re-swept after
-   the register rotation and the normalized-divisor reconstruction:
-   the tail getting cheaper moved every optimum down, dramatically so
-   at n = 4..6 (27, 27, 30 previously) */
-static const int _fixed_tan_opt_r[] = { 0, 4, 6, 9, 14, 15, 16 };
+/* the reduction parameter each series was built for, re-swept every
+   time the tail got cheaper -- and it did so twice more since the
+   original 5, 6, 15, 27, 27, 30: after the register rotation and
+   normalized divisors, and again after the one-reciprocal tail; the
+   optimum keeps moving down.  The candidates are validated at 8-10k
+   adversarial points before being locked: the sweep's 300-point error
+   estimate MISSES spikes (r = 17 at n = 5 and r = 15 at n = 7 measured
+   fastest but blow the tan budget at scale). */
+static const int _fixed_tan_opt_r[] = { 0, 4, 5, 9, 14, 15, 18, 16, 16 };
 
 static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
     NULL,
     _fixed_tan_rs_opt_1, _fixed_tan_rs_opt_2, _fixed_tan_rs_opt_3,
-    _fixed_tan_rs_opt_4, _fixed_tan_rs_opt_5, _fixed_tan_rs_opt_6
+    _fixed_tan_rs_opt_4, _fixed_tan_rs_opt_5, _fixed_tan_rs_opt_6,
+    _fixed_tan_rs_opt_7, _fixed_tan_rs_opt_8
 };
 
-#define FIXED_TAN_NMAX 6
+#define FIXED_TAN_NMAX 8
+
+#include "hand_mulhi.inc"
+#include "tan_halfangle_small.inc"
 
 #else
 
@@ -85,42 +93,26 @@ static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
 
 #endif
 
-/* divide (num, nn) by (den, dn), whose top limb may be zero -- the
-   denominators here sit near one, so mpn_tdiv_qr's normalization
-   requirement has to be met by trimming the length rather than assumed */
-static void
-_fixed_divide(nn_ptr q, nn_ptr num, slong nn, nn_srcptr den, slong dn,
-    nn_ptr scratch)
-{
-    while (dn > 1 && den[dn - 1] == 0)
-        dn--;
-
-    mpn_tdiv_qr(q, scratch, 0, num, nn, den, dn);
-}
-
 #if FLINT_BITS == 64
 
 /* n = 1 without a single mpn call past the shared reduction: the
    rotation and series were already in registers, and here the whole
-   reconstruction follows -- the two products against wx and wy are
-   umul_ppmm chains, and each division collapses to one udiv_qrnnd
-   against a divisor rounded to 64 normalized bits (the numerator and
-   denominator of t are conditionally halved together when the
-   denominator reaches one, dropping its unit limb; the sin/cos and
-   tan divisors are normalized by the same halving as in the generic
-   tail).  The roundings cost at most ~3 ulp against budgets of
-   6r + 128 and 8r + 256.  Measured at roughly a THIRD of the cost of
-   the generic path at this size: the mpn dispatch and buffer traffic
-   dominated the call. */
+   reconstruction follows in the same A/B/C form as the generic tail --
+   two umul_ppmm chains for TT and DE, three n_mulhi for A, B, C, and
+   ONE udiv_qrnnd per requested reciprocal against a divisor normalized
+   to 64 bits by a shift whose exponent moves into the final doubling.
+   The roundings cost a few ulp against budgets of 6r + 128 and
+   8r + 256.  Measured at roughly a third of the generic path at this
+   size: mpn dispatch and buffer traffic dominated the call. */
 static void
 _fixed_tan_halfangle_1(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     nn_srcptr x)
 {
     slong num, nc;
-    int r = _fixed_tan_opt_r[1];
+    int r = _fixed_tan_opt_r[1], e;
     ulong t[1], wx[2], wy[2];
-    ulong U, X0, X1, Y0, ph, pl, qh, ql, n1, n0, T1, T0, D1, D0;
-    ulong dh, nh, nl, Q, R, rr, T, s;
+    ulong U, X0, X1, Y0, ph, pl, qh, ql, n1, TT, D1, DE;
+    ulong A, B, C, S, W, R, rr, v;
     slong * used;
     TMP_INIT;
 
@@ -139,81 +131,69 @@ _fixed_tan_halfangle_1(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
 
     X0 = wx[0]; X1 = wx[1]; Y0 = wy[0];
 
-    /* numerator wy + wx u and denominator wx - wy u, each a fraction
-       limb plus a unit limb that is 0 or 1 */
+    /* TT = wy + wx u < 0.64 (one limb) and DE = wx - wy u in
+       (0.72, 1.17) (fraction limb + 0/1 unit limb), halved together
+       when DE reaches one so that DE is normalized */
     umul_ppmm(ph, pl, X0, U);
-    add_ssaaaa(n1, n0, UWORD(0), ph, UWORD(0), X1 ? U : UWORD(0));
-    add_ssaaaa(T1, T0, n1, n0, UWORD(0), Y0);
+    add_ssaaaa(n1, TT, UWORD(0), ph, UWORD(0), X1 ? U : UWORD(0));
+    TT += Y0;                           /* n1 + carry stay zero */
     umul_ppmm(qh, ql, Y0, U);
-    sub_ddmmss(D1, D0, X1, X0, UWORD(0), qh);
-    (void) pl; (void) ql; (void) T1;
-
-    /* t: the numerator t (wx - wy u) < 0.64 never uses its unit limb;
-       when the denominator reaches one, halve both */
+    sub_ddmmss(D1, DE, X1, X0, UWORD(0), qh);
+    (void) pl; (void) ql; (void) n1;
     if (D1)
     {
-        dh = (UWORD(1) << (FLINT_BITS - 1)) | (D0 >> 1);
-        nh = T0 >> 1;
-        nl = T0 << (FLINT_BITS - 1);
+        DE = (UWORD(1) << (FLINT_BITS - 1)) | (DE >> 1);
+        TT >>= 1;
     }
-    else
-    {
-        dh = D0;
-        nh = T0;
-        nl = 0;
-    }
-    udiv_qrnnd(Q, rr, nh, nl, dh);
 
-    T = n_mulhi(Q, Q);                  /* t^2 */
+    /* A = TT DE, B = DE^2, C = TT^2: sin = 2A/(B + C),
+       cos = 1 - 2C/(B + C), tan = 2A/(B - C), exactly as in the
+       generic tail */
+    A = n_mulhi(TT, DE);
+    B = n_mulhi(DE, DE);
+    C = n_mulhi(TT, TT);
 
     if (ysin != NULL || ycos != NULL)
     {
-        if (T == 0)
+        ulong cy;
+        add_ssaaaa(cy, S, UWORD(0), B, UWORD(0), C);
+        if (cy)
         {
-            if (ysin != NULL)
-            {
-                ysin[1] = Q >> (FLINT_BITS - 1);
-                ysin[0] = Q << 1;       /* sin = 2t to within one ulp */
-            }
-            if (ycos != NULL)
-            {
-                ycos[0] = 0;
-                ycos[1] = 1;            /* cos = 1 exactly */
-            }
+            S = (UWORD(1) << (FLINT_BITS - 1)) | (S >> 1);
+            e = 1;
+        }
+        else if (!(S >> (FLINT_BITS - 1)))
+        {
+            S <<= 1;
+            e = -1;
         }
         else
+            e = 0;
+        udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0), S);
+
+        if (ysin != NULL)
         {
-            /* R = 1/(1 + t^2) = (2^127 - 1) / ((1 + t^2)/2) */
-            udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0),
-                (UWORD(1) << (FLINT_BITS - 1)) | (T >> 1));
-            if (ysin != NULL)
-            {
-                s = n_mulhi(Q, R);      /* sin = 2 t R */
-                ysin[1] = s >> (FLINT_BITS - 1);
-                ysin[0] = s << 1;
-            }
-            if (ycos != NULL)
-            {
-                ycos[0] = n_mulhi(-T, R);   /* cos = (1 - t^2) R */
-                ycos[1] = 0;
-            }
+            v = n_mulhi(A, R);          /* sin = 2^(2-e) A R < 0.842 */
+            ysin[1] = v >> (FLINT_BITS - 2 + e);
+            ysin[0] = v << (2 - e);
+        }
+        if (ycos != NULL)
+        {
+            v = n_mulhi(C, R) << (2 - e);   /* 2C/S < 0.46 */
+            ycos[0] = -v;
+            ycos[1] = (v == 0);         /* cos = 1 exactly when v = 0 */
         }
     }
 
     if (ytan != NULL)
     {
-        if (T == 0)
-        {
-            ytan[1] = Q >> (FLINT_BITS - 1);
-            ytan[0] = Q << 1;           /* tan = 2t to within one ulp */
-        }
-        else
-        {
-            /* tan/2 = t/(1 - t^2), then one doubling bit shift */
-            udiv_qrnnd(s, rr, Q, UWORD(0), -T);
-            ytan[1] = s >> (FLINT_BITS - 1);
-            ytan[0] = s << 1;
-        }
+        W = B - C;                      /* DE^2 (1 - t^2) > 0.175 */
+        e = flint_clz(W);
+        W <<= e;
+        udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0), W);
+        v = n_mulhi(A, R);              /* tan = 2^(2+e) A R < 1.56 */
+        ytan[1] = v >> (FLINT_BITS - 2 - e);
+        ytan[0] = v << (2 + e);
     }
 
     TMP_END;
@@ -234,9 +214,14 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
         return 0;
 
 #if FLINT_BITS == 64
-    if (n == 1 && r == 0)
+    if (n <= FIXED_TAN_HALFANGLE_NMAX && r == 0)
     {
-        _fixed_tan_halfangle_1(ysin, ycos, ytan, x);
+        /* the register paths (n = 1 hand-written above, n = 2..4
+           generated in tan_halfangle_small.inc) hardcode the tuned r */
+        if (n == 1)
+            _fixed_tan_halfangle_1(ysin, ycos, ytan, x);
+        else
+            _fixed_tan_halfangle_tab[n](ysin, ycos, ytan, x);
         return 1;
     }
 #endif
@@ -320,163 +305,165 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
         }
     }
 
-    /* u = tan(t').  Where a tangent series exists it is used directly;
-       beyond that the sine and cosine series of the residual serve, at
-       the price of one division -- the tangent numbers have no tidy
-       recurrence, so tabulating them indefinitely is unattractive,
-       while this costs a single extra division and reuses code that is
-       there anyway. */
+    /* TT and DE, the imaginary and real parts of W (cos t' + i sin t')
+       up to positive real factors that CANCEL in every ratio below just
+       as |W| does: TT/DE is tan(x/2).  TT, at most
+       tan(1/2) = 0.5464 times DE in (0.72, 1.17), stays below 0.64 and
+       never uses its unit limb.
+
+       Where a tangent series exists, u = tan(t') comes from it
+       directly and TT = wy + wx u, DE = wx - wy u (dropping the
+       common factor cos t'); wx and wy are (n+1)-limb values scaled
+       by 2^-64n and u an n-limb fraction, so each product at that
+       scale is the top n+1 limbs of the (2n+1)-limb integer product.
+
+       Beyond those sizes the tangent u itself is NEVER DIVIDED OUT:
+       writing cos t' = 1 - g with g < 2^(-2r-1),
+
+           TT = wy cos t' + wx sin t' = wy + wx ss - wy g,
+           DE = wx cos t' - wy sin t' = wx - wx g - wy ss,
+
+       four mulhighs against the tiny ss and g in place of the division
+       ss/cc that used to make u (this was the last of the three
+       divisions the old reconstruction chain spent before reaching the
+       output reciprocals).  No difference can go negative: TT's
+       subtrahend wy g is below wy, DE's two are below wx. */
 #if FLINT_BITS == 64
     if (n <= FIXED_TAN_NMAX)
     {
         _fixed_tan_opt_tab[n](u, t);
+        flint_mpn_mul(N, wx, wn, u, n);
+        mpn_add_n(T, wy, N + n, wn);        /* TT (T[n] = 0) */
+        flint_mpn_mul(N, wy, wn, u, n);
+        mpn_sub_n(D, wx, N + n, wn);        /* DE */
     }
     else
 #endif
     {
         fixed_sin_cos_rs(ss, cc, t, n);
-        flint_mpn_zero(N, n);
-        flint_mpn_copyi(N + n, ss, wn);
-        _fixed_divide(Q, N, wn + n, cc, wn, sc);
-        flint_mpn_copyi(u, Q, n);
+
+        if (cc[n])
+            flint_mpn_zero(cc, n);          /* cos t' = 1: g = 0 */
+        else
+            mpn_neg(cc, cc, n);             /* g = 1 - cos t' */
+
+        flint_mpn_mulhigh_n(va, wx, ss, n); /* wx ss */
+        if (wx[n])
+            mpn_add_n(va, va, ss, n);       /* < 2^(1-r): no carry */
+        flint_mpn_mulhigh_n(vb, wy, cc, n); /* wy g */
+        T[n] = mpn_add_n(T, wy, va, n);     /* wy + wx ss < 1 */
+        mpn_sub_n(T, T, vb, n);             /* TT */
+
+        flint_mpn_mulhigh_n(va, wx, cc, n); /* wx g */
+        if (wx[n])
+            mpn_add_n(va, va, cc, n);
+        flint_mpn_mulhigh_n(vb, wy, ss, n); /* wy ss */
+        flint_mpn_copyi(D, wx, wn);
+        mpn_sub(D, D, wn, va, n);
+        mpn_sub(D, D, wn, vb, n);           /* DE */
     }
 
-    /* t = (wy + wx u) / (wx - wy u).  wx and wy are (n+1)-limb values
-       scaled by 2^-64n, u an n-limb fraction, so the product at that
-       scale is the top n+1 limbs of the (2n+1)-limb integer product. */
-    flint_mpn_mul(N, wx, wn, u, n);
-    mpn_add_n(T, wy, N + n, wn);            /* numerator   */
-    flint_mpn_mul(N, wy, wn, u, n);
-    mpn_sub_n(D, wx, N + n, wn);            /* denominator */
-
-    /* The denominator sits in (0.72, 1.17) and the numerator, being
-       t < tan(1/2) = 0.5464 times it, below 0.64: when the denominator
-       reaches one, halving both leaves the quotient alone and drops
-       the unit limbs, so the divisor is ALWAYS an n-limb value with
-       its top bit set -- no trimming, and mpn_tdiv_qr skips its
-       internal normalization shifts.  (Costs at most 2 ulp of floor
-       against the unhalved division.) */
     if (D[n])
     {
         mpn_rshift(D, D, wn, 1);
         mpn_rshift(T, T, n, 1);
     }
-    flint_mpn_zero(N, n);
-    flint_mpn_copyi(N + n, T, n);
-    mpn_tdiv_qr(Q, sc, 0, N, 2 * n, D, n);
-    /* t = (Q, n): below tan(1/2) < 0.5464, so the higher limbs vanish */
 
-    /* the one squaring, shared by all three outputs */
-    flint_mpn_sqrhigh(T, Q, n);             /* t^2 < 0.2984 */
+    /* The half-angle tangent t = TT/DE is never materialized.  With
 
-    /* The half-angle divisions below keep numerator and denominator
-       HALVED: 1 + t^2 in [1, 1.2984) is the worst possible divisor,
-       spending a whole limb to hold one bit above the point, while
+           A = TT DE,  B = DE^2,  C = TT^2,  S = B + C = DE^2 (1 + t^2)
 
-           D = (1 + t^2)/2 in [0.5, 0.6492)
+       the outputs are
 
-       is one limb shorter AND has its top bit set, which is what
-       mpn_tdiv_qr wants; 1 - t^2 in (0.7015, 1) is normalized as it
-       stands.  Halving the numerators alongside (sin = t/D rather
-       than 2t/(1 + t^2), tan/2 = t/(1 - t^2) with a final one-bit
-       shift) also keeps every 2n-limb-over-n-limb quotient within its
-       documented n + 1 limbs -- the old (2n+1)-limb numerators over a
-       trimmed n-limb divisor made mpn_tdiv_qr write n + 2 limbs, one
-       past the contract. */
-    if (ysin != NULL && ycos != NULL)
+           sin = 2A/S,   cos = 1 - 2C/S,   tan = 2A/(B - C),
+
+       each ONE reciprocal (against a divisor normalized to n limbs
+       with the top bit set by a shift of at most two bits, whose
+       exponent moves into the final doubling shift) and one mulhigh
+       per output -- where computing t first would have spent a whole
+       division before the reciprocal.  Every former special case
+       dissolves: t^2 = 0 makes C = 0 and cos exactly one through the
+       generic code path.
+
+       Ranges after the joint halving: A < 0.55, B in [0.25, 1),
+       C < 0.30, S in [0.25, 1.30) with S >= 0.5 whenever the halving
+       did not fire (B > 0.518 then), W = B - C = DE^2 (1 - t^2) in
+       (0.175, 1).  The doubling shifts amplify the last mulhigh's
+       truncation by at most 8 (sin/cos) resp. 16 (tan) ulp, absorbed
+       many times over by the 6r + 128 and 8r + 256 budgets. */
     {
-        if (flint_mpn_zero_p(T, n))
-        {
-            /* t^2 vanishes at working precision: sin = 2t and cos = 1
-               to within one ulp each, no division at all */
-            flint_mpn_copyi(ysin, Q, n);
-            ysin[n] = 0;
-            mpn_lshift(ysin, ysin, n + 1, 1);
-            flint_mpn_zero(ycos, n);
-            ycos[n] = 1;
-        }
-        else
-        {
-            /* Both outputs from ONE division: the reciprocal
-               R = 1/(1 + t^2) = 1/(2D) in (0.770, 1), then each output
-               is a single mulhigh, sin = 2 t R and cos = (1 - t^2) R.
-               Dividing 2^(128n-1) - 1 rather than 2^(128n-1) keeps R
-               below 2^(64n) even when D = 2^(64n-1) exactly (t^2 one
-               ulp).  Measured at a third to a half the cost of two
-               divisions across n = 1..12, at most 2 ulp apart from
-               them.  (A precomputed-inverse division, flint_mpn_preinvn
-               + divrem_preinvn, was also measured and loses even to the
-               two plain divisions at these sizes: the Newton setup only
-               amortizes over many divisions by the same divisor.) */
-            nn_ptr R = Q + n;   /* n + 1 quotient limbs, past t */
+        nn_ptr A = u, B = va, C = vb, S = T, R = Q, h = sc, W = D;
+        ulong topbit = UWORD(1) << (FLINT_BITS - 1);
+        int e;
 
-            mpn_rshift(D, T, n, 1);             /* D = (1 + t^2)/2 */
-            D[n - 1] |= (UWORD(1) << (FLINT_BITS - 1));
-            flint_mpn_store(N, 2 * n, ~UWORD(0));
-            N[2 * n - 1] = ~UWORD(0) >> 1;
-            mpn_tdiv_qr(R, sc, 0, N, 2 * n, D, n);
+        if (ysin != NULL || ytan != NULL)
+            flint_mpn_mulhigh_n(A, T, D, n);
+        flint_mpn_sqrhigh(B, D, n);
+        flint_mpn_sqrhigh(C, T, n);
 
-            flint_mpn_mulhigh_n(ysin, Q, R, n);
-            ysin[n] = 0;
-            mpn_lshift(ysin, ysin, n + 1, 1);
+        flint_mpn_store(N, 2 * n, ~UWORD(0));
+        N[2 * n - 1] = ~UWORD(0) >> 1;          /* 2^(128n-1) - 1 */
 
-            mpn_neg(D, T, n);                   /* 1 - t^2 */
-            flint_mpn_mulhigh_n(ycos, D, R, n);
-            ycos[n] = 0;
-        }
-    }
-    else if (ysin != NULL || ycos != NULL)
-    {
-        mpn_rshift(D, T, n, 1);             /* D = (1 + t^2)/2 */
-        D[n - 1] |= (UWORD(1) << (FLINT_BITS - 1));
-
-        if (ysin != NULL)
+        if (ysin != NULL || ycos != NULL)
         {
-            /* sin = 2t/(1 + t^2) = t/D */
-            flint_mpn_zero(N, n);
-            flint_mpn_copyi(N + n, Q, n);
-            mpn_tdiv_qr(ysin, sc, 0, N, 2 * n, D, n);
-        }
-        if (ycos != NULL)
-        {
-            /* cos = (1 - t^2)/(1 + t^2) = ((1 - t^2)/2)/D, with
-               (1 - t^2)/2 in (0.3507, 1/2] an n-limb fraction; the
-               endpoint is t = 0, where cos comes out exactly 1 */
-            flint_mpn_zero(N, n);
-            if (flint_mpn_zero_p(T, n))
+            /* S, normalized to [0.5, 1) by a shift of e in {-1,0,1} */
+            if (mpn_add_n(S, B, C, n))
             {
-                flint_mpn_zero(N + n, n);
-                N[2 * n - 1] = UWORD(1) << (FLINT_BITS - 1);
+                mpn_rshift(S, S, n, 1);
+                S[n - 1] |= topbit;
+                e = 1;
+            }
+            else if (!(S[n - 1] & topbit))
+            {
+                mpn_lshift(S, S, n, 1);
+                e = -1;
             }
             else
-            {
-                mpn_neg(N + n, T, n);
-                mpn_rshift(N + n, N + n, n, 1);
-            }
-            mpn_tdiv_qr(ycos, sc, 0, N, 2 * n, D, n);
-        }
-    }
+                e = 0;
 
-    if (ytan != NULL)
-    {
-        if (flint_mpn_zero_p(T, n))
-        {
-            /* t^2 vanishes at working precision, so tan = 2t/(1 - t^2)
-               is 2t to within one ulp */
-            flint_mpn_copyi(ytan, Q, n);
-            ytan[n] = 0;
-            mpn_lshift(ytan, ytan, n + 1, 1);
+            /* R = 1/(2 S'): the all-ones numerator keeps R below
+               2^(64n) even when S' = 1/2 exactly */
+            mpn_tdiv_qr(R, h, 0, N, 2 * n, S, n);
+
+            if (ysin != NULL)
+            {
+                /* sin = 2A/S = 2^(2-e) A R < 0.842 */
+                flint_mpn_mulhigh_n(ysin, A, R, n);
+                ysin[n] = 0;
+                mpn_lshift(ysin, ysin, n + 1, 2 - e);
+            }
+            if (ycos != NULL)
+            {
+                /* cos = 1 - 2C/S with 2C/S = 2t^2/(1 + t^2) < 0.46 */
+                flint_mpn_mulhigh_n(h, C, R, n);
+                mpn_lshift(h, h, n, 2 - e);
+                if (flint_mpn_zero_p(h, n))
+                {
+                    flint_mpn_zero(ycos, n);
+                    ycos[n] = 1;
+                }
+                else
+                {
+                    mpn_neg(ycos, h, n);
+                    ycos[n] = 0;
+                }
+            }
         }
-        else
+
+        if (ytan != NULL)
         {
-            /* tan/2 = t/(1 - t^2) < 0.78 stays below one, and the
-               doubling is a one-bit shift of the (n+1)-limb quotient
-               into the unit limb */
-            mpn_neg(D, T, n);               /* normalized: > 0.7015 */
-            flint_mpn_zero(N, n);
-            flint_mpn_copyi(N + n, Q, n);
-            mpn_tdiv_qr(ytan, sc, 0, N, 2 * n, D, n);
-            mpn_lshift(ytan, ytan, n + 1, 1);
+            /* W = B - C > 0.175: at most two leading zero bits */
+            mpn_sub_n(W, B, C, n);
+            e = flint_clz(W[n - 1]);
+            if (e)
+                mpn_lshift(W, W, n, e);
+
+            mpn_tdiv_qr(R, h, 0, N, 2 * n, W, n);
+
+            /* tan = 2A/(B - C) = 2^(2+e) A R < 1.56 */
+            flint_mpn_mulhigh_n(ytan, A, R, n);
+            ytan[n] = 0;
+            mpn_lshift(ytan, ytan, n + 1, 2 + e);
         }
     }
 
@@ -488,44 +475,13 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
 void
 fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
+    int ok;
     FLINT_ASSERT(n >= 1);
 
-    if (_fixed_tan_halfangle(NULL, NULL, res, x, n, r))
-        return;
-
-    /* beyond the sizes with a tangent series of their own: sin and cos
-       by their own reduction, then one division */
-    {
-        nn_ptr s, c, N, sc;
-        slong i;
-        TMP_INIT;
-
-        TMP_START;
-        s = TMP_ALLOC(((n + 1) + (n + 1) + (2 * n + 2) + (2 * n + 4))
-            * sizeof(ulong));
-        c = s + (n + 1);
-        N = c + (n + 1);
-        sc = N + (2 * n + 2);
-
-        fixed_sin_cos_bitwise_rs(s, c, x, n, r);
-
-        /* tan = sin / cos, bounded by tan(1) < 1.56.  The numerator
-           sin < 0.842 never uses its unit limb, so a 2n-limb numerator
-           over the trimmed divisor writes at most n + 1 quotient limbs
-           (a (2n+1)-limb one would write n + 2, past the contract).
-           cos >= cos(1) > 0.54 keeps the divisor at n limbs -- except
-           when it comes out exactly 1 at working precision (x tiny),
-           where the unit limb survives, the quotient is only n limbs,
-           and res[n] is pre-zeroed to cover it. */
-        flint_mpn_zero(N, n);
-        flint_mpn_copyi(N + n, s, n);
-
-        i = n + 1;
-        while (i > 1 && c[i - 1] == 0)
-            i--;
-        res[n] = 0;
-        mpn_tdiv_qr(res, sc, 0, N, 2 * n, c, i);
-
-        TMP_END;
-    }
+    /* the half-angle machinery covers every size on both word sizes
+       (beyond the tabulated tangent series it takes sin and cos of the
+       residual and never divides them: their ratio cancels) */
+    ok = _fixed_tan_halfangle(NULL, NULL, res, x, n, r);
+    FLINT_ASSERT(ok);
+    (void) ok;
 }

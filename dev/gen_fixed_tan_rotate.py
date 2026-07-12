@@ -17,14 +17,16 @@ most 1.1645); wy stays below 0.92 and needs none.  Both updates read the
 OLD components, so the two shifted vectors are formed first.
 """
 
-NMIN, NMAX = 1, 6
+NMIN, NMAX = 1, 7
 
 
 SUB = {2: "sub_ddmmss", 3: "sub_dddmmmsss", 4: "sub_ddddmmmmssss",
        5: "sub_dddddmmmmmsssss", 6: "sub_ddddddmmmmmmssssss",
-       7: "sub_dddddddmmmmmmmsssssss"}
+       7: "sub_dddddddmmmmmmmsssssss",
+       8: "sub_ddddddddmmmmmmmmssssssss"}
 ADD = {2: "add_ssaaaa", 3: "add_sssaaaaaa", 4: "add_ssssaaaaaaaa",
-       5: "add_sssssaaaaaaaaaa", 6: "add_ssssssaaaaaaaaaaaa"}
+       5: "add_sssssaaaaaaaaaa", 6: "add_ssssssaaaaaaaaaaaa",
+       7: "add_sssssssaaaaaaaaaaaaaa"}
 
 
 def emit(o, n):
