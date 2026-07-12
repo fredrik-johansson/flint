@@ -2223,3 +2223,15 @@ measurement, and the timing loop cycles over 64 random inputs so the
 branchy reductions pay their real misprediction costs.  A full exp
 run holds 2.0-4.0x over arb through n = 477 (30528 bits, 9190
 digits) without arb ever winning.
+
+### authoritative large-n tables (full-depth run)
+
+The container-tuned tables were replaced by a run on real hardware
+with nmax deep enough that every function reaches the r = 768 end of
+the ladder (exp crosses at n = 567, log1p at 1004, atan at 1483,
+trig at 1450).  The container run had truncated several ladders --
+its nmax of 640 hid the upper rungs -- and its noisy timings placed
+some crossovers early (exp r = 256: 163 vs 100 on quiet hardware).
+Selection spot-checked across all boundaries: the opt-file constants
+serve n <= 7 (<= 12 for trig), the ladder takes over exactly at the
+tabulated thresholds, and everything saturates at 768.
