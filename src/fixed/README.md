@@ -1936,3 +1936,37 @@ as present ("none required") -- comment the corresponding
 FLINT_HAVE_NATIVE_mpn_* lines out of src/config.h (NOT
 src/flint-config.h, which does not carry these).  And the merged-object
 ld -r step needs make LD="ld -m elf_i386" or it emits elf64 stubs.
+
+## First division normalized too; n = 1 reconstruction in REGISTERS
+
+Two more shipped on top of the reciprocal tail.
+
+FIRST DIVISION HALVED (all n).  t = (wy + wx u)/(wx - wy u) had the
+same disease as the old tail: denominator in (0.72, 1.17), so its top
+limb is 0 or 1 and mpn_tdiv_qr either gets trimmed or normalizes
+internally.  The numerator is t < tan(1/2) = 0.5464 times the
+denominator, hence < 0.64 and never uses ITS unit limb -- so when the
+denominator reaches one, halve BOTH: the divisor becomes an n-limb
+top-bit-set value in every case, at <= 2 ulp of extra floor.
+_fixed_divide now serves only the u = sin/cos fallback division.
+
+n = 1 IN REGISTERS (open item 4, first size).  After the reduction the
+whole call is straight-line: the rotation and series already were, and
+the reconstruction becomes two umul_ppmm chains (products against wx
+and wy, unit limbs 0/1 handled by conditional adds) and one udiv_qrnnd
+per division, each divisor rounded to 64 normalized bits by the same
+conditional halving.  Errors 7/5/16 ulp (sin/cos/tan) at 200k points
+against budgets 152/288.
+
+MEASURED, whole call (one process, ratio = arb / fixed):
+    n            1     2     3     4     5     6     7     8
+    sin_cos ns  42.4 144.4 253.9 329.4 418.2 539.9
+    sin_cos   4.91  2.01  1.56  1.64  1.70  1.52  0.91  1.16
+    tan       6.91  3.03  2.19  2.27  2.22  1.99  1.17  1.38
+n = 1 fell from 99 to 42 ns -- the mpn dispatch and buffer traffic WAS
+two thirds of the call.  Extending the register reconstruction to
+n = 2..4 (via a generator in the shape of gen_fixed_tan_rotate.py,
+using the 2x2/3x3 forms of hand_mulhi.inc and preinv 3/2 division
+steps) is the natural next step; the n = 1 result bounds what it is
+worth.  8/8 both word sizes; canary clean; production errors at
+n = 1..6 measured 5..72 ulp at 20k points per size.

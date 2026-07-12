@@ -10,6 +10,7 @@
 */
 
 #include "flint.h"
+#include "longlong.h"
 #include "mpn_extras.h"
 #include "fixed.h"
 
@@ -97,6 +98,129 @@ _fixed_divide(nn_ptr q, nn_ptr num, slong nn, nn_srcptr den, slong dn,
     mpn_tdiv_qr(q, scratch, 0, num, nn, den, dn);
 }
 
+#if FLINT_BITS == 64
+
+/* n = 1 without a single mpn call past the shared reduction: the
+   rotation and series were already in registers, and here the whole
+   reconstruction follows -- the two products against wx and wy are
+   umul_ppmm chains, and each division collapses to one udiv_qrnnd
+   against a divisor rounded to 64 normalized bits (the numerator and
+   denominator of t are conditionally halved together when the
+   denominator reaches one, dropping its unit limb; the sin/cos and
+   tan divisors are normalized by the same halving as in the generic
+   tail).  The roundings cost at most ~3 ulp against budgets of
+   6r + 128 and 8r + 256.  Measured at roughly a THIRD of the cost of
+   the generic path at this size: the mpn dispatch and buffer traffic
+   dominated the call. */
+static void
+_fixed_tan_halfangle_1(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x)
+{
+    slong num, nc;
+    int r = _fixed_tan_opt_r[1];
+    ulong t[1], wx[2], wy[2];
+    ulong U, X0, X1, Y0, ph, pl, qh, ql, n1, n0, T1, T0, D1, D0;
+    ulong dh, nh, nl, Q, R, rr, T, s;
+    slong * used;
+    TMP_INIT;
+
+    _fixed_atans_ensure(1, r);
+    nc = _fixed_atans_n;
+
+    TMP_START;
+    used = TMP_ALLOC(FIXED_BITWISE_REDUCE_USED_ALLOC(r) * sizeof(slong));
+
+    t[0] = x[0] >> 1;
+    num = _fixed_bitwise_reduce(t, 1, r, 1, _fixed_atans, nc, used);
+    _fixed_tan_rotate_tab[1](wx, wy, used, num);
+
+    _fixed_tan_rs_opt_1(t, t);          /* u = tan(t') */
+    U = t[0];
+
+    X0 = wx[0]; X1 = wx[1]; Y0 = wy[0];
+
+    /* numerator wy + wx u and denominator wx - wy u, each a fraction
+       limb plus a unit limb that is 0 or 1 */
+    umul_ppmm(ph, pl, X0, U);
+    add_ssaaaa(n1, n0, UWORD(0), ph, UWORD(0), X1 ? U : UWORD(0));
+    add_ssaaaa(T1, T0, n1, n0, UWORD(0), Y0);
+    umul_ppmm(qh, ql, Y0, U);
+    sub_ddmmss(D1, D0, X1, X0, UWORD(0), qh);
+    (void) pl; (void) ql; (void) T1;
+
+    /* t: the numerator t (wx - wy u) < 0.64 never uses its unit limb;
+       when the denominator reaches one, halve both */
+    if (D1)
+    {
+        dh = (UWORD(1) << (FLINT_BITS - 1)) | (D0 >> 1);
+        nh = T0 >> 1;
+        nl = T0 << (FLINT_BITS - 1);
+    }
+    else
+    {
+        dh = D0;
+        nh = T0;
+        nl = 0;
+    }
+    udiv_qrnnd(Q, rr, nh, nl, dh);
+
+    T = n_mulhi(Q, Q);                  /* t^2 */
+
+    if (ysin != NULL || ycos != NULL)
+    {
+        if (T == 0)
+        {
+            if (ysin != NULL)
+            {
+                ysin[1] = Q >> (FLINT_BITS - 1);
+                ysin[0] = Q << 1;       /* sin = 2t to within one ulp */
+            }
+            if (ycos != NULL)
+            {
+                ycos[0] = 0;
+                ycos[1] = 1;            /* cos = 1 exactly */
+            }
+        }
+        else
+        {
+            /* R = 1/(1 + t^2) = (2^127 - 1) / ((1 + t^2)/2) */
+            udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0),
+                (UWORD(1) << (FLINT_BITS - 1)) | (T >> 1));
+            if (ysin != NULL)
+            {
+                s = n_mulhi(Q, R);      /* sin = 2 t R */
+                ysin[1] = s >> (FLINT_BITS - 1);
+                ysin[0] = s << 1;
+            }
+            if (ycos != NULL)
+            {
+                ycos[0] = n_mulhi(-T, R);   /* cos = (1 - t^2) R */
+                ycos[1] = 0;
+            }
+        }
+    }
+
+    if (ytan != NULL)
+    {
+        if (T == 0)
+        {
+            ytan[1] = Q >> (FLINT_BITS - 1);
+            ytan[0] = Q << 1;           /* tan = 2t to within one ulp */
+        }
+        else
+        {
+            /* tan/2 = t/(1 - t^2), then one doubling bit shift */
+            udiv_qrnnd(s, rr, Q, UWORD(0), -T);
+            ytan[1] = s >> (FLINT_BITS - 1);
+            ytan[0] = s << 1;
+        }
+    }
+
+    TMP_END;
+}
+
+#endif
+
 int
 _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     nn_srcptr x, slong n, int r)
@@ -108,6 +232,14 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
 
     if (n < 1)
         return 0;
+
+#if FLINT_BITS == 64
+    if (n == 1 && r == 0)
+    {
+        _fixed_tan_halfangle_1(ysin, ycos, ytan, x);
+        return 1;
+    }
+#endif
 
     /* the sizes with a tangent series of their own take the parameter
        it was built for; the rest take the caller's (at least 32, the
@@ -217,9 +349,21 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     flint_mpn_mul(N, wy, wn, u, n);
     mpn_sub_n(D, wx, N + n, wn);            /* denominator */
 
+    /* The denominator sits in (0.72, 1.17) and the numerator, being
+       t < tan(1/2) = 0.5464 times it, below 0.64: when the denominator
+       reaches one, halving both leaves the quotient alone and drops
+       the unit limbs, so the divisor is ALWAYS an n-limb value with
+       its top bit set -- no trimming, and mpn_tdiv_qr skips its
+       internal normalization shifts.  (Costs at most 2 ulp of floor
+       against the unhalved division.) */
+    if (D[n])
+    {
+        mpn_rshift(D, D, wn, 1);
+        mpn_rshift(T, T, n, 1);
+    }
     flint_mpn_zero(N, n);
-    flint_mpn_copyi(N + n, T, wn);
-    _fixed_divide(Q, N, wn + n, D, wn, sc);
+    flint_mpn_copyi(N + n, T, n);
+    mpn_tdiv_qr(Q, sc, 0, N, 2 * n, D, n);
     /* t = (Q, n): below tan(1/2) < 0.5464, so the higher limbs vanish */
 
     /* the one squaring, shared by all three outputs */
