@@ -13,6 +13,11 @@
 #include "mpn_extras.h"
 #include "fixed.h"
 
+#include "tan_rotate.inc"
+
+/* the sizes for which the rotation is emitted in registers */
+#define FIXED_TAN_ROTATE_NMAX 6
+
 /* The tangent half-angle reconstruction.
 
    The angle is reduced exactly as for fixed_sin_cos_bitwise_rs: with the
@@ -67,7 +72,8 @@ static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
 #else
 
 /* no hand-written tangent series off 64-bit limbs: every size then
-   takes tan(t') from the sine and cosine series with one division */
+   takes tan(t') from the sine and cosine series with one division.
+   The register rotation is portable and is used regardless. */
 #define FIXED_TAN_NMAX 0
 
 #endif
@@ -136,30 +142,44 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     mpn_rshift(t, x, n, 1);
     num = _fixed_bitwise_reduce(t, n, r, 1, _fixed_atans, nc, used);
 
-    /* W = prod (1 + i 2^-i) */
-    flint_mpn_zero(wx, n);
-    wx[n] = 1;
-    flint_mpn_zero(wy, wn);
-
-    for (j = 0; j < num; j++)
+    /* W = prod (1 + i 2^-i).  For the small sizes this runs in
+       registers (tan_rotate.inc): the generic loop below materializes
+       wx >> i and wy >> i into scratch each time round -- zeroing them,
+       filling them with a shift or a copy, then an mpn_sub and an
+       mpn_add -- none of which is necessary when the components fit in
+       registers and the shift is a pair of funnel shifts. */
+    if (n <= FIXED_TAN_ROTATE_NMAX)
     {
-        slong ii = used[j], q = ii / FLINT_BITS;
-        int b = (int) (ii - q * FLINT_BITS);
+        _fixed_tan_rotate_tab[n](wx, wy, used, num);
+    }
+    else
+    {
+        flint_mpn_zero(wx, n);
+        wx[n] = 1;
+        flint_mpn_zero(wy, wn);
 
-        flint_mpn_zero(va, n);
-        flint_mpn_zero(vb, n);
-        if (b != 0)
+        for (j = 0; j < num; j++)
         {
-            mpn_rshift(va, wx + q, wn - q, b);
-            mpn_rshift(vb, wy + q, wn - q, b);
+            slong ii = used[j], q = ii / FLINT_BITS;
+            int b = (int) (ii - q * FLINT_BITS);
+
+            flint_mpn_zero(va + (wn - q), q);
+            flint_mpn_zero(vb + (n - q), q);
+            if (b != 0)
+            {
+                mpn_rshift(va, wx + q, wn - q, b);
+                if (n - q > 0)
+                    mpn_rshift(vb, wy + q, n - q, b);
+            }
+            else
+            {
+                flint_mpn_copyi(va, wx + q, wn - q);
+                if (n - q > 0)
+                    flint_mpn_copyi(vb, wy + q, n - q);
+            }
+            mpn_sub(wx, wx, wn, vb, n);
+            mpn_add(wy, wy, wn, va, n);
         }
-        else
-        {
-            flint_mpn_copyi(va, wx + q, wn - q);
-            flint_mpn_copyi(vb, wy + q, wn - q);
-        }
-        mpn_sub(wx, wx, wn, vb, n);
-        mpn_add(wy, wy, wn, va, n);
     }
 
     /* u = tan(t').  Where a tangent series exists it is used directly;
