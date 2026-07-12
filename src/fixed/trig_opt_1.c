@@ -17,7 +17,7 @@
 #include "longlong.h"
 #include "mpn_extras.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 #include "hand_mulhi.inc"
 #include "tan_rotate.inc"
 

@@ -13,7 +13,7 @@
 #include "longlong.h"
 #include "mpn_extras.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 
 #include "tan_rotate.inc"
 

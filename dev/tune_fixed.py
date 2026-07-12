@@ -75,7 +75,7 @@ class Func:
     def includes(self):
         return ['#include "flint.h"', '#include "longlong.h"',
                 '#include "mpn_extras.h"', '#include "fixed.h"',
-                '#include "fixed_tables.h"']
+                '#include "impl.h"']
 
 
 class ExpFunc(Func):

@@ -13,7 +13,7 @@
 #include "mpn_extras.h"
 #include "arb.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 
 /* exp via bitwise argument reduction: subtract in turn each
    L_i = log(1 + 2^-i), i = 0, 1, ..., r, for which L_i <= x, evaluate
@@ -335,7 +335,7 @@ _fixed_exp_logs_ensure(slong nv, slong rc)
 
 
 /* Read-only view of the table for code outside the library (the
-   thread-local storage itself is not exported; see fixed_tables.h):
+   thread-local storage itself is not exported; see impl.h):
    the top n limbs of entry i, valid until the next ensure call on
    this thread. */
 nn_srcptr

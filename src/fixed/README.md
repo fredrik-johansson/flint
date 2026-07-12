@@ -2360,8 +2360,9 @@ fully rebuilt.)
    The stress test read the cached tables through their thread-local
    pointers, and Windows DLLs cannot export thread-local data.  The
    globals are no longer declared in fixed.h; they live in the new
-   library-internal src/fixed/fixed_tables.h, which every module TU
-   includes, and external code goes through two new accessors,
+   library-internal src/fixed/impl.h (the name FLINT uses for
+   module-private headers, e.g. src/acb/impl.h; only src/*.h are
+   installed), which every module TU includes, and external code goes through two new accessors,
    _fixed_exp_logs_entry(i, n) / _fixed_atans_entry(i, n) (plus
    _..._max_index()), which return the top n limbs of an entry.  The
    emitters emit the new include, so re-emission still reproduces

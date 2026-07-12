@@ -135,7 +135,7 @@ one process, on an idle machine; the arb ratio is the durable metric.
 ### Traps added by the CI round
 
 - **Thread-local data cannot cross a DLL boundary on Windows.**  The
-  cached tables are internal (`src/fixed/fixed_tables.h`); anything
+  cached tables are internal (`src/fixed/impl.h`); anything
   outside the library uses `_fixed_exp_logs_entry` /
   `_fixed_atans_entry`.  Do not re-export them.
 - **The r >= 32 contract binds the TESTS too.**  Random r must start

@@ -12,7 +12,7 @@
 #include "flint.h"
 #include "mpn_extras.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 
 /* log(1 + x) by the dual of the bitwise exp reduction (the L-mode
    BKM recurrence): greedily multiply P (starting from 1) by factors

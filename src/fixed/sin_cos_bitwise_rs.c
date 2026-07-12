@@ -13,7 +13,7 @@
 #include "mpn_extras.h"
 #include "arb.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 
 /* sin and cos on [0, 1) by the rotation analog of the bitwise exp
    algorithm, following the identity of [Joh2022]: with
@@ -300,7 +300,7 @@ _fixed_atans_ensure(slong nv, slong rc)
 }
 
 /* Read-only view of the table for code outside the library (the
-   thread-local storage itself is not exported; see fixed_tables.h):
+   thread-local storage itself is not exported; see impl.h):
    the top n limbs of entry i, valid until the next ensure call on
    this thread. */
 nn_srcptr

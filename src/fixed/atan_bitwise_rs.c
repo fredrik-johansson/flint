@@ -12,7 +12,7 @@
 #include "flint.h"
 #include "mpn_extras.h"
 #include "fixed.h"
-#include "fixed_tables.h"
+#include "impl.h"
 
 /* atan(t) for t in [0, 1) by greedy vectoring (the trigonometric
    analog of the fixed_log1p_bitwise_rs reduction): the vector

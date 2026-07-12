@@ -22,8 +22,8 @@
    limbs with one guard limb below them.  Consumers wanting the top n
    limbs of entry i read tab + i * stride + (stride - n). */
 
-#ifndef FIXED_TABLES_H
-#define FIXED_TABLES_H
+#ifndef FIXED_IMPL_H
+#define FIXED_IMPL_H
 
 #include "flint.h"
 

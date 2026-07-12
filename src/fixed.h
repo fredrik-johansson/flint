@@ -232,7 +232,7 @@ void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n);
    declared here: Windows DLLs cannot export thread-local data, so
    library-external code (the test suite) reads entries through the
    accessors below, while the module's own translation units see the
-   definitions via src/fixed/fixed_tables.h.  _entry(i, n) returns
+   definitions via src/fixed/impl.h.  _entry(i, n) returns
    the top n limbs of entry i, valid until the next _ensure call on
    this thread. */
 void _fixed_exp_logs_ensure(slong nv, slong rc);
