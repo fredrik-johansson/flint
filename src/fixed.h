@@ -94,6 +94,14 @@ void fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
    result carries a unit limb.  r = 0 selects a tuned default. */
 void fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 
+/* Internal: sin, cos and tan of (x, n) in [0, 1) by the tangent
+   half-angle reconstruction; any output may be NULL.  Returns 1 if the
+   size is handled, 0 if the caller must fall back.  Available on both
+   word sizes: off 64-bit limbs there is no hand-written tangent series,
+   and tan(t') comes from the sine and cosine series instead. */
+int _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x, slong n, int r);
+
 /* sin, cos, sinh, cosh of (x, n) -> (res, n + 1); the combined
    versions allow either output to be NULL */
 void fixed_sin_rs(nn_ptr res, nn_srcptr x, slong n);
@@ -205,12 +213,6 @@ void _fixed_tan_rs_opt_3(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_4(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_5(nn_ptr res, nn_srcptr x);
 void _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x);
-
-/* Internal: sin, cos and tan of (x, n) in [0, 1) by the tangent
-   half-angle reconstruction; any output may be NULL.  Returns 1 if the
-   size is handled, 0 if the caller must fall back. */
-int _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
-    nn_srcptr x, slong n);
 #endif
 void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 

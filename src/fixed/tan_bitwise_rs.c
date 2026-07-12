@@ -64,6 +64,14 @@ static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
 
 #define FIXED_TAN_NMAX 6
 
+#else
+
+/* no hand-written tangent series off 64-bit limbs: every size then
+   takes tan(t') from the sine and cosine series with one division */
+#define FIXED_TAN_NMAX 0
+
+#endif
+
 /* divide (num, nn) by (den, dn), whose top limb may be zero -- the
    denominators here sit near one, so mpn_tdiv_qr's normalization
    requirement has to be met by trimming the length rather than assumed */
@@ -79,25 +87,36 @@ _fixed_divide(nn_ptr q, nn_ptr num, slong nn, nn_srcptr den, slong dn,
 
 int
 _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
-    nn_srcptr x, slong n)
+    nn_srcptr x, slong n, int r)
 {
     slong wn = n + 1, nc, num, i, j;
-    int r;
-    nn_ptr t, u, wx, wy, va, vb, T, D, N, Q, sc;
+    nn_ptr t, u, wx, wy, va, vb, T, D, N, Q, sc, ss, cc;
     slong * used;
     TMP_INIT;
 
-    if (n < 1 || n > FIXED_TAN_NMAX)
+    if (n < 1)
         return 0;
 
-    r = _fixed_tan_opt_r[n];
+    /* the sizes with a tangent series of their own take the parameter
+       it was built for; the rest take the caller's (at least 32, the
+       contract of fixed_sin_cos_rs, which supplies tan(t') there) */
+#if FLINT_BITS == 64
+    if (n <= FIXED_TAN_NMAX && r == 0)
+        r = _fixed_tan_opt_r[n];
+    else
+#endif
+    {
+        r = FLINT_MAX(r, 32);
+        r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
+    }
 
     _fixed_atans_ensure(n, r);
     nc = _fixed_atans_n;
 
     TMP_START;
     t = TMP_ALLOC((n + n + wn + wn + n + n + wn + wn
-        + (2 * n + 2) + (2 * n + 2) + (2 * n + 4)) * sizeof(ulong));
+        + (2 * n + 2) + (2 * n + 2) + (2 * n + 4)
+        + (n + 2) + (n + 2)) * sizeof(ulong));
     u = t + n;
     wx = u + n;
     wy = wx + wn;
@@ -108,6 +127,8 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     N = D + wn;                 /* 2n+2: division numerator */
     Q = N + (2 * n + 2);        /* 2n+2: quotient */
     sc = Q + (2 * n + 2);       /* 2n+4: division scratch */
+    ss = sc + (2 * n + 4);      /* n+2 each: sin, cos of the residual */
+    cc = ss + (n + 2);
     used = TMP_ALLOC(FIXED_BITWISE_REDUCE_USED_ALLOC(r) * sizeof(slong));
 
     /* reduce x/2; the residual t' is wanted as it stands, so unlike the
@@ -141,8 +162,26 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
         mpn_add(wy, wy, wn, va, n);
     }
 
-    /* u = tan(t') */
-    _fixed_tan_opt_tab[n](u, t);
+    /* u = tan(t').  Where a tangent series exists it is used directly;
+       beyond that the sine and cosine series of the residual serve, at
+       the price of one division -- the tangent numbers have no tidy
+       recurrence, so tabulating them indefinitely is unattractive,
+       while this costs a single extra division and reuses code that is
+       there anyway. */
+#if FLINT_BITS == 64
+    if (n <= FIXED_TAN_NMAX)
+    {
+        _fixed_tan_opt_tab[n](u, t);
+    }
+    else
+#endif
+    {
+        fixed_sin_cos_rs(ss, cc, t, n);
+        flint_mpn_zero(N, n);
+        flint_mpn_copyi(N + n, ss, wn);
+        _fixed_divide(Q, N, wn + n, cc, wn, sc);
+        flint_mpn_copyi(u, Q, n);
+    }
 
     /* t = (wy + wx u) / (wx - wy u).  wx and wy are (n+1)-limb values
        scaled by 2^-64n, u an n-limb fraction, so the product at that
@@ -206,23 +245,12 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     return 1;
 }
 
-#else
-
-int
-_fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
-    nn_srcptr x, slong n)
-{
-    return 0;
-}
-
-#endif
-
 void
 fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
     FLINT_ASSERT(n >= 1);
 
-    if (r == 0 && _fixed_tan_halfangle(NULL, NULL, res, x, n))
+    if (_fixed_tan_halfangle(NULL, NULL, res, x, n, r))
         return;
 
     /* beyond the sizes with a tangent series of their own: sin and cos
