@@ -17,7 +17,7 @@ measurements and negative results is `src/fixed/README.md`.
 
 ---
 
-## 1. What this session shipped (was: "open work" items 1–3 + half of 4)
+## 1. What earlier sessions shipped
 
 1. **Divisor normalization — DONE, and the old ytan bug explained.**
    It was never the normalization: the old tan division fed a
@@ -134,35 +134,33 @@ one process, on an idle machine; the arb ratio is the durable metric.
 
 ## 4. Open work, in the order I would do it
 
-1. **Extend the register reconstruction to n = 2..4** (rest of old
-   item 4).  The n = 1 result (99 → 42 ns) bounds what it is worth;
-   expect smaller but real wins.  Shape: a generator like
-   `gen_fixed_tan_rotate.py` emitting, per n, the two products against
-   wx/wy (the 2x2/3x3 forms of `hand_mulhi.inc` plus unit-limb
-   conditional adds), the conditional halvings, and the divisions as
-   preinv chains (`flint_mpn_divrem21_preinv` / `udiv_qrnnd` steps
-   against the top divisor limb with a correction — at ≤ 3 ulp the
-   rounded-divisor shortcut used at n = 1 generalizes: dropping the
-   divisor below its top n limbs costs ≤ ~2 ulp).  Validate by ulp
-   against MPFR, not bit-exactness — the roundings differ from the
-   generic path by design.
+(Old items 1 and 2 shipped this session: register reconstruction runs
+through n = 4 -- `dev/gen_fixed_tan_halfangle_small.py` ->
+`tan_halfangle_small.inc`, dispatched at r = 0 -- and n = 7 has its
+own tangent series plus register rotation, with n = 8 getting a series
+too.  The tail was also restructured so that NO tangent is ever
+divided out: A = TT DE, B = DE^2, C = TT^2, sin = 2A/(B+C),
+cos = 1 - 2C/(B+C), tan = 2A/(B-C), one reciprocal per output, and the
+n > 8 fallback forms TT and DE from sin/cos of the residual WITHOUT
+dividing them -- cos t' cancels.  See the last three README entries.)
 
-2. **n = 7 is the only size below arb (0.91×).**  It is the first
-   fallback size: no tangent series (u comes from sin/cos + a
-   division) and the generic rotation loop.  Options, cheapest first:
-   extend `gen_fixed_tan_rotate.py` beyond n = 6 (pure register
-   pressure question); emit tan series for n = 7, 8 (the `_TAN` table
-   in `gen_fixed_trig_hand_mixed.py` has enough entries); or accept it.
+1. **n = 8 register rotation** needs 9-wide add/sub chains that
+   `longlong.h` stops short of (NN_ADD_8/NN_SUB_8 are the widest).
+   Either add the two macros, or emit the unit limb's borrow by a
+   comparison; the n = 7 -> 8 sin_cos step (701 -> 955 ns) says the
+   generic rotation loop costs ~150 ns there.
 
-3. **`mpn_tdiv_qr` itself can be beaten** (Fredrik's note) — after the
-   reciprocal change only ONE tdiv_qr per sin/cos call remains (the t
-   division), so the ceiling shrank; probably not urgent.
+2. **`mpn_tdiv_qr` itself can be beaten** (Fredrik's note) -- after
+   this session exactly ONE tdiv_qr per requested reciprocal remains,
+   so the ceiling is small; a 2n/n schoolbook with a cached top-limb
+   preinverse might still shave the call overhead at n = 2..4, where
+   the division is now the majority of the tail.
 
-4. Cosmetic: patch 0002's commit message still describes the
-   conjugate-ratio construction (a rebase, so left).  The
-   `fixed.rst`/`fixed.h` halves of that item were fixed this session.
+3. Cosmetic: patch 0002's commit message still describes the
+   conjugate-ratio construction (a rebase, so left).
 
 ---
+
 
 ## 5. Verification recipe (run every time)
 

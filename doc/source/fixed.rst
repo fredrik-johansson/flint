@@ -225,21 +225,28 @@ Sine and cosine with bitwise argument reduction
 
     The used indices drive the rotation
     `W = \prod (1 + i 2^{-i})`, two shifts and two add/subtracts per
-    factor (in pure registers for `n \le 6`), and everything is then
+    factor (in pure registers for `n \le 7`), and everything is then
     read off through the tangent half-angle reconstruction described
-    under :func:`fixed_tan_bitwise_rs`: one division for
-    `t = \tan(x/2)` from `W` and `u = \tan(t')`, and, when both
-    outputs are wanted, one reciprocal `R = 1/(1 + t^2)` and one
-    mulhigh per output,
+    under :func:`fixed_tan_bitwise_rs`: with `T = w_y + w_x u` and
+    `D = w_x - w_y u` (whose ratio is `\tan(x/2)`, though the quotient
+    is never formed) and
 
     .. math ::
 
-        \sin x = 2 t R, \qquad \cos x = (1 - t^2) R.
+        A = T D, \qquad B = D^2, \qquad C = T^2,
 
-    Every divisor is arranged, by conditionally halving numerator and
-    denominator together, to be an `n`-limb value with its top bit
-    set, as :func:`mpn_tdiv_qr` wants.  At `n = 1` the whole
-    computation past the reduction runs in registers.
+    each output is ONE reciprocal division and one mulhigh,
+
+    .. math ::
+
+        \sin x = \frac{2A}{B + C}, \qquad \cos x = 1 - \frac{2C}{B + C}.
+
+    Every divisor is arranged, by conditionally halving `T` and `D`
+    together and then shifting by at most two more bits (the exponent
+    folds into the final doubling), to be an `n`-limb value with its
+    top bit set, as :func:`mpn_tdiv_qr` wants.  For `n \le 4` the whole
+    computation past the reduction runs in registers, except that one
+    division.
 
     Passing `r = 0` selects a tuned default.  Otherwise `r \ge 16`:
     values below 32 shorten the reduction further and are served by
@@ -324,8 +331,26 @@ Tangent with bitwise argument reduction
         \cos x = \frac{1 - t^2}{1 + t^2}, \quad
         \tan x = \frac{2t}{1 - t^2},
 
-    all sharing the single squaring `t^2`.  This measures a third to a
-    half faster than the conjugate-ratio reconstruction, and it yields
-    each function separately instead of computing two and discarding
-    one.  Beyond those sizes, `\tan` is obtained from
-    :func:`fixed_sin_cos_bitwise_rs` by one division.
+    where `t` itself is NEVER divided out: with `T = w_y + w_x u`,
+    `D = w_x - w_y u`, `A = TD`, `B = D^2` and `C = T^2` these are
+
+    .. math ::
+
+        \sin x = \frac{2A}{B + C}, \quad
+        \cos x = 1 - \frac{2C}{B + C}, \quad
+        \tan x = \frac{2A}{B - C},
+
+    one reciprocal division and one mulhigh per output.  This measures
+    a third to a half faster than the conjugate-ratio reconstruction,
+    and it yields each function separately instead of computing two
+    and discarding one.  Beyond the sizes with a tangent series the
+    residual contributes through `\sin` and `\cos` of `t'` WITHOUT
+    their quotient being formed: writing `\cos t' = 1 - g`,
+
+    .. math ::
+
+        T = w_y + w_x \sin t' - w_y g, \qquad
+        D = w_x - w_x g - w_y \sin t',
+
+    four small multiplications, and `\cos t'` cancels in every ratio
+    just as `|W|` does.
