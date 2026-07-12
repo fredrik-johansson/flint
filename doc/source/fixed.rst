@@ -301,3 +301,45 @@ Inverse tangent with bitwise argument reduction
     Generated register implementations (the vectoring in straight-line
     masked borrow chains, bit-for-bit identical to the generic code)
     serve `n \le 7`.
+
+Tangent with bitwise argument reduction
+-------------------------------------------------------------------------------
+
+.. macro:: FIXED_TAN_BITWISE_RS_MAX_ERR(n, r)
+
+    Bound, in ulp, for the error of :func:`fixed_tan_bitwise_rs`,
+    currently `8 r + 256`.
+
+.. function:: void fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
+
+    Sets `(res, n+1)` to an approximation of `\tan((x, n))` for any
+    `0 \le x < 1`.  Since `\tan(1) < 1.56` the result carries a unit
+    limb.
+
+    For the sizes with a tangent series of their own this uses the
+    TANGENT HALF-ANGLE reconstruction, which also serves
+    :func:`fixed_sin_cos_bitwise_rs` there.  The angle is reduced
+    exactly as before, and the rotation `W = \prod (1 + i 2^{-i})` is
+    built as before; but since `\arg W = \sum A_i`, one has
+    `\tan(\sum A_i) = w_y / w_x`, and because the tangent is a RATIO
+    the growth of `|W|` cancels.  No `|W|^2`, no normalization, no
+    unimodular correction is needed.  With `u = \tan(t')` the addition
+    formula gives the half-angle tangent in a single division,
+
+    .. math ::
+
+        t = \tan(x/2) = \frac{w_y + w_x u}{w_x - w_y u},
+
+    whose denominator lies near `w_x \in (0.72, 1.17)`, and then
+
+    .. math ::
+
+        \sin x = \frac{2t}{1 + t^2}, \quad
+        \cos x = \frac{1 - t^2}{1 + t^2}, \quad
+        \tan x = \frac{2t}{1 - t^2},
+
+    all sharing the single squaring `t^2`.  This measures a third to a
+    half faster than the conjugate-ratio reconstruction, and it yields
+    each function separately instead of computing two and discarding
+    one.  Beyond those sizes, `\tan` is obtained from
+    :func:`fixed_sin_cos_bitwise_rs` by one division.

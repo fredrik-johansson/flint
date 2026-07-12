@@ -17,6 +17,7 @@
 #include "t-exp_rs.c"
 #include "t-log1p_bitwise_rs.c"
 #include "t-sin_cos_bitwise_rs.c"
+#include "t-tan_bitwise_rs.c"
 #include "t-trig_rs.c"
 
 /* Array of test functions ***************************************************/
@@ -29,6 +30,7 @@ test_struct tests[] =
     TEST_FUNCTION(fixed_exp_rs),
     TEST_FUNCTION(fixed_log1p_bitwise_rs),
     TEST_FUNCTION(fixed_sin_cos_bitwise_rs),
+    TEST_FUNCTION(fixed_tan_bitwise_rs),
     TEST_FUNCTION(fixed_trig_rs)
 };
 

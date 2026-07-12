@@ -45,6 +45,8 @@ extern "C" {
     (6 * (slong) ((r) ? (r) : 512) + 128)
 #define FIXED_ATAN_BITWISE_RS_MAX_ERR(n, r) \
     (4 * (slong) ((r) ? (r) : 512) + 64)
+#define FIXED_TAN_BITWISE_RS_MAX_ERR(n, r) \
+    (8 * (slong) ((r) ? (r) : 512) + 256)
 #define FIXED_SIN_RS_MAX_ERR(n) 15
 #define FIXED_COS_RS_MAX_ERR(n) 15
 #define FIXED_SIN_COS_RS_MAX_ERR(n) 15
@@ -87,6 +89,10 @@ void fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
 /* atan((x, n)) -> (res, n) for x in [0, 1), by greedy vectoring;
    r = 0 selects a tuned default; otherwise r >= 16. */
 void fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
+
+/* tan((x, n)) -> (res, n + 1) for x in [0, 1); tan(1) < 1.56, so the
+   result carries a unit limb.  r = 0 selects a tuned default. */
+void fixed_tan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 
 /* sin, cos, sinh, cosh of (x, n) -> (res, n + 1); the combined
    versions allow either output to be NULL */
@@ -189,6 +195,22 @@ void _fixed_sin_cos_rs_opt_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 void _fixed_sin_cos_rs_opt_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 void _fixed_sin_cos_rs_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 void _fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+
+/* Internal: tan series for the half-angle reconstruction, one per
+   n <= 6, each built for the reduction parameter hardcoded alongside
+   it in tan_bitwise_rs.c. */
+void _fixed_tan_rs_opt_1(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_3(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_4(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_5(nn_ptr res, nn_srcptr x);
+void _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x);
+
+/* Internal: sin, cos and tan of (x, n) in [0, 1) by the tangent
+   half-angle reconstruction; any output may be NULL.  Returns 1 if the
+   size is handled, 0 if the caller must fall back. */
+int _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x, slong n);
 #endif
 void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 
