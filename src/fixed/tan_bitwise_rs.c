@@ -206,9 +206,9 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     /* t = (wy + wx u) / (wx - wy u).  wx and wy are (n+1)-limb values
        scaled by 2^-64n, u an n-limb fraction, so the product at that
        scale is the top n+1 limbs of the (2n+1)-limb integer product. */
-    mpn_mul(N, wx, wn, u, n);
+    flint_mpn_mul(N, wx, wn, u, n);
     mpn_add_n(T, wy, N + n, wn);            /* numerator   */
-    mpn_mul(N, wy, wn, u, n);
+    flint_mpn_mul(N, wy, wn, u, n);
     mpn_sub_n(D, wx, N + n, wn);            /* denominator */
 
     flint_mpn_zero(N, n);
