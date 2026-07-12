@@ -175,11 +175,14 @@ dividing them -- cos t' cancels.  See the last three README entries.)
    preinverse might still shave the call overhead at n = 2..4, where
    the division is now the majority of the tail.
 
-3. **Precomputation time.**  The angle and logarithm tables are
-   built lazily on first use per (n, r); the tuner and profiler now
-   deliberately warm them before measuring, which also means nobody
-   is watching their cost.  Worth profiling and optimizing at some
-   point (they are quadratic-ish in the table depth).
+3. **Precomputation: reimplement the binary splitting with mpn.**
+   The tables are now built in two tiers (bsplit for small i,
+   fixed-point mpn multi-summation in the target storage for large
+   i; 2-16x faster overall) but the bsplit tier still goes through
+   arb.  A native mpn implementation, and the prototype's direct
+   log(1 + p/q) series form for very high precision, are the
+   remaining wins; TODO notes sit in exp_bitwise_rs.c and
+   sin_cos_bitwise_rs.c.
 
 4. **Retune with the new tuner.**  Every shipped r was carried over
    by --pin; a fresh sweep per (function, size) through

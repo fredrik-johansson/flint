@@ -2235,3 +2235,54 @@ some crossovers early (exp r = 256: 163 vs 100 on quiet hardware).
 Selection spot-checked across all boundaries: the opt-file constants
 serve n <= 7 (<= 12 for trig), the ladder takes over exactly at the
 tabulated thresholds, and everything saturates at 768.
+
+### two-tier table precomputation
+
+The log(1 + 2^-i) and atan(2^-i) tables were built with one arb call
+per entry; per the prototype (newfastexp2.c, prolog_1) they are now
+built in two tiers, with the split at about sqrt(precision) bits
+(everything through binary splitting above 65536 bits):
+
+- **Small i: binary splitting.**  For the logarithms, i <= 6 factors
+  over the primes up to 17, so seven bsplit logs
+  (arb_log_primes_vec_bsplit) serve all of them, and beyond that
+  log(1 + 2^-i) = 2 atanh(1/(2^(i+1) + 1)) through
+  arb_atan_frac_bsplit.  For the arctangents, i <= 3 falls out of
+  the first four Gaussian-prime angles {atan 1, atan 2, atan(3/2),
+  atan 4} -- atan(1/2) = 2 theta_0 - theta_1, atan(1/4) = 2 theta_0
+  - theta_3, atan(1/8) = theta_1 - theta_2 (from 8 + i =
+  -i(1+2i)(3+2i)) -- and the direct series bsplit takes over.  TODO
+  (noted in both files): reimplement the binary splitting natively
+  with mpn arithmetic, and restore the prototype's direct
+  log(1 + p/q) series form for very high precision; arb is fine for
+  now and this tier is not the bottleneck.
+
+- **Large i: fixed-point mpn multi-summation, directly in the target
+  storage.**  Every table entry now carries one guard limb below its
+  value limbs (the stride variables _fixed_exp_logs_n /
+  _fixed_atans_n count it; consumers, which read the top n limbs of
+  each entry, needed NO changes).  The series are summed at the full
+  storage width: grouping the log series by the odd part of the
+  index makes every term a shift of floor(2^wp / k) for odd k -- and
+  that ONE division serves every i at once, so the whole tier costs
+  about wp / (2 iter_start) single-limb divisions plus shifted
+  additions.  The atan series is purely alternating over odd k and
+  is simpler still.
+
+  One-sidedness bug found and fixed on the way: for i past wp/2
+  every correction term falls below the guard limb and the raw sum
+  lands at exactly 2^-i, violating the strict tab_i < 2^-i invariant
+  the reductions rely on (t-log1p caught it at n = 3, r = 176 via
+  entry i = 128).  Subtracted terms now round UP (one extra guard
+  ulp for the dropped bits) and the leading term carries a blanket
+  two-guard-ulp bias covering the sub-guard tail, so every entry is
+  the exact floor or one ulp below -- the historical contract.
+
+Fresh-build timings (this container, us): logs/atans at (nv, rc):
+(4,32): 687/118 -> 320/52; (64,192): 8642/8804 -> 1313/1424;
+(256,448): 106995/119893 -> 15503/12825; (1024,768):
+2096931/2470287 -> 211453/156494.  That is 2-16x, growing with
+precision.  Verified: table entries against arb (floor or floor-1,
+one-sided) to rc = 176; 8/8 tests at multiplier 25 on both word
+sizes; canary; MPFR product check; explicit-r path timing unchanged
+(852 vs 858 ns, atan n = 3 r = 48, old vs new library).

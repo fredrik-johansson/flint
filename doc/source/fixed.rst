@@ -391,6 +391,13 @@ The selection is queryable:
     compile-time constant of the specialized per-size implementation
     where one exists, the tuned ladder value beyond.
 
+The shared logarithm and arctangent tables are built on demand in
+two tiers: binary splitting for small `i` (through arb for now) and
+a fixed-point multi-summation for large `i`, in which one reciprocal
+per odd series index serves every table entry at once; each cached
+entry carries a guard limb below its value limbs, and entries are
+one-sided (the exact floor or one ulp below).
+
 ``src/fixed/profile/p-fixed FUNC [nmax]`` prints, for
 `n = 1, \ldots, 12` and then geometric steps of about `4/3`, the
 precision in bits and digits, the selected `r`, the per-call times of

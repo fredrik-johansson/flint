@@ -89,18 +89,100 @@ _fixed_atans_cleanup(void)
 
 #define ATANS_A(i) (_fixed_atans + (i) * _fixed_atans_n)
 
-void
-_fixed_atans_ensure(slong nc, slong rc)
+/* floor(x 2^(FLINT_BITS nc)) of a nonnegative arb into nc limbs */
+static void
+_fixed_tab_store(nn_ptr e, const arb_t x, slong nc)
 {
-    arb_t v, t;
     arf_t lb;
     fmpz_t f;
-    slong i, prec;
 
-    if (nc <= _fixed_atans_n && rc <= _fixed_atans_r)
+    arf_init(lb);
+    fmpz_init(f);
+    arb_get_lbound_arf(lb, x, FLINT_BITS * nc + 30);
+    arf_mul_2exp_si(lb, lb, FLINT_BITS * nc);
+    arf_get_fmpz(f, lb, ARF_RND_FLOOR);
+    FLINT_ASSERT(fmpz_sgn(f) >= 0);
+    fmpz_get_ui_array(e, nc, f);
+    arf_clear(lb);
+    fmpz_clear(f);
+}
+
+/* acc (nc limbs) += or -= t >> s; the bits shifted below position 0
+   fall below the guard limb and are dropped.  scratch: nc limbs. */
+static void
+_fixed_tab_addshift(nn_ptr acc, nn_srcptr t, slong nc, slong s,
+    int sub, nn_ptr scratch)
+{
+    slong q = s / FLINT_BITS, m = nc - q;
+    int b = (int) (s % FLINT_BITS);
+    nn_srcptr v;
+
+    if (m <= 0)
         return;
 
-    nc = FLINT_MAX(nc, _fixed_atans_n);
+    if (b == 0)
+        v = t + q;
+    else
+    {
+        mpn_rshift(scratch, t + q, m, b);
+        v = scratch;
+    }
+
+    if (sub)
+    {
+        /* subtracted terms round UP (one extra guard ulp stands in
+           for the dropped bits): together with the blanket bias
+           applied to the leading term this keeps every entry AT OR
+           BELOW the exact value, preserving the strict tab_i < 2^-i
+           invariant of the reductions */
+        mpn_sub(acc, acc, nc, v, m);
+        mpn_sub_1(acc, acc, nc, 1);
+    }
+    else
+        mpn_add(acc, acc, nc, v, m);
+}
+
+/* The table entries A_i = atan(2^-i), each nc limbs (the value
+   scaled by 2^(FLINT_BITS nc), whose bottom limb is a guard), built
+   in the same two tiers as the logarithm table in exp_bitwise_rs.c.
+
+   Small i: binary splitting.  atan(2^-i) for i <= 3 falls out of the
+   first four Gaussian-prime angles theta = {atan 1, atan 2,
+   atan(3/2), atan 4}:
+
+       atan(1)   = theta_0
+       atan(1/2) = 2 theta_0 - theta_1        (complement of atan 2)
+       atan(1/4) = 2 theta_0 - theta_3        (complement of atan 4)
+       atan(1/8) = theta_1 - theta_2          (8 + i = -i(1+2i)(3+2i))
+
+   and beyond that arb_atan_frac_bsplit sums the series of 1/2^i
+   directly.  TODO: reimplement the binary splitting natively with
+   mpn arithmetic; arb is fine for now, and this tier is not the
+   bottleneck.
+
+   Large i: fixed-point multi-summation of
+
+       atan(2^-i) = sum_{j >= 0} (-1)^j 2^(-i(2j+1)) / (2j+1),
+
+   simpler than the logarithm's: every term has an odd denominator,
+   so ONE reciprocal t = floor(2^wp / k) per odd k serves every i,
+   added when k = 1 mod 4 and subtracted when k = 3 mod 4, and the
+   number of divisions is about wp / (2 iter_start) for the whole
+   tier.  The floored terms err below one guard ulp each, leaving
+   the value limbs equal to the exact truncation of A_i except when
+   A_i lies within about 2^-50 of a limb boundary, and then by one
+   ulp at most, which the reduction's accounting absorbs on either
+   side. */
+void
+_fixed_atans_ensure(slong nv, slong rc)
+{
+    slong nc, i, k, prec, iter_start;
+    nn_ptr t, scratch, num;
+
+    if (nv + 1 <= _fixed_atans_n && rc <= _fixed_atans_r)
+        return;
+
+    nc = FLINT_MAX(nv + 1, _fixed_atans_n);
     rc = FLINT_MAX(rc, _fixed_atans_r);
 
     flint_free(_fixed_atans);
@@ -108,35 +190,103 @@ _fixed_atans_ensure(slong nc, slong rc)
     _fixed_atans_n = nc;
     _fixed_atans_r = rc;
 
-    prec = FLINT_BITS * nc + 64;
+    prec = FLINT_BITS * (nc - 1);
 
-    arb_init(v);
-    arb_init(t);
-    arf_init(lb);
-    fmpz_init(f);
+    if (prec <= 65536)
+        iter_start = FLINT_MIN(n_sqrt(prec), rc + 1);
+    else
+        iter_start = rc + 1;
 
-    /* entry 0 is unused (the reductions start at i = 1) but is
-       tabulated anyway: A_0 = atan(1) = pi/4 < 1 fits the fraction
-       format */
-    for (i = 0; i <= rc; i++)
+    /* tier 1: binary splitting; entry 0 = atan(1) = pi/4 is unused
+       by the reductions (they start at i = 1) but tabulated anyway */
     {
-        /* A_i = atan(2^-i), truncated (floor) to nc fraction
-           limbs */
-        arb_one(v);
-        arb_mul_2exp_si(v, v, -i);
-        arb_atan(t, v, prec);
+        arb_ptr th;
+        arb_t x;
+        fmpz_t p, q;
+        slong wp = FLINT_BITS * nc + 30;
 
-        arb_get_lbound_arf(lb, t, prec);
-        arf_mul_2exp_si(lb, lb, FLINT_BITS * nc);
-        arf_get_fmpz(f, lb, ARF_RND_FLOOR);
-        FLINT_ASSERT(fmpz_sgn(f) >= 0);
-        fmpz_get_ui_array(ATANS_A(i), nc, f);
+        arb_init(x);
+        fmpz_init(p);
+        fmpz_init(q);
+        th = _arb_vec_init(4);
+
+        arb_atan_gauss_primes_vec_bsplit(th, 4, wp);
+
+        for (i = 0; i < iter_start && i <= rc; i++)
+        {
+            switch (i)
+            {
+                case 0:
+                    arb_set(x, th + 0);
+                    break;
+                case 1:
+                    arb_mul_2exp_si(x, th + 0, 1);
+                    arb_sub(x, x, th + 1, wp);
+                    break;
+                case 2:
+                    arb_mul_2exp_si(x, th + 0, 1);
+                    arb_sub(x, x, th + 3, wp);
+                    break;
+                case 3:
+                    arb_sub(x, th + 1, th + 2, wp);
+                    break;
+                default:
+                    fmpz_one(p);
+                    fmpz_one(q);
+                    fmpz_mul_2exp(q, q, i);
+                    arb_atan_frac_bsplit(x, p, q, 0, wp);
+                    break;
+            }
+
+            _fixed_tab_store(ATANS_A(i), x, nc);
+        }
+
+        _arb_vec_clear(th, 4);
+        arb_clear(x);
+        fmpz_clear(p);
+        fmpz_clear(q);
     }
 
-    arb_clear(v);
-    arb_clear(t);
-    arf_clear(lb);
-    fmpz_clear(f);
+    /* tier 2: fixed-point multi-summation, directly in the target
+       storage */
+    if (iter_start <= rc)
+    {
+        slong wp = FLINT_BITS * nc;
+
+        t = flint_malloc((nc + 2) * sizeof(ulong));
+        scratch = flint_malloc(nc * sizeof(ulong));
+        num = flint_malloc((nc + 1) * sizeof(ulong));
+
+        /* the k = 1 term is the single bit 2^-i */
+        for (i = iter_start; i <= rc; i++)
+        {
+            nn_ptr acc = ATANS_A(i);
+
+            flint_mpn_zero(acc, nc);
+            acc[(wp - i) / FLINT_BITS] =
+                UWORD(1) << ((wp - i) % FLINT_BITS);
+            /* blanket bias: the series terms too small to represent
+               (below the guard limb) sum to less than two guard
+               ulps; over-subtracting them keeps the entry one-sided */
+            mpn_sub_1(acc, acc, nc, 2);
+        }
+
+        for (k = 3; k * iter_start < wp; k += 2)
+        {
+            flint_mpn_zero(num, nc);
+            num[nc] = 1;                    /* 2^wp */
+            mpn_divrem_1(t, 0, num, nc + 1, (ulong) k);
+            FLINT_ASSERT(t[nc] == 0);
+
+            for (i = iter_start; i <= rc && i * k < wp; i++)
+                _fixed_tab_addshift(ATANS_A(i), t, nc, i * k,
+                    (k & 3) == 3, scratch);
+        }
+
+        flint_free(t);
+        flint_free(scratch);
+        flint_free(num);
+    }
 
     if (!_fixed_atans_cleanup_registered)
     {
