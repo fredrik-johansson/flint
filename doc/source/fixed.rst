@@ -206,54 +206,40 @@ Sine and cosine with bitwise argument reduction
 
     Sets `(ysin, n+1)` and `(ycos, n+1)` to approximations of
     `\sin((x, n))` and `\cos((x, n))` for any `0 \le x < 1`; either
-    output may be ``NULL``.  The reduction is the rotation analog of
-    :func:`fixed_exp_bitwise_rs`, based on the identity of [Joh2022]:
-    with `\alpha = 2 \operatorname{atan}(b/a)`,
+    output may be ``NULL``.  The greedy reduction with the cached
+    angles `A_i = \operatorname{atan}(2^{-i})` is applied to `x/2`
+    for `i = 1, \ldots, r`,
 
     .. math ::
 
-        e^{ix} = e^{i(x - k\alpha)}
-            \left( \frac{a + bi}{a - bi} \right)^k,
+        x/2 = \sum_{i \in \text{used}} A_i + t', \qquad t' < 2^{-r}.
 
-    whose rotation unit is a ratio of complex conjugates and is
-    therefore *exactly* unimodular, so that -- unlike a CORDIC
-    rotation -- no normalization by the growing modulus is needed.
-    Taking `a = 2^i`, `b = 1` gives the rotation angles
-    `2 \operatorname{atan}(2^{-i})`.  The cached table, however,
-    holds the *undoubled* angles
-    `A_i = \operatorname{atan}(2^{-i})`, and the greedy reduction is
-    applied to `x/2` for `i = 1, \ldots, r+1`.  This is not merely
-    an economy of one table shared with
+    The halved argument is not an accident of table sharing with
     :func:`fixed_atan_bitwise_rs`: the windowed decision model of
     the shared reduction requires table entries below `2^{-i}`,
-    which `A_i` satisfies -- as `\log(1 + 2^{-i})` does -- but
-    `2 \operatorname{atan}(2^{-i}) \approx 2^{1-i}` does not.
-    Concavity of `\operatorname{atan}` gives `A_{i-1} < 2 A_i`, so
-    each index is used at most once; writing
-    `x/2 = \sum A_i + t'`, the residual angle is `2 t'`, whence the
-    reduction to `r + 1`.  The sine and cosine of
-    the residual `t < 2^{-r}` are then evaluated by
-    :func:`fixed_sin_cos_rs`, or, once the series is long enough to
-    amortize it, by :func:`fixed_sin_rs` together with
-    `\cos t = \sqrt{1 - \sin^2 t}` at the cost of one squaring and
-    one integer square root -- the same tradeoff as the `\sinh` path
-    of :func:`fixed_exp_bitwise_rs`.
+    which `A_i` satisfies -- as `\log(1 + 2^{-i})` does -- but the
+    doubled angles `2 \operatorname{atan}(2^{-i}) \approx 2^{1-i}`
+    of the underlying rotation identity do not.  Concavity of
+    `\operatorname{atan}` gives `A_{i-1} < 2 A_i`, so each index is
+    used at most once.
 
-    The rotation is applied in deferred form: with
-    `W = \prod (1 + i 2^{-i})` over the used indices (the real
-    denominators `2^i` cancel between `W` and its conjugate), each
-    factor costs two shifts and two add/subtracts, and the result is
-    read off from
+    The used indices drive the rotation
+    `W = \prod (1 + i 2^{-i})`, two shifts and two add/subtracts per
+    factor (in pure registers for `n \le 6`), and everything is then
+    read off through the tangent half-angle reconstruction described
+    under :func:`fixed_tan_bitwise_rs`: one division for
+    `t = \tan(x/2)` from `W` and `u = \tan(t')`, and, when both
+    outputs are wanted, one reciprocal `R = 1/(1 + t^2)` and one
+    mulhigh per output,
 
     .. math ::
 
-        (\cos x, \sin x) = (c + is) \, W^2 / |W|^2,
+        \sin x = 2 t R, \qquad \cos x = (1 - t^2) R.
 
-    where two squarings supply `\operatorname{Re} W^2` and `|W|^2`
-    from the same pair.  Since the *same* truncated `W` is used
-    against its own conjugate, the reconstruction is self
-    normalizing: truncations perturb only the angle of the
-    correction, never its modulus.
+    Every divisor is arranged, by conditionally halving numerator and
+    denominator together, to be an `n`-limb value with its top bit
+    set, as :func:`mpn_tdiv_qr` wants.  At `n = 1` the whole
+    computation past the reduction runs in registers.
 
     Passing `r = 0` selects a tuned default.  Otherwise `r \ge 16`:
     values below 32 shorten the reduction further and are served by

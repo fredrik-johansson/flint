@@ -80,9 +80,10 @@ void fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 void fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 
 /* sin and cos of (x, n) in [0, 1) -> (ysin, n + 1), (ycos, n + 1)
-   (either may be NULL), by greedy reduction with the doubled angles
-   2 atan(2^-i) and unimodular reconstruction; requires n >= 2 on
-   32-bit limbs and r = 0 (tuned default) or r >= 16. */
+   (either may be NULL), by greedy reduction with the angles
+   atan(2^-i) and the tangent half-angle reconstruction (see
+   tan_bitwise_rs.c); requires n >= 2 on 32-bit limbs and r = 0
+   (tuned default) or r >= 16. */
 void fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int r);
 
@@ -162,10 +163,11 @@ void _fixed_exp_logs_ensure(slong nc, slong rc);
 slong _fixed_bitwise_reduce(nn_ptr t, slong wn, int r, slong istart,
     nn_srcptr tab, slong tabn, slong * used);
 
-/* Internal: thread-local cached table of the doubled angles
-   alpha_i = 2 atan(2^-i) (entry 0 is unused and zeroed: pi/2 does
-   not fit the fraction format), shared by fixed_sin_cos_bitwise_rs
-   and fixed_atan_bitwise_rs. */
+/* Internal: thread-local cached table of the angles
+   A_i = atan(2^-i) (entry 0, A_0 = pi/4, is unused by the
+   reductions, which start at i = 1, but fits the fraction format
+   and is tabulated anyway), shared by fixed_sin_cos_bitwise_rs,
+   fixed_tan_bitwise_rs and fixed_atan_bitwise_rs. */
 extern FLINT_TLS_PREFIX nn_ptr _fixed_atans;
 extern FLINT_TLS_PREFIX slong _fixed_atans_n;
 extern FLINT_TLS_PREFIX slong _fixed_atans_r;
