@@ -158,10 +158,12 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
     o("#define AP(ii) (_fixed_atans + (ii) * nc + (nc - %d))" % n)
     o("")
 
-    for c in range(n):
+    cmax = n - 1 if r_const is None else min(n - 1, r_const // 64)
+    for c in range(cmax + 1):
         i0 = 1 if c == 0 else 64 * c
         o("    /* window %d */" % c)
-        guard = "" if c == 0 else "if (r >= %d)\n    " % (64 * c)
+        guard = "" if (c == 0 or r_const is not None) \
+            else "if (r >= %d)\n    " % (64 * c)
         o("    %s{" % guard)
         o("        nn_srcptr Ap;")
         o("")
@@ -189,8 +191,12 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
         o("")
         o("        h = y%d;" % (n - 1 - c))
         o("")
-        o("        for (i = %d; i <= FLINT_MIN((slong) r, %d); i++)"
-          % (i0 + 1, 64 * c + 63))
+        if r_const is None:
+            o("        for (i = %d; i <= FLINT_MIN((slong) r, %d); i++)"
+              % (i0 + 1, 64 * c + 63))
+        else:
+            o("        for (i = %d; i <= %d; i++)"
+              % (i0 + 1, min(r_const, 64 * c + 63)))
         o("        {")
         o("            int b = (int) (i - %d);" % (64 * c))
         o("")
@@ -218,28 +224,45 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
     o("    for (nz = 0; nz < 2; nz++)")
     o("    {")
     o("        nn_srcptr Ap = AP((slong) r);")
-    o("        int b = (int) (r & (FLINT_BITS - 1));")
-    o("")
-    o("        switch (r / FLINT_BITS)")
-    o("        {")
-    for c in range(n):
-        o("        case %d:" % c)
-        if c >= 1:
-            o("            if (b == 0)")
-            o("            {")
+    if r_const is None:
+        o("        int b = (int) (r & (FLINT_BITS - 1));")
+        o("")
+        o("        switch (r / FLINT_BITS)")
+        o("        {")
+        for c in range(n):
+            o("        case %d:" % c)
+            if c >= 1:
+                o("            if (b == 0)")
+                o("            {")
+                vt = ["x%d" % (j + c) for j in range(n - c)] + ["UWORD(1)"]
+                wt = ["y%d" % (j + c) for j in range(n - c)]
+                masked_step(o, n, c, vt, wt, ind="                ")
+                o("                break;")
+                o("            }")
+            o("            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x%d, b);"
+              % (n - 1))
+            vw_shifted(o, n, c, "            ")
+            masked_step(o, n, c, ["v%d" % j for j in range(n - c)],
+                        ["w%d" % j for j in range(n - c)],
+                        ind="            ")
+            o("            break;")
+        o("        }")
+    else:
+        c = r_const // 64
+        b = r_const % 64
+        if c >= 1 and b == 0:
             vt = ["x%d" % (j + c) for j in range(n - c)] + ["UWORD(1)"]
             wt = ["y%d" % (j + c) for j in range(n - c)]
-            masked_step(o, n, c, vt, wt, ind="                ")
-            o("                break;")
-            o("            }")
-        o("            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x%d, b);"
-          % (n - 1))
-        vw_shifted(o, n, c, "            ")
-        masked_step(o, n, c, ["v%d" % j for j in range(n - c)],
-                    ["w%d" % j for j in range(n - c)],
-                    ind="            ")
-        o("            break;")
-    o("        }")
+            masked_step(o, n, c, vt, wt, ind="        ")
+        else:
+            o("        const int b = %d;" % b)
+            o("")
+            o("        lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x%d, b);"
+              % (n - 1))
+            vw_shifted(o, n, c, "        ")
+            masked_step(o, n, c, ["v%d" % j for j in range(n - c)],
+                        ["w%d" % j for j in range(n - c)],
+                        ind="        ")
     o("    }")
     o("")
     o("#undef AP")

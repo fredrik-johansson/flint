@@ -134,7 +134,8 @@ def gen(n, opt=False, fn_name=None, series_name=None, r_const=None,
         o("   band (see _fixed_exp_reduce) */")
         o("#define WINDOW(cc, hreg) \\")
         o("    do { \\")
-        o("        if (FLINT_BITS * (cc) <= r) \\")
+        if r_const is None:
+            o("        if (FLINT_BITS * (cc) <= r) \\")
         o("        { \\")
         o("            slong i1 = FLINT_MIN((slong) r, \\")
         o("                FLINT_BITS * ((cc) + 1) - 1); \\")
@@ -169,7 +170,8 @@ def gen(n, opt=False, fn_name=None, series_name=None, r_const=None,
         o("        } \\")
         o("    } while (0)")
         o("")
-        for c in range(0, n):
+        cmax = n - 1 if r_const is None else min(n - 1, r_const // 64)
+        for c in range(0, cmax + 1):
             o("    WINDOW(%d, t%d);" % (c, wn - 1 - c))
         o("")
         o("#undef WINDOW")

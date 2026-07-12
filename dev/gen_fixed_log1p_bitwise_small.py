@@ -119,10 +119,12 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
     o("#define LP(ii) (_fixed_exp_logs + (ii) * nc + (nc - %d))" % n)
     o("")
 
-    for c in range(n):
+    cmax = n - 1 if r_const is None else min(n - 1, r_const // 64)
+    for c in range(cmax + 1):
         i0 = 1 if c == 0 else 64 * c
         o("    /* window %d */" % c)
-        guard = "" if c == 0 else "if (r >= %d)\n    " % (64 * c)
+        guard = "" if (c == 0 or r_const is not None) \
+            else "if (r >= %d)\n    " % (64 * c)
         o("    %s{" % guard)
         o("        nn_srcptr Lp;")
         o("")
@@ -146,8 +148,12 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
         o("")
         o("        h = d%d;" % (n - 1 - c))
         o("")
-        o("        for (i = %d; i <= FLINT_MIN((slong) r, %d); i++)"
-          % (i0 + 1, 64 * c + 63))
+        if r_const is None:
+            o("        for (i = %d; i <= FLINT_MIN((slong) r, %d); i++)"
+              % (i0 + 1, 64 * c + 63))
+        else:
+            o("        for (i = %d; i <= %d; i++)"
+              % (i0 + 1, min(r_const, 64 * c + 63)))
         o("        {")
         o("            int b = (int) (i - %d);" % (64 * c))
         o("")
@@ -178,34 +184,50 @@ def gen_one(o, n, opt=False, fn_name=None, series_name=None,
     o("    /* one extra step at i = r absorbs the truncation creep */")
     o("    {")
     o("        nn_srcptr Lp = LP((slong) r);")
-    o("        int b = (int) (r & (FLINT_BITS - 1));")
-    o("")
-    o("        switch (r / FLINT_BITS)")
-    o("        {")
-    for c in range(n):
-        o("        case %d:" % c)
-        if c >= 1:
-            o("            if (b == 0)")
-            o("            {")
-            vt = ["p%d" % (j + c) for j in range(n - c)] + ["UWORD(1)"]
+    if r_const is None:
+        o("        int b = (int) (r & (FLINT_BITS - 1));")
+        o("")
+        o("        switch (r / FLINT_BITS)")
+        o("        {")
+        for c in range(n):
+            o("        case %d:" % c)
+            if c >= 1:
+                o("            if (b == 0)")
+                o("            {")
+                vt = ["p%d" % (j + c) for j in range(n - c)] + ["UWORD(1)"]
+                body = []
+                masked_step(lambda ln: body.append(ln), n, c, vt)
+                for ln in body:
+                    o("        " + ln)
+                o("                break;")
+                o("            }")
+            for j in range(n - 1 - c):
+                o("            v%d = MPN_RIGHT_SHIFT_LOW(p%d, p%d, b);"
+                  % (j, j + c + 1, j + c))
+            o("            v%d = MPN_RIGHT_SHIFT_LOW(UWORD(1), p%d, b);"
+              % (n - 1 - c, n - 1))
             body = []
-            masked_step(lambda ln: body.append(ln), n, c, vt)
+            masked_step(lambda ln: body.append(ln), n, c,
+                        ["v%d" % j for j in range(n - c)])
             for ln in body:
-                o("        " + ln)
-            o("                break;")
-            o("            }")
-        for j in range(n - 1 - c):
-            o("            v%d = MPN_RIGHT_SHIFT_LOW(p%d, p%d, b);"
-              % (j, j + c + 1, j + c))
-        o("            v%d = MPN_RIGHT_SHIFT_LOW(UWORD(1), p%d, b);"
-          % (n - 1 - c, n - 1))
-        body = []
-        masked_step(lambda ln: body.append(ln), n, c,
-                    ["v%d" % j for j in range(n - c)])
-        for ln in body:
-            o("    " + ln)
-        o("            break;")
-    o("        }")
+                o("    " + ln)
+            o("            break;")
+        o("        }")
+    else:
+        c = r_const // 64
+        b = r_const % 64
+        if c >= 1 and b == 0:
+            vt = ["p%d" % (j + c) for j in range(n - c)] + ["UWORD(1)"]
+            masked_step(o, n, c, vt)
+        else:
+            o("        const int b = %d;" % b)
+            o("")
+            for j in range(n - 1 - c):
+                o("        v%d = MPN_RIGHT_SHIFT_LOW(p%d, p%d, b);"
+                  % (j, j + c + 1, j + c))
+            o("        v%d = MPN_RIGHT_SHIFT_LOW(UWORD(1), p%d, b);"
+              % (n - 1 - c, n - 1))
+            masked_step(o, n, c, ["v%d" % j for j in range(n - c)])
     o("    }")
     o("")
     o("#undef LP")

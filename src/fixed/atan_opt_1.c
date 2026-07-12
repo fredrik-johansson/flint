@@ -110,7 +110,7 @@ fixed_atan_opt_1(nn_ptr res, nn_srcptr x)
 
         h = y0;
 
-        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        for (i = 2; i <= 4; i++)
         {
             int b = (int) (i - 0);
 
@@ -137,23 +137,18 @@ fixed_atan_opt_1(nn_ptr res, nn_srcptr x)
     for (nz = 0; nz < 2; nz++)
     {
         nn_srcptr Ap = AP((slong) r);
-        int b = (int) (r & (FLINT_BITS - 1));
+        const int b = 4;
 
-        switch (r / FLINT_BITS)
-        {
-        case 0:
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x0, b);
-            v0 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y0, b);
-            sub_ddmmss(bw, e0,
-                UWORD(0), y0,
-                UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            x0 += (w0) & m;
-            a0 += Ap[0] & m;
-            y0 = (y0 & bw) | (e0 & m);
-            break;
-        }
+        lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x0, b);
+        v0 = lt;
+        w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y0, b);
+        sub_ddmmss(bw, e0,
+            UWORD(0), y0,
+            UWORD(0), v0);
+        m = ~bw;                /* accept iff no borrow */
+        x0 += (w0) & m;
+        a0 += Ap[0] & m;
+        y0 = (y0 & bw) | (e0 & m);
     }
 
 #undef AP

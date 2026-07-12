@@ -2166,3 +2166,25 @@ Performance parity verified across every function and size (log1p
 n = 7 gained 8% incidentally: its new dedicated r = 25 beats the old
 runtime-32 path).  8/8 tests both word sizes at multiplier 25;
 canary clean; error validation at 3000+ points per trig size.
+
+### specialization pruned at generation time, not left to the compiler
+
+The per-size opt files carried the full runtime-r bodies with a
+const int r on top -- correct, and the compiler eliminated the dead
+windows, but the SOURCE still contained them: log1p_opt_7.c had six
+guarded windows and a seven-case trailing switch of which only
+window 0 and case 0 were reachable at r = 25.  The body emitters now
+prune when the reduction parameter is a compile-time constant: only
+windows c <= r/64 are emitted (guard-free), the trailing boundary
+step collapses to the single live case with its shift count b = r
+mod 64 a literal, and window-0 loop bounds resolve numerically.  The
+hand-carried log1p n <= 2 bodies in dev/log1p_hand.inc were
+specialized the same way (their r >= 64 branches pruned, with the
+header noting they are the r = 16 specialization of the originals).
+
+17 emitted files shrank by 3900 lines (atan_opt_7.c: 1000 -> 383);
+src/fixed is now 22099 lines, from 32085 before the restructure
+began.  Object code is unchanged by construction -- the pruned
+branches were compiler-dead -- and the full verification (tests at
+multiplier 25 on both word sizes, canary, MPFR validation, benchmark
+parity) agrees.

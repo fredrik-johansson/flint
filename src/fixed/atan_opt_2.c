@@ -128,7 +128,7 @@ fixed_atan_opt_2(nn_ptr res, nn_srcptr x)
 
         h = y1;
 
-        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        for (i = 2; i <= 6; i++)
         {
             int b = (int) (i - 0);
 
@@ -157,117 +157,30 @@ fixed_atan_opt_2(nn_ptr res, nn_srcptr x)
         }
     }
 
-    /* window 1 */
-    if (r >= 64)
-    {
-        nn_srcptr Ap;
-
-        /* boundary step i = 64 */
-        Ap = AP(64);
-        sub_dddmmmsss(bw, e1, e0,
-            UWORD(0), y1, y0,
-            UWORD(0), UWORD(1), x1);
-        m = ~bw;                /* accept iff no borrow */
-        add_ssaaaa(x1, x0,
-            x1, x0,
-            UWORD(0), (y1) & m);
-        add_ssaaaa(a1, a0,
-            a1, a0,
-            Ap[1] & m, Ap[0] & m);
-        y0 = (y0 & bw) | (e0 & m);
-        y1 = (y1 & bw) | (e1 & m);
-
-        h = y0;
-
-        for (i = 65; i <= FLINT_MIN((slong) r, 127); i++)
-        {
-            int b = (int) (i - 64);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x1, b);
-            if (h < lt && y1 == 0)
-                continue;    /* certain reject */
-
-            Ap = AP(i);
-            v0 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y1, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), y1, y0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssaaaa(x1, x0,
-                x1, x0,
-                UWORD(0), (w0) & m);
-            add_ssaaaa(a1, a0,
-                a1, a0,
-                Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            h = y0;
-        }
-    }
-
     /* the step at i = r restores Y < trunc(X >> r) <= X 2^-r;
        entering it Y < X 2^-(r-1), so two passes suffice */
     for (nz = 0; nz < 2; nz++)
     {
         nn_srcptr Ap = AP((slong) r);
-        int b = (int) (r & (FLINT_BITS - 1));
+        const int b = 6;
 
-        switch (r / FLINT_BITS)
-        {
-        case 0:
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x1, b);
-            v0 = MPN_RIGHT_SHIFT_LOW(x1, x0, b);
-            v1 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y1, y0, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y1, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), y1, y0,
-                UWORD(0), v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssaaaa(x1, x0,
-                x1, x0,
-                (w1) & m, (w0) & m);
-            add_ssaaaa(a1, a0,
-                a1, a0,
-                Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            break;
-        case 1:
-            if (b == 0)
-            {
-                sub_dddmmmsss(bw, e1, e0,
-                    UWORD(0), y1, y0,
-                    UWORD(0), UWORD(1), x1);
-                m = ~bw;                /* accept iff no borrow */
-                add_ssaaaa(x1, x0,
-                    x1, x0,
-                    UWORD(0), (y1) & m);
-                add_ssaaaa(a1, a0,
-                    a1, a0,
-                    Ap[1] & m, Ap[0] & m);
-                y0 = (y0 & bw) | (e0 & m);
-                y1 = (y1 & bw) | (e1 & m);
-                break;
-            }
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x1, b);
-            v0 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y1, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), y1, y0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssaaaa(x1, x0,
-                x1, x0,
-                UWORD(0), (w0) & m);
-            add_ssaaaa(a1, a0,
-                a1, a0,
-                Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            break;
-        }
+        lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x1, b);
+        v0 = MPN_RIGHT_SHIFT_LOW(x1, x0, b);
+        v1 = lt;
+        w0 = MPN_RIGHT_SHIFT_LOW(y1, y0, b);
+        w1 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y1, b);
+        sub_dddmmmsss(bw, e1, e0,
+            UWORD(0), y1, y0,
+            UWORD(0), v1, v0);
+        m = ~bw;                /* accept iff no borrow */
+        add_ssaaaa(x1, x0,
+            x1, x0,
+            (w1) & m, (w0) & m);
+        add_ssaaaa(a1, a0,
+            a1, a0,
+            Ap[1] & m, Ap[0] & m);
+        y0 = (y0 & bw) | (e0 & m);
+        y1 = (y1 & bw) | (e1 & m);
     }
 
 #undef AP

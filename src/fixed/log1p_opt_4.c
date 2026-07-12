@@ -122,7 +122,7 @@ fixed_log1p_opt_4(nn_ptr res, nn_srcptr x)
 
         h = d3;
 
-        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        for (i = 2; i <= 26; i++)
         {
             int b = (int) (i - 0);
 
@@ -153,16 +153,18 @@ fixed_log1p_opt_4(nn_ptr res, nn_srcptr x)
         }
     }
 
-    /* window 1 */
-    if (r >= 64)
+    /* one extra step at i = r absorbs the truncation creep */
     {
-        nn_srcptr Lp;
+        nn_srcptr Lp = LP((slong) r);
+        const int b = 26;
 
-        /* boundary step i = 64 */
-        Lp = LP(64);
+        v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
+        v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+        v2 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+        v3 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
         sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
             UWORD(0), d3, d2, d1, d0,
-            UWORD(0), UWORD(1), p3, p2, p1);
+            UWORD(0), v3, v2, v1, v0);
         m = ~bw;                /* accept iff no borrow */
         d0 = (d0 & bw) | (e0 & m);
         d1 = (d1 & bw) | (e1 & m);
@@ -170,272 +172,10 @@ fixed_log1p_opt_4(nn_ptr res, nn_srcptr x)
         d3 = (d3 & bw) | (e3 & m);
         add_ssssaaaaaaaa(p3, p2, p1, p0,
             p3, p2, p1, p0,
-            (UWORD(1)) & m, (p3) & m, (p2) & m, (p1) & m);
+            (v3) & m, (v2) & m, (v1) & m, (v0) & m);
         add_ssssaaaaaaaa(a3, a2, a1, a0,
             a3, a2, a1, a0,
             Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-
-        h = d2;
-
-        for (i = 65; i <= FLINT_MIN((slong) r, 127); i++)
-        {
-            int b = (int) (i - 64);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            if (h < lt && d3 == 0)
-                continue;    /* certain reject */
-
-            Lp = LP(i);
-            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
-            v2 = lt;
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), d3, d2, d1, d0,
-                UWORD(0), UWORD(0), v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            d2 = (d2 & bw) | (e2 & m);
-            d3 = (d3 & bw) | (e3 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), (v2) & m, (v1) & m, (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            h = d2;
-        }
-    }
-
-    /* window 2 */
-    if (r >= 128)
-    {
-        nn_srcptr Lp;
-
-        /* boundary step i = 128 */
-        Lp = LP(128);
-        sub_ddddmmmmssss(bw, e2, e1, e0,
-            UWORD(0), d2, d1, d0,
-            UWORD(0), UWORD(1), p3, p2);
-        m = ~bw;                /* accept iff no borrow */
-        d0 = (d0 & bw) | (e0 & m);
-        d1 = (d1 & bw) | (e1 & m);
-        d2 = (d2 & bw) | (e2 & m);
-        add_ssssaaaaaaaa(p3, p2, p1, p0,
-            p3, p2, p1, p0,
-            UWORD(0), (UWORD(1)) & m, (p3) & m, (p2) & m);
-        add_ssssaaaaaaaa(a3, a2, a1, a0,
-            a3, a2, a1, a0,
-            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-
-        h = d1;
-
-        for (i = 129; i <= FLINT_MIN((slong) r, 191); i++)
-        {
-            int b = (int) (i - 128);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            if (h < lt && d2 == 0)
-                continue;    /* certain reject */
-
-            Lp = LP(i);
-            v0 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
-            v1 = lt;
-            sub_ddddmmmmssss(bw, e2, e1, e0,
-                UWORD(0), d2, d1, d0,
-                UWORD(0), UWORD(0), v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            d2 = (d2 & bw) | (e2 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), UWORD(0), (v1) & m, (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            h = d1;
-        }
-    }
-
-    /* window 3 */
-    if (r >= 192)
-    {
-        nn_srcptr Lp;
-
-        /* boundary step i = 192 */
-        Lp = LP(192);
-        sub_dddmmmsss(bw, e1, e0,
-            UWORD(0), d1, d0,
-            UWORD(0), UWORD(1), p3);
-        m = ~bw;                /* accept iff no borrow */
-        d0 = (d0 & bw) | (e0 & m);
-        d1 = (d1 & bw) | (e1 & m);
-        add_ssssaaaaaaaa(p3, p2, p1, p0,
-            p3, p2, p1, p0,
-            UWORD(0), UWORD(0), (UWORD(1)) & m, (p3) & m);
-        add_ssssaaaaaaaa(a3, a2, a1, a0,
-            a3, a2, a1, a0,
-            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-
-        h = d0;
-
-        for (i = 193; i <= FLINT_MIN((slong) r, 255); i++)
-        {
-            int b = (int) (i - 192);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            if (h < lt && d1 == 0)
-                continue;    /* certain reject */
-
-            Lp = LP(i);
-            v0 = lt;
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), d1, d0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), UWORD(0), UWORD(0), (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            h = d0;
-        }
-    }
-
-    /* one extra step at i = r absorbs the truncation creep */
-    {
-        nn_srcptr Lp = LP((slong) r);
-        int b = (int) (r & (FLINT_BITS - 1));
-
-        switch (r / FLINT_BITS)
-        {
-        case 0:
-            v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
-            v2 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
-            v3 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), d3, d2, d1, d0,
-                UWORD(0), v3, v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            d2 = (d2 & bw) | (e2 & m);
-            d3 = (d3 & bw) | (e3 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                (v3) & m, (v2) & m, (v1) & m, (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            break;
-        case 1:
-            if (b == 0)
-            {
-                sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                    UWORD(0), d3, d2, d1, d0,
-                    UWORD(0), UWORD(1), p3, p2, p1);
-                m = ~bw;                /* accept iff no borrow */
-                d0 = (d0 & bw) | (e0 & m);
-                d1 = (d1 & bw) | (e1 & m);
-                d2 = (d2 & bw) | (e2 & m);
-                d3 = (d3 & bw) | (e3 & m);
-                add_ssssaaaaaaaa(p3, p2, p1, p0,
-                    p3, p2, p1, p0,
-                    (UWORD(1)) & m, (p3) & m, (p2) & m, (p1) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-                break;
-            }
-            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
-            v2 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), d3, d2, d1, d0,
-                UWORD(0), UWORD(0), v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            d2 = (d2 & bw) | (e2 & m);
-            d3 = (d3 & bw) | (e3 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), (v2) & m, (v1) & m, (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            break;
-        case 2:
-            if (b == 0)
-            {
-                sub_ddddmmmmssss(bw, e2, e1, e0,
-                    UWORD(0), d2, d1, d0,
-                    UWORD(0), UWORD(1), p3, p2);
-                m = ~bw;                /* accept iff no borrow */
-                d0 = (d0 & bw) | (e0 & m);
-                d1 = (d1 & bw) | (e1 & m);
-                d2 = (d2 & bw) | (e2 & m);
-                add_ssssaaaaaaaa(p3, p2, p1, p0,
-                    p3, p2, p1, p0,
-                    UWORD(0), (UWORD(1)) & m, (p3) & m, (p2) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-                break;
-            }
-            v0 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            sub_ddddmmmmssss(bw, e2, e1, e0,
-                UWORD(0), d2, d1, d0,
-                UWORD(0), UWORD(0), v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            d2 = (d2 & bw) | (e2 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), UWORD(0), (v1) & m, (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            break;
-        case 3:
-            if (b == 0)
-            {
-                sub_dddmmmsss(bw, e1, e0,
-                    UWORD(0), d1, d0,
-                    UWORD(0), UWORD(1), p3);
-                m = ~bw;                /* accept iff no borrow */
-                d0 = (d0 & bw) | (e0 & m);
-                d1 = (d1 & bw) | (e1 & m);
-                add_ssssaaaaaaaa(p3, p2, p1, p0,
-                    p3, p2, p1, p0,
-                    UWORD(0), UWORD(0), (UWORD(1)) & m, (p3) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-                break;
-            }
-            v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), d1, d0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            d0 = (d0 & bw) | (e0 & m);
-            d1 = (d1 & bw) | (e1 & m);
-            add_ssssaaaaaaaa(p3, p2, p1, p0,
-                p3, p2, p1, p0,
-                UWORD(0), UWORD(0), UWORD(0), (v0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
-            break;
-        }
     }
 
 #undef LP

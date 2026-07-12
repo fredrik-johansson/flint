@@ -138,7 +138,7 @@ fixed_atan_opt_4(nn_ptr res, nn_srcptr x)
 
         h = y3;
 
-        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        for (i = 2; i <= 20; i++)
         {
             int b = (int) (i - 0);
 
@@ -173,20 +173,29 @@ fixed_atan_opt_4(nn_ptr res, nn_srcptr x)
         }
     }
 
-    /* window 1 */
-    if (r >= 64)
+    /* the step at i = r restores Y < trunc(X >> r) <= X 2^-r;
+       entering it Y < X 2^-(r-1), so two passes suffice */
+    for (nz = 0; nz < 2; nz++)
     {
-        nn_srcptr Ap;
+        nn_srcptr Ap = AP((slong) r);
+        const int b = 20;
 
-        /* boundary step i = 64 */
-        Ap = AP(64);
+        lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
+        v0 = MPN_RIGHT_SHIFT_LOW(x1, x0, b);
+        v1 = MPN_RIGHT_SHIFT_LOW(x2, x1, b);
+        v2 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
+        v3 = lt;
+        w0 = MPN_RIGHT_SHIFT_LOW(y1, y0, b);
+        w1 = MPN_RIGHT_SHIFT_LOW(y2, y1, b);
+        w2 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
+        w3 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
         sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
             UWORD(0), y3, y2, y1, y0,
-            UWORD(0), UWORD(1), x3, x2, x1);
+            UWORD(0), v3, v2, v1, v0);
         m = ~bw;                /* accept iff no borrow */
         add_ssssaaaaaaaa(x3, x2, x1, x0,
             x3, x2, x1, x0,
-            UWORD(0), (y3) & m, (y2) & m, (y1) & m);
+            (w3) & m, (w2) & m, (w1) & m, (w0) & m);
         add_ssssaaaaaaaa(a3, a2, a1, a0,
             a3, a2, a1, a0,
             Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
@@ -194,290 +203,6 @@ fixed_atan_opt_4(nn_ptr res, nn_srcptr x)
         y1 = (y1 & bw) | (e1 & m);
         y2 = (y2 & bw) | (e2 & m);
         y3 = (y3 & bw) | (e3 & m);
-
-        h = y2;
-
-        for (i = 65; i <= FLINT_MIN((slong) r, 127); i++)
-        {
-            int b = (int) (i - 64);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            if (h < lt && y3 == 0)
-                continue;    /* certain reject */
-
-            Ap = AP(i);
-            v0 = MPN_RIGHT_SHIFT_LOW(x2, x1, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
-            v2 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y2, y1, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
-            w2 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), y3, y2, y1, y0,
-                UWORD(0), UWORD(0), v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), (w2) & m, (w1) & m, (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            y2 = (y2 & bw) | (e2 & m);
-            y3 = (y3 & bw) | (e3 & m);
-            h = y2;
-        }
-    }
-
-    /* window 2 */
-    if (r >= 128)
-    {
-        nn_srcptr Ap;
-
-        /* boundary step i = 128 */
-        Ap = AP(128);
-        sub_ddddmmmmssss(bw, e2, e1, e0,
-            UWORD(0), y2, y1, y0,
-            UWORD(0), UWORD(1), x3, x2);
-        m = ~bw;                /* accept iff no borrow */
-        add_ssssaaaaaaaa(x3, x2, x1, x0,
-            x3, x2, x1, x0,
-            UWORD(0), UWORD(0), (y3) & m, (y2) & m);
-        add_ssssaaaaaaaa(a3, a2, a1, a0,
-            a3, a2, a1, a0,
-            Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-        y0 = (y0 & bw) | (e0 & m);
-        y1 = (y1 & bw) | (e1 & m);
-        y2 = (y2 & bw) | (e2 & m);
-
-        h = y1;
-
-        for (i = 129; i <= FLINT_MIN((slong) r, 191); i++)
-        {
-            int b = (int) (i - 128);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            if (h < lt && y2 == 0)
-                continue;    /* certain reject */
-
-            Ap = AP(i);
-            v0 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
-            v1 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_ddddmmmmssss(bw, e2, e1, e0,
-                UWORD(0), y2, y1, y0,
-                UWORD(0), UWORD(0), v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), UWORD(0), (w1) & m, (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            y2 = (y2 & bw) | (e2 & m);
-            h = y1;
-        }
-    }
-
-    /* window 3 */
-    if (r >= 192)
-    {
-        nn_srcptr Ap;
-
-        /* boundary step i = 192 */
-        Ap = AP(192);
-        sub_dddmmmsss(bw, e1, e0,
-            UWORD(0), y1, y0,
-            UWORD(0), UWORD(1), x3);
-        m = ~bw;                /* accept iff no borrow */
-        add_ssssaaaaaaaa(x3, x2, x1, x0,
-            x3, x2, x1, x0,
-            UWORD(0), UWORD(0), UWORD(0), (y3) & m);
-        add_ssssaaaaaaaa(a3, a2, a1, a0,
-            a3, a2, a1, a0,
-            Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-        y0 = (y0 & bw) | (e0 & m);
-        y1 = (y1 & bw) | (e1 & m);
-
-        h = y0;
-
-        for (i = 193; i <= FLINT_MIN((slong) r, 255); i++)
-        {
-            int b = (int) (i - 192);
-
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            if (h < lt && y1 == 0)
-                continue;    /* certain reject */
-
-            Ap = AP(i);
-            v0 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), y1, y0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), UWORD(0), UWORD(0), (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            h = y0;
-        }
-    }
-
-    /* the step at i = r restores Y < trunc(X >> r) <= X 2^-r;
-       entering it Y < X 2^-(r-1), so two passes suffice */
-    for (nz = 0; nz < 2; nz++)
-    {
-        nn_srcptr Ap = AP((slong) r);
-        int b = (int) (r & (FLINT_BITS - 1));
-
-        switch (r / FLINT_BITS)
-        {
-        case 0:
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            v0 = MPN_RIGHT_SHIFT_LOW(x1, x0, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(x2, x1, b);
-            v2 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
-            v3 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y1, y0, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(y2, y1, b);
-            w2 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
-            w3 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), y3, y2, y1, y0,
-                UWORD(0), v3, v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                (w3) & m, (w2) & m, (w1) & m, (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            y2 = (y2 & bw) | (e2 & m);
-            y3 = (y3 & bw) | (e3 & m);
-            break;
-        case 1:
-            if (b == 0)
-            {
-                sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                    UWORD(0), y3, y2, y1, y0,
-                    UWORD(0), UWORD(1), x3, x2, x1);
-                m = ~bw;                /* accept iff no borrow */
-                add_ssssaaaaaaaa(x3, x2, x1, x0,
-                    x3, x2, x1, x0,
-                    UWORD(0), (y3) & m, (y2) & m, (y1) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-                y0 = (y0 & bw) | (e0 & m);
-                y1 = (y1 & bw) | (e1 & m);
-                y2 = (y2 & bw) | (e2 & m);
-                y3 = (y3 & bw) | (e3 & m);
-                break;
-            }
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            v0 = MPN_RIGHT_SHIFT_LOW(x2, x1, b);
-            v1 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
-            v2 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y2, y1, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
-            w2 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
-                UWORD(0), y3, y2, y1, y0,
-                UWORD(0), UWORD(0), v2, v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), (w2) & m, (w1) & m, (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            y2 = (y2 & bw) | (e2 & m);
-            y3 = (y3 & bw) | (e3 & m);
-            break;
-        case 2:
-            if (b == 0)
-            {
-                sub_ddddmmmmssss(bw, e2, e1, e0,
-                    UWORD(0), y2, y1, y0,
-                    UWORD(0), UWORD(1), x3, x2);
-                m = ~bw;                /* accept iff no borrow */
-                add_ssssaaaaaaaa(x3, x2, x1, x0,
-                    x3, x2, x1, x0,
-                    UWORD(0), UWORD(0), (y3) & m, (y2) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-                y0 = (y0 & bw) | (e0 & m);
-                y1 = (y1 & bw) | (e1 & m);
-                y2 = (y2 & bw) | (e2 & m);
-                break;
-            }
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            v0 = MPN_RIGHT_SHIFT_LOW(x3, x2, b);
-            v1 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(y3, y2, b);
-            w1 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_ddddmmmmssss(bw, e2, e1, e0,
-                UWORD(0), y2, y1, y0,
-                UWORD(0), UWORD(0), v1, v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), UWORD(0), (w1) & m, (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            y2 = (y2 & bw) | (e2 & m);
-            break;
-        case 3:
-            if (b == 0)
-            {
-                sub_dddmmmsss(bw, e1, e0,
-                    UWORD(0), y1, y0,
-                    UWORD(0), UWORD(1), x3);
-                m = ~bw;                /* accept iff no borrow */
-                add_ssssaaaaaaaa(x3, x2, x1, x0,
-                    x3, x2, x1, x0,
-                    UWORD(0), UWORD(0), UWORD(0), (y3) & m);
-                add_ssssaaaaaaaa(a3, a2, a1, a0,
-                    a3, a2, a1, a0,
-                    Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-                y0 = (y0 & bw) | (e0 & m);
-                y1 = (y1 & bw) | (e1 & m);
-                break;
-            }
-            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), x3, b);
-            v0 = lt;
-            w0 = MPN_RIGHT_SHIFT_LOW(UWORD(0), y3, b);
-            sub_dddmmmsss(bw, e1, e0,
-                UWORD(0), y1, y0,
-                UWORD(0), UWORD(0), v0);
-            m = ~bw;                /* accept iff no borrow */
-            add_ssssaaaaaaaa(x3, x2, x1, x0,
-                x3, x2, x1, x0,
-                UWORD(0), UWORD(0), UWORD(0), (w0) & m);
-            add_ssssaaaaaaaa(a3, a2, a1, a0,
-                a3, a2, a1, a0,
-                Ap[3] & m, Ap[2] & m, Ap[1] & m, Ap[0] & m);
-            y0 = (y0 & bw) | (e0 & m);
-            y1 = (y1 & bw) | (e1 & m);
-            break;
-        }
     }
 
 #undef AP

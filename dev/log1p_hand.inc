@@ -1,5 +1,7 @@
-/* hand-written fixed_log1p_opt_1 / _2 bodies (r = 16); the tuner
-   copies these on --pin 16 --emit */
+/* hand-written fixed_log1p_opt_1 / _2 bodies, SPECIALIZED to
+   r = 16 (the runtime-r branches of the originals for
+   r >= 64 were pruned as unreachable); the tuner copies
+   these on --pin 16 --emit */
 
 /* n = 1: everything in registers.  With r <= 48 there is a single
    reduction window; each step is a funnel shift of P's top limbs, a
@@ -95,35 +97,14 @@ fixed_log1p_opt_2(nn_ptr res, nn_srcptr x)
         add_ssaaaa(a1, a0, a1, a0, Lq[1] & m, Lq[0] & m); \
     } while (0)
 
-    for (i = 1; i <= FLINT_MIN((slong) r, FLINT_BITS - 1); i++)
+    for (i = 1; i <= (slong) r; i++)      /* r < FLINT_BITS: one window */
     {
         ulong v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1, (int) i);
         ulong v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, (int) i);
         STEP2(i, v1, v0);
     }
 
-    if (r >= FLINT_BITS)
-    {
-        STEP2(FLINT_BITS, UWORD(1), p1);      /* i = 64: v = P >> 64 */
-
-        for (i = FLINT_BITS + 1; i <= (slong) r; i++)
-        {
-            ulong v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1,
-                (int) (i - FLINT_BITS));
-            STEP2(i, UWORD(0), v0);
-        }
-    }
-
     /* one extra step at i = r absorbs the truncation creep */
-    if (r > FLINT_BITS)
-    {
-        ulong v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1,
-            (int) (r - FLINT_BITS));
-        STEP2(r, UWORD(0), v0);
-    }
-    else if (r == FLINT_BITS)
-        STEP2(r, UWORD(1), p1);           /* v = P >> 64 exactly */
-    else
     {
         ulong v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1, (int) r);
         ulong v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, (int) r);

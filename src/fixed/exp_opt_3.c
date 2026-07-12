@@ -129,7 +129,6 @@ fixed_exp_opt_3(nn_ptr res, nn_srcptr x)
    band (see _fixed_exp_reduce) */
 #define WINDOW(cc, hreg) \
     do { \
-        if (FLINT_BITS * (cc) <= r) \
         { \
             slong i1 = FLINT_MIN((slong) r, \
                 FLINT_BITS * ((cc) + 1) - 1); \
@@ -165,8 +164,6 @@ fixed_exp_opt_3(nn_ptr res, nn_srcptr x)
     } while (0)
 
     WINDOW(0, t2);
-    WINDOW(1, t1);
-    WINDOW(2, t0);
 
 #undef WINDOW
 
