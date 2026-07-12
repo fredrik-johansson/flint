@@ -224,6 +224,138 @@ def emit(o, func, n, r, name):
     return N
 
 
+def emit_chain(o, func, n, r, zname):
+    """emit the Horner chain for one family on an already-computed z,
+    leaving the result in the register/array named by the return value"""
+    N = minN(func, n, r)
+    L = [min(n, width(func, n, r, k)) for k in range(N)]
+    for k in range(N - 1, 0, -1):
+        L[k - 1] = max(L[k - 1], L[k])
+    sub = True                              # sin and cos both alternate
+    pre = "s" if func == "sin" else "c"
+    k = N - 1
+    cur = L[k]
+    c = cbits(coeff(func, k), cur)
+    if cur == 1:
+        o("    %sv = UWORD(0x%016x);" % (pre, c[0]))
+    elif cur == 2:
+        o("    %sw1 = UWORD(0x%016x); %sw0 = UWORD(0x%016x);"
+          % (pre, c[1], pre, c[0]))
+    else:
+        for i in range(cur):
+            o("    %sV[%d] = UWORD(0x%016x);" % (pre, i, c[i]))
+    for k in range(N - 2, -1, -1):
+        prev, cur = cur, L[k]
+        c = cbits(coeff(func, k), cur)
+        o("")
+        o("    /* %s V_%d  (%d x %d) */" % (func, k, cur, prev))
+        if cur == 1:
+            o("    %sv = n_mulhi(%s[%d], %sv);" % (pre, zname, n - 1, pre))
+            o("    %sv = UWORD(0x%016x) - %sv;" % (pre, c[0], pre))
+        elif cur == 2 and prev == 1:
+            o("    _fixed_mulhi_2x1(&h, &l, %s[%d], %s[%d], %sv);"
+              % (zname, n - 1, zname, n - 2, pre))
+            o("    sub_ddmmss(%sw1, %sw0, UWORD(0x%016x), UWORD(0x%016x), h, l);"
+              % (pre, pre, c[1], c[0]))
+        elif cur == 2:
+            o("    _fixed_mulhi_2x2_sloppy(&h, &l, %s[%d], %s[%d], %sw1, %sw0);"
+              % (zname, n - 1, zname, n - 2, pre, pre))
+            o("    sub_ddmmss(%sw1, %sw0, UWORD(0x%016x), UWORD(0x%016x), h, l);"
+              % (pre, pre, c[1], c[0]))
+        else:
+            if prev == 1:
+                for i in range(cur - 1):
+                    o("    P[%d] = UWORD(0);" % i)
+                o("    P[%d] = %sv;" % (cur - 1, pre))
+            elif prev == 2:
+                for i in range(cur - 2):
+                    o("    P[%d] = UWORD(0);" % i)
+                o("    P[%d] = %sw0; P[%d] = %sw1;" % (cur - 2, pre, cur - 1, pre))
+            else:
+                for i in range(cur - prev):
+                    o("    P[%d] = UWORD(0);" % i)
+                for i in range(prev):
+                    o("    P[%d] = %sV[%d];" % (cur - prev + i, pre, i))
+            if cur >= 3:
+                emit_mulhigh(o, "T", "%s + %d" % (zname, n - cur), "P", cur)
+            else:
+                for i in range(cur):
+                    o("    Z[%d] = %s[%d];" % (i, zname, n - cur + i))
+                emit_mulhigh(o, "T", "Z", "P", cur)
+            for i in range(cur):
+                o("    P[%d] = UWORD(0x%016x);" % (i, c[i]))
+            emit_addsub(o, True, "%sV" % pre, "P", "T", cur)
+    return cur
+
+
+def emit_sincos(o, n, r, name):
+    """sin and cos together: they are both series in z = x^2, so ONE
+    squaring serves both"""
+    o("/* sin_cos, n = %d, r = %d */" % (n, r))
+    o("static void")
+    o("%s(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)" % name)
+    o("{")
+    o("    ulong z[%d], sV[%d], cV[%d], T[%d], P[%d], Z[2];" % (n, n, n, n, n))
+    o("    ulong sv, sw1, sw0, cv, cw1, cw0, h, l;")
+    o("")
+    o("    (void) sv; (void) sw1; (void) sw0; (void) cv; (void) cw1;")
+    o("    (void) cw0; (void) h; (void) l; (void) Z; (void) T; (void) P;")
+    o("    (void) sV; (void) cV;")
+    o("")
+    o("    /* the one squaring shared by both series */")
+    emit_sqrhigh(o, "z", "x", n)
+    o("")
+    cs = emit_chain(o, "sin", n, r, "z")
+    o("")
+    cc = emit_chain(o, "cos", n, r, "z")
+    o("")
+    o("    /* sin = x - x^3 V_0 */")
+    if cs == 1:
+        for i in range(n - 1):
+            o("    P[%d] = UWORD(0);" % i)
+        o("    P[%d] = sv;" % (n - 1))
+    elif cs == 2:
+        for i in range(n - 2):
+            o("    P[%d] = UWORD(0);" % i)
+        o("    P[%d] = sw0; P[%d] = sw1;" % (n - 2, n - 1))
+    else:
+        for i in range(n - cs):
+            o("    P[%d] = UWORD(0);" % i)
+        for i in range(cs):
+            o("    P[%d] = sV[%d];" % (n - cs + i, i))
+    emit_mulhigh(o, "T", "z", "x", n)
+    emit_mulhigh(o, "sV", "T", "P", n)
+    emit_addsub(o, True, "ysin", "x", "sV", n)
+    o("    ysin[%d] = 0;" % n)
+    o("")
+    o("    /* cos = 1 - z V_0 */")
+    if cc == 1:
+        for i in range(n - 1):
+            o("    P[%d] = UWORD(0);" % i)
+        o("    P[%d] = cv;" % (n - 1))
+    elif cc == 2:
+        for i in range(n - 2):
+            o("    P[%d] = UWORD(0);" % i)
+        o("    P[%d] = cw0; P[%d] = cw1;" % (n - 2, n - 1))
+    else:
+        for i in range(n - cc):
+            o("    P[%d] = UWORD(0);" % i)
+        for i in range(cc):
+            o("    P[%d] = cV[%d];" % (n - cc + i, i))
+    emit_mulhigh(o, "T", "z", "P", n)
+    o("    if (mpn_zero_p(T, %d))" % n)
+    o("    {")
+    o("        flint_mpn_zero(ycos, %d);" % n)
+    o("        ycos[%d] = 1;" % n)
+    o("    }")
+    o("    else")
+    o("    {")
+    o("        mpn_neg(ycos, T, %d);" % n)
+    o("        ycos[%d] = 0;" % n)
+    o("    }")
+    o("}")
+    o("")
+
 def main():
     which = sys.argv[1] if len(sys.argv) > 1 else "all"
     out = []

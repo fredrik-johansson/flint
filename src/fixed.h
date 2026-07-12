@@ -178,6 +178,17 @@ void _fixed_atan_rs_opt_1(nn_ptr res, nn_srcptr x);
 void _fixed_atan_rs_opt_2(nn_ptr res, nn_srcptr x);
 void _fixed_atan_rs_opt_3(nn_ptr res, nn_srcptr x);
 void _fixed_atan_rs_opt_4(nn_ptr res, nn_srcptr x);
+
+/* Internal: hand-written atanh and sin/cos series, each built for the
+   reduction parameter hardcoded alongside it in the bitwise callers.
+   The sin/cos routines compute both outputs from a single squaring. */
+void _fixed_atanh_rs_opt_2(nn_ptr res, nn_srcptr x);
+void _fixed_atanh_rs_opt_3(nn_ptr res, nn_srcptr x);
+void _fixed_atanh_rs_opt_4(nn_ptr res, nn_srcptr x);
+void _fixed_sin_cos_rs_opt_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void _fixed_sin_cos_rs_opt_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void _fixed_sin_cos_rs_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void _fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 #endif
 void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 

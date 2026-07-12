@@ -72,10 +72,18 @@ def masked_step(o, n, c, vt):
     o("            %s);" % ", ".join(la))
 
 
-def gen_one(o, n):
+OPT_R = {3: 10, 4: 26}
+
+
+def gen_one(o, n, opt=False):
     o("static void")
-    o("_fixed_log1p_bitwise_rs_%d(nn_ptr res, nn_srcptr x, int r)" % n)
+    if opt:
+        o("_fixed_log1p_bitwise_rs_opt_%d(nn_ptr res, nn_srcptr x)" % n)
+    else:
+        o("_fixed_log1p_bitwise_rs_%d(nn_ptr res, nn_srcptr x, int r)" % n)
     o("{")
+    if opt:
+        o("    const int r = %d;" % OPT_R[n])
     o("    ulong " + ", ".join("d%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("p%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("a%d" % j for j in range(n)) + ";")
@@ -86,8 +94,9 @@ def gen_one(o, n):
     o("    slong i, nc;")
     o("")
     lo = 16 if n <= 4 else 32
-    o("    r = FLINT_MAX(r, %d);" % lo)
-    o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
+    if not opt:
+        o("    r = FLINT_MAX(r, %d);" % lo)
+        o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
     o("")
     o("    _fixed_exp_logs_ensure(%d, r);" % n)
     o("    nc = _fixed_exp_logs_n;")
@@ -213,7 +222,9 @@ def gen_one(o, n):
     # atanh (r < 32 reaches here only for n <= 4: at n >= 5 the
     # fixed-length 2^-16 series costs more than the reduction saves,
     # so r is clamped to 32 above)
-    if n <= 4:
+    if opt:
+        o("    _fixed_atanh_rs_opt_%d(y, t);" % n)
+    elif n <= 7:
         o("    if (r < 32)")
         o("        _fixed_atanh_rs16(y, t, %d);" % n)
         o("    else")
@@ -245,6 +256,21 @@ def main():
     o("")
     for n in range(NMIN, NMAX + 1):
         gen_one(o, n)
+    for n in sorted(OPT_R):
+        gen_one(o, n, opt=True)
+    o("/* sizes with a hardcoded reduction parameter (see OPT_R) */")
+    o("static int")
+    o("_fixed_log1p_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)")
+    o("{")
+    o("    switch (n)")
+    o("    {")
+    for n in sorted(OPT_R):
+        o("        case %d: _fixed_log1p_bitwise_rs_opt_%d(res, x); return 1;"
+          % (n, n))
+    o("        default: return 0;")
+    o("    }")
+    o("}")
+    o("")
     print("\n".join(out).rstrip("\n"))
 
 

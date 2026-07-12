@@ -125,11 +125,20 @@ def emit_uv(o, n, c, ind, b):
         o("%sv%d = UWORD(0);" % (ind, j))
 
 
-def gen_one(o, n):
+OPT_R = {1: 5, 2: 8, 3: 12, 4: 19}
+
+
+def gen_one(o, n, opt=False):
     o("static void")
-    o("_fixed_sin_cos_bitwise_rs_%d(nn_ptr ysin, nn_ptr ycos," % n)
-    o("    nn_srcptr x, int r)")
+    if opt:
+        o("_fixed_sin_cos_bitwise_rs_opt_%d(nn_ptr ysin, nn_ptr ycos," % n)
+        o("    nn_srcptr x)")
+    else:
+        o("_fixed_sin_cos_bitwise_rs_%d(nn_ptr ysin, nn_ptr ycos," % n)
+        o("    nn_srcptr x, int r)")
     o("{")
+    if opt:
+        o("    const int r = %d;" % OPT_R[n])
     o("    ulong " + ", ".join("t%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("p%d" % j for j in range(n)) + ";")
     o("    ulong " + ", ".join("q%d" % j for j in range(n)) + ";")
@@ -142,8 +151,9 @@ def gen_one(o, n):
     o("    slong i, nc, R;")
     o("    int pass;")
     o("")
-    o("    r = FLINT_MAX(r, 16);")
-    o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
+    if not opt:
+        o("    r = FLINT_MAX(r, 16);")
+        o("    r = FLINT_MIN(r, FLINT_BITS * %d - 16);" % n)
     o("    R = (slong) r + 1;")
     o("")
     o("    _fixed_atans_ensure(%d, R);" % n)
@@ -233,10 +243,13 @@ def gen_one(o, n):
         o("    tt[%d] = t%d;" % (j, j))
     o("    mpn_lshift(tt, tt, %d, 1);" % n)
     o("")
-    o("    if (r < 32)")
-    o("        _fixed_sin_cos_rs16(sr, cr, tt, %d);" % n)
-    o("    else")
-    o("        fixed_sin_cos_rs(sr, cr, tt, %d);" % n)
+    if opt:
+        o("    _fixed_sin_cos_rs_opt_%d(sr, cr, tt);" % n)
+    else:
+        o("    if (r < 32)")
+        o("        _fixed_sin_cos_rs16(sr, cr, tt, %d);" % n)
+        o("    else")
+        o("        fixed_sin_cos_rs(sr, cr, tt, %d);" % n)
     o("")
     for j in range(n):
         o("    wx[%d] = p%d;" % (j, j))
@@ -259,6 +272,23 @@ def main():
     o("")
     for n in range(NMIN, NMAX + 1):
         gen_one(o, n)
+    for n in sorted(OPT_R):
+        gen_one(o, n, opt=True)
+    o("/* sizes with a hardcoded reduction parameter (see OPT_R) */")
+    o("static int")
+    o("_fixed_sin_cos_bitwise_rs_opt(nn_ptr ysin, nn_ptr ycos,")
+    o("    nn_srcptr x, slong n)")
+    o("{")
+    o("    switch (n)")
+    o("    {")
+    for n in sorted(OPT_R):
+        o("        case %d: _fixed_sin_cos_bitwise_rs_opt_%d(ysin, ycos, x);"
+          % (n, n))
+        o("            return 1;")
+    o("        default: return 0;")
+    o("    }")
+    o("}")
+    o("")
     o("static void (* const _fixed_sin_cos_bitwise_rs_small_tab[])")
     o("    (nn_ptr, nn_ptr, nn_srcptr, int) = {")
     o("    NULL,")

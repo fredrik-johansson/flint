@@ -227,12 +227,19 @@ static const short _fixed_log1p_bitwise_rs_n_tab[] = {1, 4, 18, 64};
 void
 fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 {
+#if FLINT_BITS == 64
+    int r0;
+#endif
     slong i, c, wn, nc, pl, lsb_bits, qr, ds;
     nn_ptr P, D, acc, sh, t, nd;
     TMP_INIT;
 
     FLINT_ASSERT(n >= 1);
     FLINT_ASSERT(r == 0 || r >= 16);
+
+#if FLINT_BITS == 64
+    r0 = r;
+#endif
 
     if (r == 0)
     {
@@ -252,6 +259,15 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
        atanh evaluations only need t < 2^-16; the general path uses
        fixed_atanh_rs and hence at least r = 32 */
 #if FLINT_BITS == 64
+#ifndef FIXED_LOG1P_BITWISE_NO_SMALL
+    /* r = 0: the specialized sizes run with a compile-time constant r
+       and the hand-written atanh series built for it.  n = 1 and n = 2
+       keep their own register code, whose atanh evaluation is already
+       inline. */
+    if (n <= 4 && r0 == 0 && _fixed_log1p_bitwise_rs_opt(res, x, n))
+        return;
+#endif
+
     if (n == 1)
     {
         _fixed_log1p_bitwise_rs_1(res, x, (int) FLINT_MAX(r, 16));

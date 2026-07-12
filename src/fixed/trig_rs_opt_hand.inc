@@ -205,3 +205,520 @@ _fixed_atan_rs_opt_4(nn_ptr res, nn_srcptr x)
     flint_mpn_mulhigh_n(V, T, P, 4);
     NN_SUB_4(res, x, V);
 }
+
+/* --- atanh, for the bitwise logarithm (same structure: a series in
+   z = x^2, atanh(x) = x + x^3 V_0 with V_0 = 1/3 + z(1/5 + ...)) --- */
+
+/* atanh, n = 2, r = 6: 9 levels, widths [2, 2, 2, 2, 1, 1, 1, 1, 1] */
+void
+_fixed_atanh_rs_opt_2(nn_ptr res, nn_srcptr x)
+{
+    ulong z[2], V[2], T[2], P[2], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    _fixed_sqrhi_2x2(&z[1], &z[0], x[1], x[0]);
+
+    v = UWORD(0x0d79435e50d79435);
+
+    /* V_7 = c + z V_8   (1 x 1 limbs) */
+    v = n_mulhi(z[1], v);
+    v = UWORD(0x0f0f0f0f0f0f0f0f) + v;
+
+    /* V_6 = c + z V_7   (1 x 1 limbs) */
+    v = n_mulhi(z[1], v);
+    v = UWORD(0x1111111111111111) + v;
+
+    /* V_5 = c + z V_6   (1 x 1 limbs) */
+    v = n_mulhi(z[1], v);
+    v = UWORD(0x13b13b13b13b13b1) + v;
+
+    /* V_4 = c + z V_5   (1 x 1 limbs) */
+    v = n_mulhi(z[1], v);
+    v = UWORD(0x1745d1745d1745d1) + v;
+
+    /* V_3 = c + z V_4   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[1], z[0], v);
+    add_ssaaaa(w1, w0, UWORD(0x1c71c71c71c71c71), UWORD(0xc71c71c71c71c71c), h, l);
+
+    /* V_2 = c + z V_3   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x2492492492492492), UWORD(0x4924924924924924), h, l);
+
+    /* V_1 = c + z V_2   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x3333333333333333), UWORD(0x3333333333333333), h, l);
+
+    /* V_0 = c + z V_1   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x5555555555555555), UWORD(0x5555555555555555), h, l);
+
+    /* atanh = x + x^3 V_0 */
+    P[0] = w0; P[1] = w1;
+    _fixed_mulhi_2x2_sloppy(&T[1], &T[0], z[1], z[0], x[1], x[0]);
+    _fixed_mulhi_2x2_sloppy(&V[1], &V[0], T[1], T[0], P[1], P[0]);
+    NN_ADD_2(res, x, V);
+}
+
+/* atanh, n = 3, r = 10: 8 levels, widths [3, 3, 2, 2, 2, 1, 1, 1] */
+void
+_fixed_atanh_rs_opt_3(nn_ptr res, nn_srcptr x)
+{
+    ulong z[3], V[3], T[3], P[3], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 3);
+
+    v = UWORD(0x0f0f0f0f0f0f0f0f);
+
+    /* V_6 = c + z V_7   (1 x 1 limbs) */
+    v = n_mulhi(z[2], v);
+    v = UWORD(0x1111111111111111) + v;
+
+    /* V_5 = c + z V_6   (1 x 1 limbs) */
+    v = n_mulhi(z[2], v);
+    v = UWORD(0x13b13b13b13b13b1) + v;
+
+    /* V_4 = c + z V_5   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[2], z[1], v);
+    add_ssaaaa(w1, w0, UWORD(0x1745d1745d1745d1), UWORD(0x745d1745d1745d17), h, l);
+
+    /* V_3 = c + z V_4   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x1c71c71c71c71c71), UWORD(0xc71c71c71c71c71c), h, l);
+
+    /* V_2 = c + z V_3   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x2492492492492492), UWORD(0x4924924924924924), h, l);
+
+    /* V_1 = c + z V_2   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 0, P, 3);
+    P[0] = UWORD(0x3333333333333333);
+    P[1] = UWORD(0x3333333333333333);
+    P[2] = UWORD(0x3333333333333333);
+    NN_ADD_3(V, P, T);
+
+    /* V_0 = c + z V_1   (3 x 3 limbs) */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z + 0, P, 3);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    NN_ADD_3(V, P, T);
+
+    /* atanh = x + x^3 V_0 */
+    P[0] = V[0];
+    P[1] = V[1];
+    P[2] = V[2];
+    flint_mpn_mulhigh_n(T, z, x, 3);
+    flint_mpn_mulhigh_n(V, T, P, 3);
+    NN_ADD_3(res, x, V);
+}
+
+/* atanh, n = 4, r = 26: 4 levels, widths [3, 2, 2, 1] */
+void
+_fixed_atanh_rs_opt_4(nn_ptr res, nn_srcptr x)
+{
+    ulong z[4], V[4], T[4], P[4], Z[2];
+    ulong v, w1, w0, h, l;
+    slong i;
+
+    (void) v; (void) w1; (void) w0; (void) h; (void) l;
+    (void) i; (void) Z; (void) V; (void) T; (void) P;
+
+    flint_mpn_sqrhigh(z, x, 4);
+
+    v = UWORD(0x1c71c71c71c71c71);
+
+    /* V_2 = c + z V_3   (2 x 1 limbs) */
+    _fixed_mulhi_2x1(&h, &l, z[3], z[2], v);
+    add_ssaaaa(w1, w0, UWORD(0x2492492492492492), UWORD(0x4924924924924924), h, l);
+
+    /* V_1 = c + z V_2   (2 x 2 limbs) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[3], z[2], w1, w0);
+    add_ssaaaa(w1, w0, UWORD(0x3333333333333333), UWORD(0x3333333333333333), h, l);
+
+    /* V_0 = c + z V_1   (3 x 2 limbs) */
+    P[0] = UWORD(0);
+    P[1] = w0; P[2] = w1;
+    flint_mpn_mulhigh_n(T, z + 1, P, 3);
+    P[0] = UWORD(0x5555555555555555);
+    P[1] = UWORD(0x5555555555555555);
+    P[2] = UWORD(0x5555555555555555);
+    NN_ADD_3(V, P, T);
+
+    /* atanh = x + x^3 V_0 */
+    P[0] = UWORD(0);
+    P[1] = V[0];
+    P[2] = V[1];
+    P[3] = V[2];
+    flint_mpn_mulhigh_n(T, z, x, 4);
+    flint_mpn_mulhigh_n(V, T, P, 4);
+    NN_ADD_4(res, x, V);
+}
+
+
+/* --- sin and cos together.  Both are series in z = x^2, so ONE
+   squaring serves both -- a saving the separate generated series
+   cannot take. --- */
+
+/* sin_cos, n = 1, r = 5 */
+void
+_fixed_sin_cos_rs_opt_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[1], sV[1], cV[1], T[1], P[1], Z[2];
+    ulong sv, sw1, sw0, cv, cw1, cw0, h, l;
+
+    (void) sv; (void) sw1; (void) sw0; (void) cv; (void) cw1;
+    (void) cw0; (void) h; (void) l; (void) Z; (void) T; (void) P;
+    (void) sV; (void) cV;
+
+    /* the one squaring shared by both series */
+    z[0] = n_mulhi(x[0], x[0]);
+
+    sv = UWORD(0x00002e3bc74aad8e);
+
+    /* sin V_2  (1 x 1) */
+    sv = n_mulhi(z[0], sv);
+    sv = UWORD(0x000d00d00d00d00d) - sv;
+
+    /* sin V_1  (1 x 1) */
+    sv = n_mulhi(z[0], sv);
+    sv = UWORD(0x0222222222222222) - sv;
+
+    /* sin V_0  (1 x 1) */
+    sv = n_mulhi(z[0], sv);
+    sv = UWORD(0x2aaaaaaaaaaaaaaa) - sv;
+
+    cv = UWORD(0x0001a01a01a01a01);
+
+    /* cos V_2  (1 x 1) */
+    cv = n_mulhi(z[0], cv);
+    cv = UWORD(0x005b05b05b05b05b) - cv;
+
+    /* cos V_1  (1 x 1) */
+    cv = n_mulhi(z[0], cv);
+    cv = UWORD(0x0aaaaaaaaaaaaaaa) - cv;
+
+    /* cos V_0  (1 x 1) */
+    cv = n_mulhi(z[0], cv);
+    cv = UWORD(0x8000000000000000) - cv;
+
+    /* sin = x - x^3 V_0 */
+    P[0] = sv;
+    T[0] = n_mulhi(z[0], x[0]);
+    sV[0] = n_mulhi(T[0], P[0]);
+    ysin[0] = x[0] - sV[0];
+    ysin[1] = 0;
+
+    /* cos = 1 - z V_0 */
+    P[0] = cv;
+    T[0] = n_mulhi(z[0], P[0]);
+    if (mpn_zero_p(T, 1))
+    {
+        flint_mpn_zero(ycos, 1);
+        ycos[1] = 1;
+    }
+    else
+    {
+        mpn_neg(ycos, T, 1);
+        ycos[1] = 0;
+    }
+}
+
+/* sin_cos, n = 2, r = 8 */
+void
+_fixed_sin_cos_rs_opt_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[2], sV[2], cV[2], T[2], P[2], Z[2];
+    ulong sv, sw1, sw0, cv, cw1, cw0, h, l;
+
+    (void) sv; (void) sw1; (void) sw0; (void) cv; (void) cw1;
+    (void) cw0; (void) h; (void) l; (void) Z; (void) T; (void) P;
+    (void) sV; (void) cV;
+
+    /* the one squaring shared by both series */
+    _fixed_sqrhi_2x2(&z[1], &z[0], x[1], x[0]);
+
+    sv = UWORD(0x0000006b99159fd5);
+
+    /* sin V_3  (1 x 1) */
+    sv = n_mulhi(z[1], sv);
+    sv = UWORD(0x00002e3bc74aad8e) - sv;
+
+    /* sin V_2  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[1], z[0], sv);
+    sub_ddmmss(sw1, sw0, UWORD(0x000d00d00d00d00d), UWORD(0x00d00d00d00d00d0), h, l);
+
+    /* sin V_1  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], sw1, sw0);
+    sub_ddmmss(sw1, sw0, UWORD(0x0222222222222222), UWORD(0x2222222222222222), h, l);
+
+    /* sin V_0  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], sw1, sw0);
+    sub_ddmmss(sw1, sw0, UWORD(0x2aaaaaaaaaaaaaaa), UWORD(0xaaaaaaaaaaaaaaaa), h, l);
+
+    cv = UWORD(0x00000008f76c77fc);
+
+    /* cos V_4  (1 x 1) */
+    cv = n_mulhi(z[1], cv);
+    cv = UWORD(0x0000049f93edde27) - cv;
+
+    /* cos V_3  (1 x 1) */
+    cv = n_mulhi(z[1], cv);
+    cv = UWORD(0x0001a01a01a01a01) - cv;
+
+    /* cos V_2  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[1], z[0], cv);
+    sub_ddmmss(cw1, cw0, UWORD(0x005b05b05b05b05b), UWORD(0x05b05b05b05b05b0), h, l);
+
+    /* cos V_1  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], cw1, cw0);
+    sub_ddmmss(cw1, cw0, UWORD(0x0aaaaaaaaaaaaaaa), UWORD(0xaaaaaaaaaaaaaaaa), h, l);
+
+    /* cos V_0  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[1], z[0], cw1, cw0);
+    sub_ddmmss(cw1, cw0, UWORD(0x8000000000000000), UWORD(0x0000000000000000), h, l);
+
+    /* sin = x - x^3 V_0 */
+    P[0] = sw0; P[1] = sw1;
+    _fixed_mulhi_2x2_sloppy(&T[1], &T[0], z[1], z[0], x[1], x[0]);
+    _fixed_mulhi_2x2_sloppy(&sV[1], &sV[0], T[1], T[0], P[1], P[0]);
+    NN_SUB_2(ysin, x, sV);
+    ysin[2] = 0;
+
+    /* cos = 1 - z V_0 */
+    P[0] = cw0; P[1] = cw1;
+    _fixed_mulhi_2x2_sloppy(&T[1], &T[0], z[1], z[0], P[1], P[0]);
+    if (mpn_zero_p(T, 2))
+    {
+        flint_mpn_zero(ycos, 2);
+        ycos[2] = 1;
+    }
+    else
+    {
+        mpn_neg(ycos, T, 2);
+        ycos[2] = 0;
+    }
+}
+
+/* sin_cos, n = 3, r = 12 */
+void
+_fixed_sin_cos_rs_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[3], sV[3], cV[3], T[3], P[3], Z[2];
+    ulong sv, sw1, sw0, cv, cw1, cw0, h, l;
+
+    (void) sv; (void) sw1; (void) sw0; (void) cv; (void) cw1;
+    (void) cw0; (void) h; (void) l; (void) Z; (void) T; (void) P;
+    (void) sV; (void) cV;
+
+    /* the one squaring shared by both series */
+    flint_mpn_sqrhigh(z, x, 3);
+
+    sv = UWORD(0x00000000b092309d);
+
+    /* sin V_4  (1 x 1) */
+    sv = n_mulhi(z[2], sv);
+    sv = UWORD(0x0000006b99159fd5) - sv;
+
+    /* sin V_3  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[2], z[1], sv);
+    sub_ddmmss(sw1, sw0, UWORD(0x00002e3bc74aad8e), UWORD(0x671f5583911ca002), h, l);
+
+    /* sin V_2  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], sw1, sw0);
+    sub_ddmmss(sw1, sw0, UWORD(0x000d00d00d00d00d), UWORD(0x00d00d00d00d00d0), h, l);
+
+    /* sin V_1  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], sw1, sw0);
+    sub_ddmmss(sw1, sw0, UWORD(0x0222222222222222), UWORD(0x2222222222222222), h, l);
+
+    /* sin V_0  (3 x 2) */
+    P[0] = UWORD(0);
+    P[1] = sw0; P[2] = sw1;
+    flint_mpn_mulhigh_n(T, z + 0, P, 3);
+    P[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[2] = UWORD(0x2aaaaaaaaaaaaaaa);
+    NN_SUB_3(sV, P, T);
+
+    cv = UWORD(0x00000008f76c77fc);
+
+    /* cos V_4  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[2], z[1], cv);
+    sub_ddmmss(cw1, cw0, UWORD(0x0000049f93edde27), UWORD(0xd71cbbc05b4fa999), h, l);
+
+    /* cos V_3  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], cw1, cw0);
+    sub_ddmmss(cw1, cw0, UWORD(0x0001a01a01a01a01), UWORD(0xa01a01a01a01a01a), h, l);
+
+    /* cos V_2  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[2], z[1], cw1, cw0);
+    sub_ddmmss(cw1, cw0, UWORD(0x005b05b05b05b05b), UWORD(0x05b05b05b05b05b0), h, l);
+
+    /* cos V_1  (3 x 2) */
+    P[0] = UWORD(0);
+    P[1] = cw0; P[2] = cw1;
+    flint_mpn_mulhigh_n(T, z + 0, P, 3);
+    P[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[2] = UWORD(0x0aaaaaaaaaaaaaaa);
+    NN_SUB_3(cV, P, T);
+
+    /* cos V_0  (3 x 3) */
+    P[0] = cV[0];
+    P[1] = cV[1];
+    P[2] = cV[2];
+    flint_mpn_mulhigh_n(T, z + 0, P, 3);
+    P[0] = UWORD(0x0000000000000000);
+    P[1] = UWORD(0x0000000000000000);
+    P[2] = UWORD(0x8000000000000000);
+    NN_SUB_3(cV, P, T);
+
+    /* sin = x - x^3 V_0 */
+    P[0] = sV[0];
+    P[1] = sV[1];
+    P[2] = sV[2];
+    flint_mpn_mulhigh_n(T, z, x, 3);
+    flint_mpn_mulhigh_n(sV, T, P, 3);
+    NN_SUB_3(ysin, x, sV);
+    ysin[3] = 0;
+
+    /* cos = 1 - z V_0 */
+    P[0] = cV[0];
+    P[1] = cV[1];
+    P[2] = cV[2];
+    flint_mpn_mulhigh_n(T, z, P, 3);
+    if (mpn_zero_p(T, 3))
+    {
+        flint_mpn_zero(ycos, 3);
+        ycos[3] = 1;
+    }
+    else
+    {
+        mpn_neg(ycos, T, 3);
+        ycos[3] = 0;
+    }
+}
+
+/* sin_cos, n = 4, r = 19 */
+void
+_fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x)
+{
+    ulong z[4], sV[4], cV[4], T[4], P[4], Z[2];
+    ulong sv, sw1, sw0, cv, cw1, cw0, h, l;
+
+    (void) sv; (void) sw1; (void) sw0; (void) cv; (void) cw1;
+    (void) cw0; (void) h; (void) l; (void) Z; (void) T; (void) P;
+    (void) sV; (void) cV;
+
+    /* the one squaring shared by both series */
+    flint_mpn_sqrhigh(z, x, 4);
+
+    sv = UWORD(0x0000006b99159fd5);
+
+    /* sin V_3  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[3], z[2], sv);
+    sub_ddmmss(sw1, sw0, UWORD(0x00002e3bc74aad8e), UWORD(0x671f5583911ca002), h, l);
+
+    /* sin V_2  (2 x 2) */
+    _fixed_mulhi_2x2_sloppy(&h, &l, z[3], z[2], sw1, sw0);
+    sub_ddmmss(sw1, sw0, UWORD(0x000d00d00d00d00d), UWORD(0x00d00d00d00d00d0), h, l);
+
+    /* sin V_1  (3 x 2) */
+    P[0] = UWORD(0);
+    P[1] = sw0; P[2] = sw1;
+    flint_mpn_mulhigh_n(T, z + 1, P, 3);
+    P[0] = UWORD(0x2222222222222222);
+    P[1] = UWORD(0x2222222222222222);
+    P[2] = UWORD(0x0222222222222222);
+    NN_SUB_3(sV, P, T);
+
+    /* sin V_0  (4 x 3) */
+    P[0] = UWORD(0);
+    P[1] = sV[0];
+    P[2] = sV[1];
+    P[3] = sV[2];
+    flint_mpn_mulhigh_n(T, z + 0, P, 4);
+    P[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[2] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[3] = UWORD(0x2aaaaaaaaaaaaaaa);
+    NN_SUB_4(sV, P, T);
+
+    cv = UWORD(0x0000049f93edde27);
+
+    /* cos V_3  (2 x 1) */
+    _fixed_mulhi_2x1(&h, &l, z[3], z[2], cv);
+    sub_ddmmss(cw1, cw0, UWORD(0x0001a01a01a01a01), UWORD(0xa01a01a01a01a01a), h, l);
+
+    /* cos V_2  (3 x 2) */
+    P[0] = UWORD(0);
+    P[1] = cw0; P[2] = cw1;
+    flint_mpn_mulhigh_n(T, z + 1, P, 3);
+    P[0] = UWORD(0x5b05b05b05b05b05);
+    P[1] = UWORD(0x05b05b05b05b05b0);
+    P[2] = UWORD(0x005b05b05b05b05b);
+    NN_SUB_3(cV, P, T);
+
+    /* cos V_1  (3 x 3) */
+    P[0] = cV[0];
+    P[1] = cV[1];
+    P[2] = cV[2];
+    flint_mpn_mulhigh_n(T, z + 1, P, 3);
+    P[0] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[1] = UWORD(0xaaaaaaaaaaaaaaaa);
+    P[2] = UWORD(0x0aaaaaaaaaaaaaaa);
+    NN_SUB_3(cV, P, T);
+
+    /* cos V_0  (4 x 3) */
+    P[0] = UWORD(0);
+    P[1] = cV[0];
+    P[2] = cV[1];
+    P[3] = cV[2];
+    flint_mpn_mulhigh_n(T, z + 0, P, 4);
+    P[0] = UWORD(0x0000000000000000);
+    P[1] = UWORD(0x0000000000000000);
+    P[2] = UWORD(0x0000000000000000);
+    P[3] = UWORD(0x8000000000000000);
+    NN_SUB_4(cV, P, T);
+
+    /* sin = x - x^3 V_0 */
+    P[0] = sV[0];
+    P[1] = sV[1];
+    P[2] = sV[2];
+    P[3] = sV[3];
+    flint_mpn_mulhigh_n(T, z, x, 4);
+    flint_mpn_mulhigh_n(sV, T, P, 4);
+    NN_SUB_4(ysin, x, sV);
+    ysin[4] = 0;
+
+    /* cos = 1 - z V_0 */
+    P[0] = cV[0];
+    P[1] = cV[1];
+    P[2] = cV[2];
+    P[3] = cV[3];
+    flint_mpn_mulhigh_n(T, z, P, 4);
+    if (mpn_zero_p(T, 4))
+    {
+        flint_mpn_zero(ycos, 4);
+        ycos[4] = 1;
+    }
+    else
+    {
+        mpn_neg(ycos, T, 4);
+        ycos[4] = 0;
+    }
+}

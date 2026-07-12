@@ -245,6 +245,9 @@ void
 fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int r)
 {
+#if FLINT_BITS == 64
+    int r0;
+#endif
     slong wn, nc, num, j;
     nn_ptr t, s, cc, wx, wy, va, vb, A;
     slong * used;
@@ -255,6 +258,10 @@ fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     /* on 32-bit limbs, n = 1 would clamp r below the series
        contract */
     FLINT_ASSERT(FLINT_BITS == 64 || n >= 2);
+
+#if FLINT_BITS == 64
+    r0 = r;
+#endif
 
     if (r == 0)
     {
@@ -269,6 +276,13 @@ fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
 
 #if FLINT_BITS == 64
+    /* r = 0: the specialized sizes run with a compile-time constant r
+       and the hand-written series built for it, in which sin and cos
+       share their single squaring */
+    if (n <= 4 && r0 == 0
+            && _fixed_sin_cos_bitwise_rs_opt(ysin, ycos, x, n))
+        return;
+
     if (n <= 7)
     {
         _fixed_sin_cos_bitwise_rs_small_tab[n](ysin, ycos, x, r);

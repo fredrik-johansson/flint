@@ -1208,7 +1208,10 @@ _fixed_log1p_bitwise_rs_5(nn_ptr res, nn_srcptr x, int r)
     if (d4 != 0 || d3 != 0 || d2 != 0 || d1 != 0 || d0 != 0)
         mpn_tdiv_qr(t, nd, 0, nd, 10, S, 6);
 
-    fixed_atanh_rs(y, t, 5);
+    if (r < 32)
+        _fixed_atanh_rs16(y, t, 5);
+    else
+        fixed_atanh_rs(y, t, 5);
 
     add_sssssaaaaaaaaaa(res[4], res[3], res[2], res[1], res[0],
         a4, a3, a2, a1, a0,
@@ -1831,7 +1834,10 @@ _fixed_log1p_bitwise_rs_6(nn_ptr res, nn_srcptr x, int r)
     if (d5 != 0 || d4 != 0 || d3 != 0 || d2 != 0 || d1 != 0 || d0 != 0)
         mpn_tdiv_qr(t, nd, 0, nd, 12, S, 7);
 
-    fixed_atanh_rs(y, t, 6);
+    if (r < 32)
+        _fixed_atanh_rs16(y, t, 6);
+    else
+        fixed_atanh_rs(y, t, 6);
 
     add_ssssssaaaaaaaaaaaa(res[5], res[4], res[3], res[2], res[1], res[0],
         a5, a4, a3, a2, a1, a0,
@@ -2574,9 +2580,722 @@ _fixed_log1p_bitwise_rs_7(nn_ptr res, nn_srcptr x, int r)
     if (d6 != 0 || d5 != 0 || d4 != 0 || d3 != 0 || d2 != 0 || d1 != 0 || d0 != 0)
         mpn_tdiv_qr(t, nd, 0, nd, 14, S, 8);
 
-    fixed_atanh_rs(y, t, 7);
+    if (r < 32)
+        _fixed_atanh_rs16(y, t, 7);
+    else
+        fixed_atanh_rs(y, t, 7);
 
     add_sssssssaaaaaaaaaaaaaa(res[6], res[5], res[4], res[3], res[2], res[1], res[0],
         a6, a5, a4, a3, a2, a1, a0,
         (y[6] << 1) | (y[5] >> (FLINT_BITS - 1)), (y[5] << 1) | (y[4] >> (FLINT_BITS - 1)), (y[4] << 1) | (y[3] >> (FLINT_BITS - 1)), (y[3] << 1) | (y[2] >> (FLINT_BITS - 1)), (y[2] << 1) | (y[1] >> (FLINT_BITS - 1)), (y[1] << 1) | (y[0] >> (FLINT_BITS - 1)), y[0] << 1);
+}
+
+static void
+_fixed_log1p_bitwise_rs_opt_3(nn_ptr res, nn_srcptr x)
+{
+    const int r = 10;
+    ulong d0, d1, d2;
+    ulong p0, p1, p2;
+    ulong a0, a1, a2;
+    ulong e0, e1, e2;
+    ulong v0, v1, v2;
+    ulong bw, m, h, lt;
+    ulong S[4], nd[6], t[3], y[3];
+    slong i, nc;
+
+
+    _fixed_exp_logs_ensure(3, r);
+    nc = _fixed_exp_logs_n;
+
+    d0 = x[0];
+    d1 = x[1];
+    d2 = x[2];
+    p0 = 0;
+    p1 = 0;
+    p2 = 0;
+    a0 = 0;
+    a1 = 0;
+    a2 = 0;
+
+#define LP(ii) (_fixed_exp_logs + (ii) * nc + (nc - 3))
+
+    /* window 0 */
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 1 */
+        Lp = LP(1);
+        v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, 1);
+        v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, 1);
+        v2 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, 1);
+        sub_ddddmmmmssss(bw, e2, e1, e0,
+            UWORD(0), d2, d1, d0,
+            UWORD(0), v2, v1, v0);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        d2 = (d2 & bw) | (e2 & m);
+        add_sssaaaaaa(p2, p1, p0,
+            p2, p1, p0,
+            (v2) & m, (v1) & m, (v0) & m);
+        add_sssaaaaaa(a2, a1, a0,
+            a2, a1, a0,
+            Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d2;
+
+        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        {
+            int b = (int) (i - 0);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            if (h < lt)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v2 = lt;
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                (v2) & m, (v1) & m, (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d2;
+        }
+    }
+
+    /* window 1 */
+    if (r >= 64)
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 64 */
+        Lp = LP(64);
+        sub_ddddmmmmssss(bw, e2, e1, e0,
+            UWORD(0), d2, d1, d0,
+            UWORD(0), UWORD(1), p2, p1);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        d2 = (d2 & bw) | (e2 & m);
+        add_sssaaaaaa(p2, p1, p0,
+            p2, p1, p0,
+            (UWORD(1)) & m, (p2) & m, (p1) & m);
+        add_sssaaaaaa(a2, a1, a0,
+            a2, a1, a0,
+            Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d1;
+
+        for (i = 65; i <= FLINT_MIN((slong) r, 127); i++)
+        {
+            int b = (int) (i - 64);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            if (h < lt && d2 == 0)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v1 = lt;
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), UWORD(0), v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                UWORD(0), (v1) & m, (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d1;
+        }
+    }
+
+    /* window 2 */
+    if (r >= 128)
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 128 */
+        Lp = LP(128);
+        sub_dddmmmsss(bw, e1, e0,
+            UWORD(0), d1, d0,
+            UWORD(0), UWORD(1), p2);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        add_sssaaaaaa(p2, p1, p0,
+            p2, p1, p0,
+            UWORD(0), (UWORD(1)) & m, (p2) & m);
+        add_sssaaaaaa(a2, a1, a0,
+            a2, a1, a0,
+            Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d0;
+
+        for (i = 129; i <= FLINT_MIN((slong) r, 191); i++)
+        {
+            int b = (int) (i - 128);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            if (h < lt && d1 == 0)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = lt;
+            sub_dddmmmsss(bw, e1, e0,
+                UWORD(0), d1, d0,
+                UWORD(0), UWORD(0), v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                UWORD(0), UWORD(0), (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d0;
+        }
+    }
+
+    /* one extra step at i = r absorbs the truncation creep */
+    {
+        nn_srcptr Lp = LP((slong) r);
+        int b = (int) (r & (FLINT_BITS - 1));
+
+        switch (r / FLINT_BITS)
+        {
+        case 0:
+            v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v2 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                (v2) & m, (v1) & m, (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        case 1:
+            if (b == 0)
+            {
+                sub_ddddmmmmssss(bw, e2, e1, e0,
+                    UWORD(0), d2, d1, d0,
+                    UWORD(0), UWORD(1), p2, p1);
+                m = ~bw;                /* accept iff no borrow */
+                d0 = (d0 & bw) | (e0 & m);
+                d1 = (d1 & bw) | (e1 & m);
+                d2 = (d2 & bw) | (e2 & m);
+                add_sssaaaaaa(p2, p1, p0,
+                    p2, p1, p0,
+                    (UWORD(1)) & m, (p2) & m, (p1) & m);
+                add_sssaaaaaa(a2, a1, a0,
+                    a2, a1, a0,
+                    Lp[2] & m, Lp[1] & m, Lp[0] & m);
+                break;
+            }
+            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), UWORD(0), v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                UWORD(0), (v1) & m, (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        case 2:
+            if (b == 0)
+            {
+                sub_dddmmmsss(bw, e1, e0,
+                    UWORD(0), d1, d0,
+                    UWORD(0), UWORD(1), p2);
+                m = ~bw;                /* accept iff no borrow */
+                d0 = (d0 & bw) | (e0 & m);
+                d1 = (d1 & bw) | (e1 & m);
+                add_sssaaaaaa(p2, p1, p0,
+                    p2, p1, p0,
+                    UWORD(0), (UWORD(1)) & m, (p2) & m);
+                add_sssaaaaaa(a2, a1, a0,
+                    a2, a1, a0,
+                    Lp[2] & m, Lp[1] & m, Lp[0] & m);
+                break;
+            }
+            v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p2, b);
+            sub_dddmmmsss(bw, e1, e0,
+                UWORD(0), d1, d0,
+                UWORD(0), UWORD(0), v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            add_sssaaaaaa(p2, p1, p0,
+                p2, p1, p0,
+                UWORD(0), UWORD(0), (v0) & m);
+            add_sssaaaaaa(a2, a1, a0,
+                a2, a1, a0,
+                Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        }
+    }
+
+#undef LP
+
+    /* t = D 2^(FLINT_BITS 3) / (X + P) */
+    add_ssssaaaaaaaa(S[3], S[2], S[1], S[0],
+        UWORD(1), x[2], x[1], x[0],
+        UWORD(1), p2, p1, p0);
+    nd[0] = 0;
+    nd[1] = 0;
+    nd[2] = 0;
+    nd[3] = d0;
+    nd[4] = d1;
+    nd[5] = d2;
+    flint_mpn_zero(t, 3);
+    if (d2 != 0 || d1 != 0 || d0 != 0)
+        mpn_tdiv_qr(t, nd, 0, nd, 6, S, 4);
+
+    _fixed_atanh_rs_opt_3(y, t);
+
+    add_sssaaaaaa(res[2], res[1], res[0],
+        a2, a1, a0,
+        (y[2] << 1) | (y[1] >> (FLINT_BITS - 1)), (y[1] << 1) | (y[0] >> (FLINT_BITS - 1)), y[0] << 1);
+}
+
+static void
+_fixed_log1p_bitwise_rs_opt_4(nn_ptr res, nn_srcptr x)
+{
+    const int r = 26;
+    ulong d0, d1, d2, d3;
+    ulong p0, p1, p2, p3;
+    ulong a0, a1, a2, a3;
+    ulong e0, e1, e2, e3;
+    ulong v0, v1, v2, v3;
+    ulong bw, m, h, lt;
+    ulong S[5], nd[8], t[4], y[4];
+    slong i, nc;
+
+
+    _fixed_exp_logs_ensure(4, r);
+    nc = _fixed_exp_logs_n;
+
+    d0 = x[0];
+    d1 = x[1];
+    d2 = x[2];
+    d3 = x[3];
+    p0 = 0;
+    p1 = 0;
+    p2 = 0;
+    p3 = 0;
+    a0 = 0;
+    a1 = 0;
+    a2 = 0;
+    a3 = 0;
+
+#define LP(ii) (_fixed_exp_logs + (ii) * nc + (nc - 4))
+
+    /* window 0 */
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 1 */
+        Lp = LP(1);
+        v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, 1);
+        v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, 1);
+        v2 = MPN_RIGHT_SHIFT_LOW(p3, p2, 1);
+        v3 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, 1);
+        sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+            UWORD(0), d3, d2, d1, d0,
+            UWORD(0), v3, v2, v1, v0);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        d2 = (d2 & bw) | (e2 & m);
+        d3 = (d3 & bw) | (e3 & m);
+        add_ssssaaaaaaaa(p3, p2, p1, p0,
+            p3, p2, p1, p0,
+            (v3) & m, (v2) & m, (v1) & m, (v0) & m);
+        add_ssssaaaaaaaa(a3, a2, a1, a0,
+            a3, a2, a1, a0,
+            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d3;
+
+        for (i = 2; i <= FLINT_MIN((slong) r, 63); i++)
+        {
+            int b = (int) (i - 0);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            if (h < lt)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v2 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v3 = lt;
+            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+                UWORD(0), d3, d2, d1, d0,
+                UWORD(0), v3, v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            d3 = (d3 & bw) | (e3 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                (v3) & m, (v2) & m, (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d3;
+        }
+    }
+
+    /* window 1 */
+    if (r >= 64)
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 64 */
+        Lp = LP(64);
+        sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+            UWORD(0), d3, d2, d1, d0,
+            UWORD(0), UWORD(1), p3, p2, p1);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        d2 = (d2 & bw) | (e2 & m);
+        d3 = (d3 & bw) | (e3 & m);
+        add_ssssaaaaaaaa(p3, p2, p1, p0,
+            p3, p2, p1, p0,
+            (UWORD(1)) & m, (p3) & m, (p2) & m, (p1) & m);
+        add_ssssaaaaaaaa(a3, a2, a1, a0,
+            a3, a2, a1, a0,
+            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d2;
+
+        for (i = 65; i <= FLINT_MIN((slong) r, 127); i++)
+        {
+            int b = (int) (i - 64);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            if (h < lt && d3 == 0)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v2 = lt;
+            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+                UWORD(0), d3, d2, d1, d0,
+                UWORD(0), UWORD(0), v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            d3 = (d3 & bw) | (e3 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), (v2) & m, (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d2;
+        }
+    }
+
+    /* window 2 */
+    if (r >= 128)
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 128 */
+        Lp = LP(128);
+        sub_ddddmmmmssss(bw, e2, e1, e0,
+            UWORD(0), d2, d1, d0,
+            UWORD(0), UWORD(1), p3, p2);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        d2 = (d2 & bw) | (e2 & m);
+        add_ssssaaaaaaaa(p3, p2, p1, p0,
+            p3, p2, p1, p0,
+            UWORD(0), (UWORD(1)) & m, (p3) & m, (p2) & m);
+        add_ssssaaaaaaaa(a3, a2, a1, a0,
+            a3, a2, a1, a0,
+            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d1;
+
+        for (i = 129; i <= FLINT_MIN((slong) r, 191); i++)
+        {
+            int b = (int) (i - 128);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            if (h < lt && d2 == 0)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v1 = lt;
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), UWORD(0), v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), UWORD(0), (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d1;
+        }
+    }
+
+    /* window 3 */
+    if (r >= 192)
+    {
+        nn_srcptr Lp;
+
+        /* boundary step i = 192 */
+        Lp = LP(192);
+        sub_dddmmmsss(bw, e1, e0,
+            UWORD(0), d1, d0,
+            UWORD(0), UWORD(1), p3);
+        m = ~bw;                /* accept iff no borrow */
+        d0 = (d0 & bw) | (e0 & m);
+        d1 = (d1 & bw) | (e1 & m);
+        add_ssssaaaaaaaa(p3, p2, p1, p0,
+            p3, p2, p1, p0,
+            UWORD(0), UWORD(0), (UWORD(1)) & m, (p3) & m);
+        add_ssssaaaaaaaa(a3, a2, a1, a0,
+            a3, a2, a1, a0,
+            Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+
+        h = d0;
+
+        for (i = 193; i <= FLINT_MIN((slong) r, 255); i++)
+        {
+            int b = (int) (i - 192);
+
+            lt = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            if (h < lt && d1 == 0)
+                continue;    /* certain reject */
+
+            Lp = LP(i);
+            v0 = lt;
+            sub_dddmmmsss(bw, e1, e0,
+                UWORD(0), d1, d0,
+                UWORD(0), UWORD(0), v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), UWORD(0), UWORD(0), (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            h = d0;
+        }
+    }
+
+    /* one extra step at i = r absorbs the truncation creep */
+    {
+        nn_srcptr Lp = LP((slong) r);
+        int b = (int) (r & (FLINT_BITS - 1));
+
+        switch (r / FLINT_BITS)
+        {
+        case 0:
+            v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v2 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v3 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+                UWORD(0), d3, d2, d1, d0,
+                UWORD(0), v3, v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            d3 = (d3 & bw) | (e3 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                (v3) & m, (v2) & m, (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        case 1:
+            if (b == 0)
+            {
+                sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+                    UWORD(0), d3, d2, d1, d0,
+                    UWORD(0), UWORD(1), p3, p2, p1);
+                m = ~bw;                /* accept iff no borrow */
+                d0 = (d0 & bw) | (e0 & m);
+                d1 = (d1 & bw) | (e1 & m);
+                d2 = (d2 & bw) | (e2 & m);
+                d3 = (d3 & bw) | (e3 & m);
+                add_ssssaaaaaaaa(p3, p2, p1, p0,
+                    p3, p2, p1, p0,
+                    (UWORD(1)) & m, (p3) & m, (p2) & m, (p1) & m);
+                add_ssssaaaaaaaa(a3, a2, a1, a0,
+                    a3, a2, a1, a0,
+                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+                break;
+            }
+            v0 = MPN_RIGHT_SHIFT_LOW(p2, p1, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v2 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            sub_dddddmmmmmsssss(bw, e3, e2, e1, e0,
+                UWORD(0), d3, d2, d1, d0,
+                UWORD(0), UWORD(0), v2, v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            d3 = (d3 & bw) | (e3 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), (v2) & m, (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        case 2:
+            if (b == 0)
+            {
+                sub_ddddmmmmssss(bw, e2, e1, e0,
+                    UWORD(0), d2, d1, d0,
+                    UWORD(0), UWORD(1), p3, p2);
+                m = ~bw;                /* accept iff no borrow */
+                d0 = (d0 & bw) | (e0 & m);
+                d1 = (d1 & bw) | (e1 & m);
+                d2 = (d2 & bw) | (e2 & m);
+                add_ssssaaaaaaaa(p3, p2, p1, p0,
+                    p3, p2, p1, p0,
+                    UWORD(0), (UWORD(1)) & m, (p3) & m, (p2) & m);
+                add_ssssaaaaaaaa(a3, a2, a1, a0,
+                    a3, a2, a1, a0,
+                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+                break;
+            }
+            v0 = MPN_RIGHT_SHIFT_LOW(p3, p2, b);
+            v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            sub_ddddmmmmssss(bw, e2, e1, e0,
+                UWORD(0), d2, d1, d0,
+                UWORD(0), UWORD(0), v1, v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            d2 = (d2 & bw) | (e2 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), UWORD(0), (v1) & m, (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        case 3:
+            if (b == 0)
+            {
+                sub_dddmmmsss(bw, e1, e0,
+                    UWORD(0), d1, d0,
+                    UWORD(0), UWORD(1), p3);
+                m = ~bw;                /* accept iff no borrow */
+                d0 = (d0 & bw) | (e0 & m);
+                d1 = (d1 & bw) | (e1 & m);
+                add_ssssaaaaaaaa(p3, p2, p1, p0,
+                    p3, p2, p1, p0,
+                    UWORD(0), UWORD(0), (UWORD(1)) & m, (p3) & m);
+                add_ssssaaaaaaaa(a3, a2, a1, a0,
+                    a3, a2, a1, a0,
+                    Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+                break;
+            }
+            v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p3, b);
+            sub_dddmmmsss(bw, e1, e0,
+                UWORD(0), d1, d0,
+                UWORD(0), UWORD(0), v0);
+            m = ~bw;                /* accept iff no borrow */
+            d0 = (d0 & bw) | (e0 & m);
+            d1 = (d1 & bw) | (e1 & m);
+            add_ssssaaaaaaaa(p3, p2, p1, p0,
+                p3, p2, p1, p0,
+                UWORD(0), UWORD(0), UWORD(0), (v0) & m);
+            add_ssssaaaaaaaa(a3, a2, a1, a0,
+                a3, a2, a1, a0,
+                Lp[3] & m, Lp[2] & m, Lp[1] & m, Lp[0] & m);
+            break;
+        }
+    }
+
+#undef LP
+
+    /* t = D 2^(FLINT_BITS 4) / (X + P) */
+    add_sssssaaaaaaaaaa(S[4], S[3], S[2], S[1], S[0],
+        UWORD(1), x[3], x[2], x[1], x[0],
+        UWORD(1), p3, p2, p1, p0);
+    nd[0] = 0;
+    nd[1] = 0;
+    nd[2] = 0;
+    nd[3] = 0;
+    nd[4] = d0;
+    nd[5] = d1;
+    nd[6] = d2;
+    nd[7] = d3;
+    flint_mpn_zero(t, 4);
+    if (d3 != 0 || d2 != 0 || d1 != 0 || d0 != 0)
+        mpn_tdiv_qr(t, nd, 0, nd, 8, S, 5);
+
+    _fixed_atanh_rs_opt_4(y, t);
+
+    add_ssssaaaaaaaa(res[3], res[2], res[1], res[0],
+        a3, a2, a1, a0,
+        (y[3] << 1) | (y[2] >> (FLINT_BITS - 1)), (y[2] << 1) | (y[1] >> (FLINT_BITS - 1)), (y[1] << 1) | (y[0] >> (FLINT_BITS - 1)), y[0] << 1);
+}
+
+/* sizes with a hardcoded reduction parameter (see OPT_R) */
+static int
+_fixed_log1p_bitwise_rs_opt(nn_ptr res, nn_srcptr x, slong n)
+{
+    switch (n)
+    {
+        case 3: _fixed_log1p_bitwise_rs_opt_3(res, x); return 1;
+        case 4: _fixed_log1p_bitwise_rs_opt_4(res, x); return 1;
+        default: return 0;
+    }
 }
