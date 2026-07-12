@@ -36,9 +36,9 @@ TEST_FUNCTION_START(fixed_sin_cos_bitwise_rs, state)
         slong nmin = (FLINT_BITS == 64) ? 1 : 2;
         slong n = det ? FLINT_MAX(det_n, nmin)
             : nmin + n_randint(state, (iter % 5 == 0) ? 80 : 16);
-        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 16))
+        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 32))
             : (iter % 4 == 0) ? 0 :
-            (iter % 9 == 3) ? 16 + (int) n_randint(state, 17) :
+            (iter % 9 == 3) ? 32 + (int) n_randint(state, 17) :
             (iter % 7 == 2) ? FLINT_BITS * (1 + (int) n_randint(state, 7))
                             : 32 + (int) n_randint(state, 401);
         ulong x[82], ysin[83], ycos[83];

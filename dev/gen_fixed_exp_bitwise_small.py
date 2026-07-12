@@ -39,18 +39,29 @@ def lst(p, k, hi_to_lo=True):
 OPT_R = {1: 12, 2: 16, 3: 16, 4: 16, 5: 16}
 
 
-def gen(n, opt=False):
+def gen(n, opt=False, fn_name=None, series_name=None, r_const=None,
+        static=True):
+    """opt=True with fn_name/series_name/r_const emits a fully
+    specialized body under an arbitrary name with an arbitrary series,
+    for the per-size production files and the tuner's candidates."""
     wn = n
     L = []
     o = L.append
-    o("static void")
+    if fn_name is None:
+        fn_name = ("_fixed_exp_bitwise_rs_opt_%d" % n) if opt \
+            else ("_fixed_exp_bitwise_rs_%d" % n)
+    if series_name is None and opt:
+        series_name = "_fixed_exp_rs_opt_%d" % n
+    if r_const is None and opt:
+        r_const = OPT_R[n]
+    o("static void" if static else "void")
     if opt:
-        o("_fixed_exp_bitwise_rs_opt_%d(nn_ptr res, nn_srcptr x)" % n)
+        o("%s(nn_ptr res, nn_srcptr x)" % fn_name)
     else:
-        o("_fixed_exp_bitwise_rs_%d(nn_ptr res, nn_srcptr x, int r)" % n)
+        o("%s(nn_ptr res, nn_srcptr x, int r)" % fn_name)
     o("{")
     if opt:
-        o("    const int r = %d;" % OPT_R[n])
+        o("    const int r = %d;" % r_const)
     o("    slong i, j, num, bj, nc;")
     o("    ulong %s, bw, h, e;" % lst("t", wn, False))
     o("    ulong %s;" % lst("d", wn, False))
@@ -175,12 +186,7 @@ def gen(n, opt=False):
     for k in range(wn):
         o("    ts[%d] = t%d;" % (k, k))
     if opt:
-        o("    _fixed_exp_rs_opt_%d(ys, ts);" % n)
-    elif n <= 5:
-        o("    if (r < 32)")
-        o("        _fixed_exp_rs16(ys, ts, %d);" % wn)
-        o("    else")
-        o("        fixed_exp_rs(ys, ts, %d);" % wn)
+        o("    %s(ys, ts);" % series_name)
     else:
         o("    fixed_exp_rs(ys, ts, %d);" % wn)
     for k in range(wn + 1):
@@ -259,3 +265,9 @@ _fixed_exp_bitwise_rs_small(nn_ptr res, nn_srcptr x, slong n, int r)
 }
 """)
 print("\n".join(out).rstrip("\n"))
+
+
+if __name__ == "__main__":
+    import sys
+    sys.exit("this module is a body-emitter library for "
+             "dev/tune_fixed.py; run that instead")

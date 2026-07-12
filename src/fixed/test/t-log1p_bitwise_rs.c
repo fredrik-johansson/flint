@@ -35,10 +35,10 @@ TEST_FUNCTION_START(fixed_log1p_bitwise_rs, state)
 
         slong n = det ? det_n
             : 1 + n_randint(state, (iter % 5 == 0) ? 80 : 16);
-        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 16))
+        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 32))
             : (iter % 4 == 0) ? 0 :
             (iter % 7 == 2) ? FLINT_BITS * (1 + (int) n_randint(state, 7))
-                            : 16 + (int) n_randint(state, 417);
+                            : 32 + (int) n_randint(state, 401);
         ulong x[90], res[90];
         arb_t xa, e, va, delta;
         fmpz_t t;

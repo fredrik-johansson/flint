@@ -70,21 +70,8 @@
    adversarial points before being locked: the sweep's 300-point error
    estimate MISSES spikes (r = 17 at n = 5 and r = 15 at n = 7 measured
    fastest but blow the tan budget at scale). */
-static const int _fixed_tan_opt_r[] =
-    { 0, 4, 5, 9, 14, 15, 18, 16, 16, 16, 19, 23, 25 };
-
-static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
-    NULL,
-    _fixed_tan_rs_opt_1, _fixed_tan_rs_opt_2, _fixed_tan_rs_opt_3,
-    _fixed_tan_rs_opt_4, _fixed_tan_rs_opt_5, _fixed_tan_rs_opt_6,
-    _fixed_tan_rs_opt_7, _fixed_tan_rs_opt_8, _fixed_tan_rs_opt_9,
-    _fixed_tan_rs_opt_10, _fixed_tan_rs_opt_11, _fixed_tan_rs_opt_12
-};
-
-#define FIXED_TAN_NMAX 12
 
 #include "hand_mulhi.inc"
-#include "tan_halfangle_small.inc"
 
 #else
 
@@ -97,149 +84,16 @@ static void (* const _fixed_tan_opt_tab[])(nn_ptr, nn_srcptr) = {
 
 #if FLINT_BITS == 64
 
-/* n = 1 without a single mpn call past the shared reduction: the
-   rotation and series were already in registers, and here the whole
-   reconstruction follows in the same A/B/C form as the generic tail --
-   two umul_ppmm chains for TT and DE, three n_mulhi for A, B, C, and
-   ONE udiv_qrnnd per requested reciprocal against a divisor normalized
-   to 64 bits by a shift whose exponent moves into the final doubling.
-   The roundings cost a few ulp against budgets of 6r + 128 and
-   8r + 256.  Measured at roughly a third of the generic path at this
-   size: mpn dispatch and buffer traffic dominated the call. */
-static void
-_fixed_tan_halfangle_1(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
-    nn_srcptr x)
-{
-    slong num, nc;
-    int r = _fixed_tan_opt_r[1], e;
-    ulong t[1], wx[2], wy[2];
-    ulong U, X0, X1, Y0, ph, pl, qh, ql, n1, TT, D1, DE;
-    ulong A, B, C, S, W, R, rr, v;
-    slong * used;
-    TMP_INIT;
-
-    _fixed_atans_ensure(1, r);
-    nc = _fixed_atans_n;
-
-    TMP_START;
-    used = TMP_ALLOC(FIXED_BITWISE_REDUCE_USED_ALLOC(r) * sizeof(slong));
-
-    t[0] = x[0] >> 1;
-    num = _fixed_bitwise_reduce(t, 1, r, 1, _fixed_atans, nc, used);
-    _fixed_tan_rotate_tab[1](wx, wy, used, num);
-
-    _fixed_tan_rs_opt_1(t, t);          /* u = tan(t') */
-    U = t[0];
-
-    X0 = wx[0]; X1 = wx[1]; Y0 = wy[0];
-
-    /* TT = wy + wx u < 0.64 (one limb) and DE = wx - wy u in
-       (0.72, 1.17) (fraction limb + 0/1 unit limb), halved together
-       when DE reaches one so that DE is normalized */
-    umul_ppmm(ph, pl, X0, U);
-    add_ssaaaa(n1, TT, UWORD(0), ph, UWORD(0), X1 ? U : UWORD(0));
-    TT += Y0;                           /* n1 + carry stay zero */
-    umul_ppmm(qh, ql, Y0, U);
-    sub_ddmmss(D1, DE, X1, X0, UWORD(0), qh);
-    (void) pl; (void) ql; (void) n1;
-    if (D1)
-    {
-        DE = (UWORD(1) << (FLINT_BITS - 1)) | (DE >> 1);
-        TT >>= 1;
-    }
-
-    /* A = TT DE, B = DE^2, C = TT^2: sin = 2A/(B + C),
-       cos = 1 - 2C/(B + C), tan = 2A/(B - C), exactly as in the
-       generic tail */
-    A = n_mulhi(TT, DE);
-    B = n_mulhi(DE, DE);
-    C = n_mulhi(TT, TT);
-
-    if (ysin != NULL || ycos != NULL)
-    {
-        ulong cy;
-        add_ssaaaa(cy, S, UWORD(0), B, UWORD(0), C);
-        if (cy)
-        {
-            S = (UWORD(1) << (FLINT_BITS - 1)) | (S >> 1);
-            e = 1;
-        }
-        else if (!(S >> (FLINT_BITS - 1)))
-        {
-            S <<= 1;
-            e = -1;
-        }
-        else
-            e = 0;
-        udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0), S);
-
-        if (ysin != NULL)
-        {
-            v = n_mulhi(A, R);          /* sin = 2^(2-e) A R < 0.842 */
-            ysin[1] = v >> (FLINT_BITS - 2 + e);
-            ysin[0] = v << (2 - e);
-        }
-        if (ycos != NULL)
-        {
-            v = n_mulhi(C, R) << (2 - e);   /* 2C/S < 0.46 */
-            ycos[0] = -v;
-            ycos[1] = (v == 0);         /* cos = 1 exactly when v = 0 */
-        }
-    }
-
-    if (ytan != NULL)
-    {
-        W = B - C;                      /* DE^2 (1 - t^2) > 0.175 */
-        e = flint_clz(W);
-        W <<= e;
-        udiv_qrnnd(R, rr, ~UWORD(0) >> 1, ~UWORD(0), W);
-        v = n_mulhi(A, R);              /* tan = 2^(2+e) A R < 1.56 */
-        ytan[1] = v >> (FLINT_BITS - 2 - e);
-        ytan[0] = v << (2 + e);
-    }
-
-    TMP_END;
-}
-
 #endif
 
-int
-_fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
-    nn_srcptr x, slong n, int r)
+void
+_fixed_tan_halfangle_mid(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x, slong n, int r, void (*series)(nn_ptr, nn_srcptr))
 {
     slong wn = n + 1, nc, num, i, j;
     nn_ptr t, u, wx, wy, va, vb, T, D, N, Q, sc, ss, cc;
     slong * used;
     TMP_INIT;
-
-    if (n < 1)
-        return 0;
-
-#if FLINT_BITS == 64
-    if (n <= FIXED_TAN_HALFANGLE_NMAX && r == 0)
-    {
-        /* the register paths (n = 1 hand-written above, n = 2..4
-           generated in tan_halfangle_small.inc) hardcode the tuned r */
-        if (n == 1)
-            _fixed_tan_halfangle_1(ysin, ycos, ytan, x);
-        else
-            _fixed_tan_halfangle_tab[n](ysin, ycos, ytan, x);
-        return 1;
-    }
-#endif
-
-    /* the sizes with a tangent series of their own take the parameter
-       it was built for; the rest take the caller's (at least 32, the
-       contract of fixed_sin_cos_rs, which supplies tan(t') there) */
-#if FLINT_BITS == 64
-    if (n <= FIXED_TAN_NMAX && r == 0)
-        r = _fixed_tan_opt_r[n];
-    else
-#endif
-    {
-        r = FLINT_MAX(r, 32);
-        r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
-    }
 
     _fixed_atans_ensure(n, r);
     nc = _fixed_atans_n;
@@ -330,17 +184,15 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
        divisions the old reconstruction chain spent before reaching the
        output reciprocals).  No difference can go negative: TT's
        subtrahend wy g is below wy, DE's two are below wx. */
-#if FLINT_BITS == 64
-    if (n <= FIXED_TAN_NMAX)
+    if (series != NULL)
     {
-        _fixed_tan_opt_tab[n](u, t);
+        series(u, t);                       /* u = tan(t') */
         flint_mpn_mul(N, wx, wn, u, n);
         mpn_add_n(T, wy, N + n, wn);        /* TT (T[n] = 0) */
         flint_mpn_mul(N, wy, wn, u, n);
         mpn_sub_n(D, wx, N + n, wn);        /* DE */
     }
     else
-#endif
     {
         fixed_sin_cos_rs(ss, cc, t, n);
 
@@ -471,6 +323,39 @@ _fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
 
     (void) i;
     TMP_END;
+    return;
+}
+
+int
+_fixed_tan_halfangle(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x, slong n, int r)
+{
+    if (n < 1)
+        return 0;
+
+#if FLINT_BITS == 64
+    /* fully specialized per-size implementations (trig_opt_<n>.c,
+       emitted and tuned by dev/tune_fixed.py) */
+    if (r == 0 && n <= 12)
+    {
+        static void (* const tab[])(nn_ptr, nn_ptr, nn_ptr, nn_srcptr) = {
+            NULL,
+            _fixed_trig_opt_1, _fixed_trig_opt_2, _fixed_trig_opt_3,
+            _fixed_trig_opt_4, _fixed_trig_opt_5, _fixed_trig_opt_6,
+            _fixed_trig_opt_7, _fixed_trig_opt_8, _fixed_trig_opt_9,
+            _fixed_trig_opt_10, _fixed_trig_opt_11, _fixed_trig_opt_12
+        };
+        tab[n](ysin, ycos, ytan, x);
+        return 1;
+    }
+#endif
+
+    r = FLINT_MAX(r, 32);
+    r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
+
+    /* no tabulated tangent series here: the residual contributes
+       through sin and cos of t', whose quotient is never formed */
+    _fixed_tan_halfangle_mid(ysin, ycos, ytan, x, n, r, NULL);
     return 1;
 }
 

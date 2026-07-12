@@ -60,7 +60,6 @@ static const int _fixed_atan_bitwise_rs_r_tab[] = {16, 32, 64, 128};
 static const short _fixed_atan_bitwise_rs_n_tab[] = {1, 7, 18, 92};
 
 #if FLINT_BITS == 64
-#include "atan_bitwise_rs_small.inc"
 #endif
 
 void
@@ -75,7 +74,7 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     TMP_INIT;
 
     FLINT_ASSERT(n >= 1);
-    FLINT_ASSERT(r == 0 || r >= 16);
+    FLINT_ASSERT(r == 0 || r >= 32);
 
 #if FLINT_BITS == 64
     r0 = r;
@@ -92,22 +91,24 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
         r = _fixed_atan_bitwise_rs_r_tab[j];
     }
 
-    /* r >= 16 is served by the wider-range series _fixed_atan_rs16
-       (hardcoded to n = 7, generic beyond); r >= 32 by the narrower
-       fixed_atan_rs */
-    r = FLINT_MAX(r, 16);
+    /* the residual series contract is r >= 32 */
+    r = FLINT_MAX(r, 32);
     r = FLINT_MIN((slong) r, FLINT_BITS * n - 16);
 
 #if FLINT_BITS == 64
-    /* with r = 0 the caller leaves the reduction parameter to us: the
-       specialized sizes then run with a compile-time constant r and
-       the hand-written series built for it */
-    if (n <= 7 && r0 == 0 && _fixed_atan_bitwise_rs_opt(res, x, n))
-        return;
-
-    if (n <= 7)
+    /* fully specialized per-size implementations (atan_opt_<n>.c,
+       emitted and tuned by dev/tune_fixed.py): with r = 0 the caller
+       has left the reduction parameter to us, and the whole call
+       collapses to straight-line code with a compile-time r and the
+       series built for it */
+    if (r0 == 0 && n <= 7)
     {
-        _fixed_atan_bitwise_rs_small_tab[n](res, x, r);
+        static void (* const tab[])(nn_ptr, nn_srcptr) = {
+            NULL, fixed_atan_opt_1, fixed_atan_opt_2, fixed_atan_opt_3,
+            fixed_atan_opt_4, fixed_atan_opt_5, fixed_atan_opt_6,
+            fixed_atan_opt_7
+        };
+        tab[n](res, x);
         return;
     }
 #endif
@@ -256,10 +257,7 @@ fixed_atan_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     /* res = acc + atan(t') (the series does not support aliased
        output) */
     y = t + n;
-    if (r >= 32)
-        fixed_atan_rs(y, t, n);
-    else
-        _fixed_atan_rs16(y, t, n);
+    fixed_atan_rs(y, t, n);
     mpn_add_n(res, acc, y, n);
 
     TMP_END;

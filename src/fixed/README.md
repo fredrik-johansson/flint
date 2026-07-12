@@ -2108,3 +2108,61 @@ pointer), so the sweep's r optimum transfers directly; the residual
 divisor in the atan/log1p bodies still carries its unit limb into
 mpn_tdiv_qr (the pre-normalization trick from the tan tail has not
 been applied there -- a possible next nibble).
+
+### restructure: one file per specialized size, tuned by one script
+
+The dispatch had grown byzantine: each function threaded r = 0 calls
+through up to three tiers (fully specialized opt variants, register
+_small variants taking a runtime r, and the generic mpn path), the
+generated .inc files mixed live and dead series families, and the
+2^-16 window series existed for explicit reduction parameters nobody
+sensible passes.  Reorganized:
+
+- **The public contract is r = 0 or r >= 32.**  Everything the r < 32
+  window family served is covered better by the specialized tier;
+  the whole rs16 machinery died (about 3300 lines across
+  trig_rs_hard.inc, exp_rs_hard.inc, their wrappers and tables), as
+  did the runtime-r register _small variants (three .inc files,
+  another 12600 lines) -- explicit r now takes the generic mpn path,
+  which is a tuning/testing interface, not a fast path.
+
+- **One source file per (function, size)**: exp_opt_1..7.c,
+  log1p_opt_1..7.c, atan_opt_1..7.c, trig_opt_1..12.c (the last
+  defines _fixed_trig_opt_n plus the fixed_sin_cos_opt_n and
+  fixed_tan_opt_n wrappers -- sin/cos and tan share the half-angle
+  reconstruction, so they share the file).  Each file is complete:
+  its hand series (static, built for exactly its compile-time r),
+  its reduction and reconstruction.  Shared helpers stay shared:
+  _fixed_bitwise_reduce, the angle/log tables, _fixed_exp_recon,
+  _fixed_tan_halfangle_mid (the generic half-angle body with the
+  residual series behind a function pointer; series = NULL takes
+  sin/cos of the residual and never divides them), hand_mulhi.inc
+  (now include-guarded), tan_rotate.inc.
+
+- **dev/tune_fixed.py generates, builds, runs, selects and emits.**
+  For FUNC in {exp, log1p, atan, trig} and a size n it writes an
+  out-of-tree source with one fully specialized candidate per r,
+  each the SAME body production will use; builds it against the
+  in-tree libflint; validates every candidate against MPFR over
+  --points adversarial inputs and times it; selects the fastest
+  whose error stays within --margin (default 0.5) of the budget,
+  breaking near-ties (1.5%) toward the CLEANEST error -- the sweep
+  blowout lesson, now institutional; and with --emit writes
+  src/fixed/FUNC_opt_n.c.  --pin R skips the sweep; --pin at the
+  shipped r reproduces the shipped file byte for byte (verified),
+  which is the reproducibility check.  Hand-written pieces that
+  predate the series generator (exp n <= 2 series, the log1p n <= 2
+  bodies, the trig n = 1 scalar body) are archived in dev/ and
+  carried over verbatim by the tuner.
+
+- The old per-function generators remain as body-emitter libraries
+  for the tuner; their inc-emitting mains are gone.
+  gen_fixed_exp_rs_hard.py and gen_fixed_trig_rs_hard.py now emit
+  only the surviving 2^-64/2^-32 families and reproduce the pruned
+  .inc files.
+
+Net: 32085 -> 25976 lines in src/fixed (-19%) while ADDING 33 files.
+Performance parity verified across every function and size (log1p
+n = 7 gained 8% incidentally: its new dedicated r = 25 beats the old
+runtime-32 path).  8/8 tests both word sizes at multiplier 25;
+canary clean; error validation at 3000+ points per trig size.

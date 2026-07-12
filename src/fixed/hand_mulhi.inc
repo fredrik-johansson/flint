@@ -1,3 +1,6 @@
+#ifndef FIXED_HAND_MULHI_INC
+#define FIXED_HAND_MULHI_INC
+
 /* Inline high-multiply helpers shared by the hand-written fixed-point
    series (exp_rs_opt_hand.inc, trig_rs_opt_hand.inc).
 
@@ -74,3 +77,31 @@ _fixed_sqrhi_2x2(ulong * r1, ulong * r0, ulong a1, ulong a0)
     *r0 = rl;
     *r1 = rh;
 }
+
+/* Top 3 limbs of a (3 limbs) times a 2-limb fraction b, which embeds
+   as (0, b0, b1): the whole b-limb-0 column of the product vanishes,
+   so three full products and two high-only ones suffice, against the
+   six of a general 3x3. */
+FLINT_FORCE_INLINE void
+_fixed_mulhi_3x2(ulong * r2, ulong * r1, ulong * r0,
+    ulong a2, ulong a1, ulong a0, ulong b1, ulong b0)
+{
+    ulong t2, t1, t0, ph, pl;
+
+    umul_ppmm(t2, t1, a2, b1);          /* weight 4 */
+    t0 = 0;
+    umul_ppmm(ph, pl, a1, b1);          /* weight 3 */
+    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), ph, pl);
+    umul_ppmm(ph, pl, a2, b0);          /* weight 3 */
+    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), ph, pl);
+    ph = n_mulhi(a0, b1);               /* weight 2: high word only */
+    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), UWORD(0), ph);
+    ph = n_mulhi(a1, b0);               /* weight 2: high word only */
+    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), UWORD(0), ph);
+
+    *r0 = t0;
+    *r1 = t1;
+    *r2 = t2;
+}
+
+#endif /* FIXED_HAND_MULHI_INC */

@@ -84,16 +84,9 @@ extra limb of precision).
               void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n, int alternating)
 
     As the corresponding functions above, requiring only
-    `x < 2^{-32}` (`x < 2^{-16}` for the atan/atanh fallback; the
+    `x < 2^{-32}` (the
     number of terms is chosen from the actual leading zero bits of
     `x`).
-
-.. function:: void _fixed_atanh_rs16(nn_ptr res, nn_srcptr x, slong n)
-
-    Internal: as :func:`fixed_atanh_rs` but for the wider range
-    `x < 2^{-16}`, backed by generated straight-line code for
-    `n \le 4`; used by the small reduction parameters of
-    :func:`fixed_log1p_bitwise_rs`.
 
 Exponential with bitwise argument reduction
 -------------------------------------------------------------------------------
@@ -128,13 +121,14 @@ Exponential with bitwise argument reduction
     The logarithm table is generated at runtime and cached per thread
     at the largest precision and index range requested so far.
 
-    Values below 32 are served by a wider-range series for
-    `t < 2^{-16}` (available for `n \le 5` on 64-bit machines) and
-    pay up to about `n = 4`.
+    Explicit values require `r \ge 32`, the contract of the residual
+    series.
 
-    With `r = 0` the sizes `n = 1, 2, 3, 5` are fully specialized on
-    64-bit machines: the reduction parameter is a compile-time
-    constant and the series is built for exactly that `r`, with the
+    With `r = 0` the sizes `n \le 7` are fully specialized on 64-bit
+    machines, one source file per size (``exp_opt_<n>.c``, emitted and
+    tuned by ``dev/tune_fixed.py``): the reduction parameter is a
+    compile-time constant and the series is built for exactly that
+    `r`, with the
     smallest number of terms `N` satisfying
     `N r + \log_2(N!) \ge 64 n` -- that is, the `1/N!` of the last
     coefficient is spent on dropping terms rather than kept as slack,
@@ -177,15 +171,14 @@ Logarithm with bitwise argument reduction
     logarithms of the used factors are added.  The same cached table
     serves :func:`fixed_exp_bitwise_rs` and this function.
 
-    Passing `r = 0` selects a tuned default, as for
-    :func:`fixed_exp_bitwise_rs`.  Otherwise requires `r \ge 16`:
-    values below 32 shorten the reduction
-    further and take effect for `n \le 4`, where the atanh series
-    for the wider range `t < 2^{-16}` is available; the general path
-    clamps `r` up to 32, matching the :func:`fixed_atanh_rs`
-    contract.  Generated register implementations (decisions and
-    updates in straight-line masked carry chains) serve
-    `n \le 7`.
+    Passing `r = 0` selects the fully specialized per-size
+    implementations for `n \le 7` on 64-bit machines
+    (``log1p_opt_<n>.c``, emitted and tuned by ``dev/tune_fixed.py``;
+    decisions and updates in straight-line masked carry chains, with a
+    compile-time `r` and the atanh series built for it -- the
+    hand-written `n \le 2` paths run at `r = 16`, below the public
+    contract, which their inline series support).  Explicit values
+    require `r \ge 32`, the :func:`fixed_atanh_rs` contract.
 
     The significant length of `P` grows gradually (by `i` bits per
     accepted factor), so the per-factor work starts out at a single
@@ -248,11 +241,14 @@ Sine and cosine with bitwise argument reduction
     computation past the reduction runs in registers, except that one
     division.
 
-    Passing `r = 0` selects a tuned default.  Otherwise `r \ge 16`:
-    values below 32 shorten the reduction further and are served by
-    the wider-range series for `t < 2^{-16}`, which pays up to about
-    `n = 4`.  Requires `n \ge 2` when ``FLINT_BITS == 32``.  The angle
-    table is shared with :func:`fixed_atan_bitwise_rs`.
+    Passing `r = 0` selects the fully specialized per-size
+    implementations for `n \le 12` on 64-bit machines
+    (``trig_opt_<n>.c``, emitted and tuned by ``dev/tune_fixed.py``,
+    each with a compile-time `r` and the tangent series built for
+    it).  Explicit values require `r \ge 32`, the contract of
+    :func:`fixed_sin_cos_rs`, which supplies the residual there.
+    Requires `n \ge 2` when ``FLINT_BITS == 32``.  The angle table is
+    shared with :func:`fixed_atan_bitwise_rs`.
 
 Inverse tangent with bitwise argument reduction
 -------------------------------------------------------------------------------
@@ -288,12 +284,12 @@ Inverse tangent with bitwise argument reduction
     table (they compare `Y` against `X 2^{-i}`), so only the
     rotation direction constrains how the shared angles are scaled.
 
-    Passing `r = 0` selects a tuned default.  Otherwise `r \ge 16`,
-    values below 32 being served by the wider-range series for
-    `t < 2^{-16}`; the shorter reduction pays up to about `n = 6`.
-    Generated register implementations (the vectoring in straight-line
-    masked borrow chains, bit-for-bit identical to the generic code)
-    serve `n \le 7`.
+    Passing `r = 0` selects the fully specialized per-size
+    implementations for `n \le 7` on 64-bit machines
+    (``atan_opt_<n>.c``, emitted and tuned by ``dev/tune_fixed.py``:
+    the vectoring in straight-line masked borrow chains, a
+    compile-time `r`, and the series built for it).  Explicit values
+    require `r \ge 32`.
 
 Tangent with bitwise argument reduction
 -------------------------------------------------------------------------------

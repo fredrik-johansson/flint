@@ -105,22 +105,6 @@ TEST_FUNCTION_START(fixed_trig_rs, state)
             TEST_FUNCTION_FAIL("atan(h): zbits = %d, n = %wd, alt = %d\n",
                 zbits, n, alt);
 
-        /* internal atanh for the wider range x < 2^-16 */
-        {
-            ulong x16[130], xr16[131], a16[131], ref16[132];
-
-            flint_mpn_copyi(x16, x, n);
-            mask_top2(x16, n, 16);
-            xr16[0] = 0;
-            flint_mpn_copyi(xr16 + 1, x16, n);
-
-            _fixed_atanh_rs16(a16, x16, n);
-            _fixed_atan_rs_fallback(ref16, xr16, n + 1, 0);
-
-            if (!close_1ulp(a16, n, ref16, bhi, blo))
-                TEST_FUNCTION_FAIL("atanh16: n = %wd\n", n);
-        }
-
         /* absolute check for small n (note: this will become circular
            once arb is built on the fixed module; it can then be
            replaced by an mpfr comparison) */

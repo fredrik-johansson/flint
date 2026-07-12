@@ -26,7 +26,7 @@ TEST_FUNCTION_START(fixed_tan_bitwise_rs, state)
         slong n = nmin + n_randint(state, (iter % 5 == 0) ? 40 : 9);
         int r = (iter % 3 == 0) ? 0
               : (iter % 3 == 1) ? 32 + (int) n_randint(state, 200)
-                                : 16 + (int) n_randint(state, 17);
+                                : 32 + (int) n_randint(state, 17);
         ulong x[64], res[66];
         arb_t xa, e, va, d;
         fmpz_t f;

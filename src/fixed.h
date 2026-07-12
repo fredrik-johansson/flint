@@ -69,6 +69,86 @@ void fixed_exp_rs(nn_ptr res, nn_srcptr x, slong n);
    limb themselves. */
 void fixed_exp_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r);
 
+/* fully specialized per-size implementations (default dispatch;
+   generated and tuned by dev/tune_fixed.py) */
+#if FLINT_BITS == 64
+void fixed_exp_opt_1(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_2(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_3(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_4(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_5(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_6(nn_ptr res, nn_srcptr x);
+void fixed_exp_opt_7(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_1(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_2(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_3(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_4(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_5(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_6(nn_ptr res, nn_srcptr x);
+void fixed_atan_opt_7(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_1(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_2(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_3(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_4(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_5(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_6(nn_ptr res, nn_srcptr x);
+void fixed_log1p_opt_7(nn_ptr res, nn_srcptr x);
+void _fixed_trig_opt_1(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_2(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_3(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_4(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_5(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_6(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_7(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_8(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_9(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_10(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_11(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void _fixed_trig_opt_12(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x);
+void fixed_sin_cos_opt_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_5(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_6(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_7(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_8(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_9(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_10(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_11(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_sin_cos_opt_12(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
+void fixed_tan_opt_1(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_2(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_3(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_4(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_5(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_6(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_7(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_8(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_9(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_10(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_11(nn_ptr res, nn_srcptr x);
+void fixed_tan_opt_12(nn_ptr res, nn_srcptr x);
+#endif
+
+/* shared internals of the specialized per-size implementations */
+void _fixed_exp_recon(nn_ptr y, nn_ptr sh, slong ylen, const slong * used,
+    slong j, slong num);
+void _fixed_tan_halfangle_mid(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
+    nn_srcptr x, slong n, int r, void (*series)(nn_ptr, nn_srcptr));
+
 /* log(1 + (x, n)) -> (res, n) for any 0 <= x < 1, by the dual
    reduction: greedily multiply P by factors 1 + 2^-i (each one
    shift-and-add) while P (1 + 2^-i) <= 1 + x, then
@@ -126,17 +206,11 @@ void _fixed_exp_rs_fallback(nn_ptr res, nn_srcptr x, slong n);
    small reduction parameters of fixed_exp_bitwise_rs.  The hardcoded
    series family exists only for 64-bit limbs. */
 #if FLINT_BITS == 64
-void _fixed_exp_rs16(nn_ptr res, nn_srcptr x, slong n);
 
 /* Internal: the fully specialized exp series, one per n <= 5, each
    built for the reduction parameter hardcoded alongside it in
    fixed_exp_bitwise_rs and using the smallest number of terms N with
    N r + log2(N!) >= 64 n. */
-void _fixed_exp_rs_opt_1(nn_ptr res, nn_srcptr x);
-void _fixed_exp_rs_opt_2(nn_ptr res, nn_srcptr x);
-void _fixed_exp_rs_opt_3(nn_ptr res, nn_srcptr x);
-void _fixed_exp_rs_opt_4(nn_ptr res, nn_srcptr x);
-void _fixed_exp_rs_opt_5(nn_ptr res, nn_srcptr x);
 #endif
 
 /* Internal: thread-local cached table of L_i = log(1 + 2^-i)
@@ -179,55 +253,24 @@ void _fixed_atan_rs_fallback(nn_ptr res, nn_srcptr x, slong n,
 
 /* Internal: atanh for the wider range x < 2^-16, used by the small
    reduction parameters of fixed_log1p_bitwise_rs. */
-void _fixed_atanh_rs16(nn_ptr res, nn_srcptr x, slong n);
 
 /* Internal: atan and sin/cos for the wider range x < 2^-16, used by
    the small reduction parameters of the bitwise trigonometric
    functions.  The sin/cos routine requires both outputs. */
-void _fixed_atan_rs16(nn_ptr res, nn_srcptr x, slong n);
 
 /* Internal: hand-written atan series, one per n <= 4, each built for
    the reduction parameter hardcoded alongside it in
    fixed_atan_bitwise_rs (64-bit limbs only). */
 #if FLINT_BITS == 64
-void _fixed_atan_rs_opt_1(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_2(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_3(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_4(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_5(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_6(nn_ptr res, nn_srcptr x);
-void _fixed_atan_rs_opt_7(nn_ptr res, nn_srcptr x);
 
 /* Internal: hand-written atanh and sin/cos series, each built for the
    reduction parameter hardcoded alongside it in the bitwise callers.
    The sin/cos routines compute both outputs from a single squaring. */
-void _fixed_atanh_rs_opt_2(nn_ptr res, nn_srcptr x);
-void _fixed_atanh_rs_opt_3(nn_ptr res, nn_srcptr x);
-void _fixed_atanh_rs_opt_4(nn_ptr res, nn_srcptr x);
-void _fixed_atanh_rs_opt_5(nn_ptr res, nn_srcptr x);
-void _fixed_atanh_rs_opt_6(nn_ptr res, nn_srcptr x);
-void _fixed_sin_cos_rs_opt_1(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
-void _fixed_sin_cos_rs_opt_2(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
-void _fixed_sin_cos_rs_opt_3(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
-void _fixed_sin_cos_rs_opt_4(nn_ptr ysin, nn_ptr ycos, nn_srcptr x);
 
 /* Internal: tan series for the half-angle reconstruction, one per
    n <= 12, each built for the reduction parameter hardcoded alongside
    it in tan_bitwise_rs.c. */
-void _fixed_tan_rs_opt_1(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_2(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_3(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_4(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_5(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_6(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_7(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_8(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_9(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_10(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_11(nn_ptr res, nn_srcptr x);
-void _fixed_tan_rs_opt_12(nn_ptr res, nn_srcptr x);
 #endif
-void _fixed_sin_cos_rs16(nn_ptr ysin, nn_ptr ycos, nn_srcptr x, slong n);
 
 #ifdef __cplusplus
 }

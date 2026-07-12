@@ -61,161 +61,6 @@
 
 #if FLINT_BITS == 64
 
-#ifndef FIXED_LOG1P_BITWISE_NO_SMALL
-#include "log1p_bitwise_rs_small.inc"
-#endif
-
-
-/* n = 1: everything in registers.  With r <= 48 there is a single
-   reduction window; each step is a funnel shift of P's top limbs, a
-   branch-free compare-select, and masked updates of the deficit, the
-   product and the (single-limb) logarithm accumulator.  The final
-   division is a 3-by-2 limb schoolbook step, and at t < 2^-16 the
-   atanh series collapses to t + t^3/3 (the t^5 term is below the
-   64-bit ulp already for r = 16). */
-static void
-_fixed_log1p_bitwise_rs_1(nn_ptr res, nn_srcptr x, int r)
-{
-    ulong p0 = 0, d0 = x[0], a0 = 0;
-    ulong t0, z, w, q, rr, h, l, sn1, sn0, n2, n1, s1, s0, cy;
-    slong i, nc;
-    int k;
-
-    r = FLINT_MIN(r, FLINT_BITS * 1 - 16);
-
-    _fixed_exp_logs_ensure(1, r);
-    nc = _fixed_exp_logs_n;
-
-    for (i = 1; i <= r + 1; i++)
-    {
-        slong ii = FLINT_MIN(i, (slong) r);
-        ulong v = MPN_RIGHT_SHIFT_LOW(UWORD(1), p0, (int) ii);
-        ulong lt = _fixed_exp_logs[ii * nc + (nc - 1)];
-        ulong m = -(ulong) (v <= d0);
-
-        d0 -= v & m;
-        p0 += v & m;      /* no carry: P + v <= X < 2 */
-        a0 += lt & m;     /* no carry: acc < log 2 */
-    }
-
-    /* t = d0 2^64 / S, S = X + P = (s1 : s0) with s1 in {2, 3}:
-       one normalized 3-by-2 division step with two corrections */
-    add_ssaaaa(s1, s0, UWORD(1), x[0], UWORD(1), p0);
-    if (d0 == 0)
-    {
-        res[0] = a0;
-        return;
-    }
-    k = flint_clz(s1);
-    sn1 = (s1 << k) | (s0 >> (FLINT_BITS - k));
-    sn0 = s0 << k;
-    n2 = d0 >> (FLINT_BITS - k);
-    n1 = d0 << k;
-    udiv_qrnnd(q, rr, n2, n1, sn1);
-    umul_ppmm(h, l, q, sn0);
-    while (h > rr || (h == rr && l > 0))
-    {
-        q--;
-        sub_ddmmss(h, l, h, l, UWORD(0), sn0);
-        cy = rr + sn1;
-        if (cy < rr)
-            break;      /* remainder overflowed: q is now correct */
-        rr = cy;
-    }
-    t0 = q;
-
-    /* atanh(t) = t + t^3/3 + O(t^5), t < 2^-16 */
-    umul_ppmm(z, l, t0, t0);
-    umul_ppmm(w, l, t0, z);
-    res[0] = a0 + 2 * (t0 + w / 3);
-}
-
-/* n = 2: two-limb register version.  Window 0 (i < 64) works on
-   two-limb funnel shifts of P and branch-free two-limb
-   compare-selects; window 1 (i >= 64) reduces to a single
-   significant limb.  The division falls back to mpn_tdiv_qr and the
-   atanh series runs four terms (enough down to r = 16). */
-static void
-_fixed_log1p_bitwise_rs_2(nn_ptr res, nn_srcptr x, int r)
-{
-    ulong p1 = 0, p0 = 0, d1 = x[1], d0 = x[0], a1 = 0, a0 = 0;
-    ulong t2[2], w[2], S[3], nd[4], rem[4];
-    slong i, nc;
-
-    r = FLINT_MIN(r, FLINT_BITS * 2 - 16);
-
-    _fixed_exp_logs_ensure(2, r);
-    nc = _fixed_exp_logs_n;
-
-#define STEP2(ii, v1, v0) \
-    do { \
-        nn_srcptr Lq = _fixed_exp_logs + (ii) * nc + (nc - 2); \
-        ulong bw, e1, e0, m; \
-        sub_dddmmmsss(bw, e1, e0, UWORD(0), d1, d0, \
-            UWORD(0), v1, v0); \
-        m = ~bw;                          /* accept iff no borrow */ \
-        d1 = (d1 & bw) | (e1 & m); \
-        d0 = (d0 & bw) | (e0 & m); \
-        add_ssaaaa(p1, p0, p1, p0, (v1) & m, (v0) & m); \
-        add_ssaaaa(a1, a0, a1, a0, Lq[1] & m, Lq[0] & m); \
-    } while (0)
-
-    for (i = 1; i <= FLINT_MIN((slong) r, FLINT_BITS - 1); i++)
-    {
-        ulong v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1, (int) i);
-        ulong v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, (int) i);
-        STEP2(i, v1, v0);
-    }
-
-    if (r >= FLINT_BITS)
-    {
-        STEP2(FLINT_BITS, UWORD(1), p1);      /* i = 64: v = P >> 64 */
-
-        for (i = FLINT_BITS + 1; i <= (slong) r; i++)
-        {
-            ulong v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1,
-                (int) (i - FLINT_BITS));
-            STEP2(i, UWORD(0), v0);
-        }
-    }
-
-    /* one extra step at i = r absorbs the truncation creep */
-    if (r > FLINT_BITS)
-    {
-        ulong v0 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1,
-            (int) (r - FLINT_BITS));
-        STEP2(r, UWORD(0), v0);
-    }
-    else if (r == FLINT_BITS)
-        STEP2(r, UWORD(1), p1);           /* v = P >> 64 exactly */
-    else
-    {
-        ulong v1 = MPN_RIGHT_SHIFT_LOW(UWORD(1), p1, (int) r);
-        ulong v0 = MPN_RIGHT_SHIFT_LOW(p1, p0, (int) r);
-        STEP2(r, v1, v0);
-    }
-
-#undef STEP2
-
-    /* t = D 2^128 / (X + P) via mpn_tdiv_qr; S = X + P in [2, 4) */
-    add_sssaaaaaa(S[2], S[1], S[0], UWORD(1), x[1], x[0],
-        UWORD(1), p1, p0);
-    nd[0] = 0;
-    nd[1] = 0;
-    nd[2] = d0;
-    nd[3] = d1;
-    t2[0] = t2[1] = 0;
-    if (d1 != 0 || d0 != 0)
-        mpn_tdiv_qr(t2, rem, 0, nd, 4, S, 3);
-
-    /* generated atanh series for t < 2^-16 (single denominator
-       division by truncated-inverse multiplication) */
-    _fixed_atanh_rs16(w, t2, 2);
-
-    /* res = acc + 2 atanh(t) */
-    add_ssaaaa(res[1], res[0], a1, a0,
-        (w[1] << 1) | (w[0] >> (FLINT_BITS - 1)), w[0] << 1);
-}
 
 #endif /* FLINT_BITS == 64 */
 
@@ -235,7 +80,7 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
     TMP_INIT;
 
     FLINT_ASSERT(n >= 1);
-    FLINT_ASSERT(r == 0 || r >= 16);
+    FLINT_ASSERT(r == 0 || r >= 32);
 
 #if FLINT_BITS == 64
     r0 = r;
@@ -259,38 +104,19 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
        atanh evaluations only need t < 2^-16; the general path uses
        fixed_atanh_rs and hence at least r = 32 */
 #if FLINT_BITS == 64
-#ifndef FIXED_LOG1P_BITWISE_NO_SMALL
-    /* r = 0: the specialized sizes run with a compile-time constant r
-       and the hand-written atanh series built for it.  n = 1 and n = 2
-       keep their own register code, whose atanh evaluation is already
-       inline. */
-    if (n <= 6 && r0 == 0 && _fixed_log1p_bitwise_rs_opt(res, x, n))
-        return;
-#endif
-
-    if (n == 1)
+    /* fully specialized per-size implementations (log1p_opt_<n>.c,
+       emitted and tuned by dev/tune_fixed.py; n = 1 and 2 are the
+       hand-written register paths, carried over by the tuner) */
+    if (r0 == 0 && n <= 7)
     {
-        _fixed_log1p_bitwise_rs_1(res, x, (int) FLINT_MAX(r, 16));
-        return;
-    }
-    if (n == 2)
-    {
-        _fixed_log1p_bitwise_rs_2(res, x, (int) FLINT_MAX(r, 16));
+        static void (* const tab[])(nn_ptr, nn_srcptr) = {
+            NULL, fixed_log1p_opt_1, fixed_log1p_opt_2,
+            fixed_log1p_opt_3, fixed_log1p_opt_4, fixed_log1p_opt_5,
+            fixed_log1p_opt_6, fixed_log1p_opt_7
+        };
+        tab[n](res, x);
         return;
     }
-#ifndef FIXED_LOG1P_BITWISE_NO_SMALL
-    if (n <= 7)
-    {
-        switch (n)
-        {
-            case 3: _fixed_log1p_bitwise_rs_3(res, x, (int) r); return;
-            case 4: _fixed_log1p_bitwise_rs_4(res, x, (int) r); return;
-            case 5: _fixed_log1p_bitwise_rs_5(res, x, (int) r); return;
-            case 6: _fixed_log1p_bitwise_rs_6(res, x, (int) r); return;
-            default: _fixed_log1p_bitwise_rs_7(res, x, (int) r); return;
-        }
-    }
-#endif
 #endif /* FLINT_BITS == 64 */
 
     r = FLINT_MAX(r, 32);
@@ -468,10 +294,7 @@ fixed_log1p_bitwise_rs(nn_ptr res, nn_srcptr x, slong n, int r)
 
     /* log X = acc + 2 atanh(t); on 32-bit limbs n = 1 clamps r to
        16 above, where the wider-range atanh applies */
-    if (r < 32)
-        _fixed_atanh_rs16(sh, t, n);
-    else
-        fixed_atanh_rs(sh, t, n);
+    fixed_atanh_rs(sh, t, n);
     mpn_lshift(sh, sh, n, 1);
     mpn_add_n(res, acc, sh, n);
 

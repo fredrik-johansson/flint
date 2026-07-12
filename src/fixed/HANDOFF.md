@@ -134,10 +134,20 @@ one process, on an idle machine; the arb ratio is the durable metric.
 
 ## 4. Open work, in the order I would do it
 
-(Also since: fully specialized atan runs to n = 7 and log1p to
-n = 6 -- OPT_R extensions with matching hand series; exp measured a
-1-3% tier delta at 5..7 and was deliberately NOT extended.  Old items
-1 and 2 shipped this session: register reconstruction runs
+(Also since: THE MODULE WAS RESTRUCTURED -- one file per fully
+specialized (function, size): exp_opt_1..7.c, log1p_opt_1..7.c,
+atan_opt_1..7.c, trig_opt_1..12.c, each complete with its static
+series, reduction and reconstruction, all emitted and tuned by
+dev/tune_fixed.py (generate all-r candidates out of tree, build, run
+against MPFR, select with the clean-error tie-break, emit; --pin R
+reproduces the shipped file byte for byte).  The public contract is
+r = 0 or r >= 32; the rs16 window families and the runtime-r _small
+register variants are gone (~16k lines).  Hand-written pieces the
+generators cannot reproduce live in dev/exp_series_hand.inc,
+dev/log1p_hand.inc, dev/trig_hand.inc and are carried over verbatim.
+Earlier: fully specialized atan ran to n = 7 and log1p to
+n = 6; exp measured a 1-3% tier delta at 5..7.  Old items
+1 and 2 shipped before that: register reconstruction runs
 through n = 4 -- `dev/gen_fixed_tan_halfangle_small.py` ->
 `tan_halfangle_small.inc`, dispatched at r = 0 -- and n = 7 has its
 own tangent series plus register rotation, with n = 8 getting a series
@@ -165,14 +175,19 @@ dividing them -- cos t' cancels.  See the last three README entries.)
    preinverse might still shave the call overhead at n = 2..4, where
    the division is now the majority of the tail.
 
-3. **The atan/log1p residual divisions still feed mpn_tdiv_qr an
+3. **Retune with the new tuner.**  Every shipped r was carried over
+   by --pin; a fresh sweep per (function, size) through
+   dev/tune_fixed.py may move a few of them (the tuner's margin and
+   tie-break are stricter than some of the older choices).
+
+4. **The atan/log1p residual divisions still feed mpn_tdiv_qr an
    (n+1)-limb divisor with a unit limb** (S = 1.x in the generated
    small bodies).  The tan tail's normalization trick (halve or shift
    numerator and denominator together so the divisor is n limbs, top
    bit set) has not been applied there; it was worth a few percent
    per division on the tan side.
 
-4. Cosmetic: patch 0002's commit message still describes the
+5. Cosmetic: patch 0002's commit message still describes the
    conjugate-ratio construction (a rebase, so left).
 
 ---

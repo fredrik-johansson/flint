@@ -62,7 +62,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
         slong n = nmin + n_randint(state, (iter % 5 == 0) ? 40 : 10);
         slong imax = FLINT_MIN(FLINT_BITS * n - 16, 448);
         int r = (iter % 4 == 0) ? 0
-                : 16 + (int) n_randint(state, FLINT_MAX(1, imax - 16));
+                : 32 + (int) n_randint(state, FLINT_MAX(1, imax - 32));
         int reff = (r == 0) ? 32 : r;
         slong nc, j, k, nsum;
         ulong x[52], res[53], cy;
@@ -140,7 +140,7 @@ TEST_FUNCTION_START(fixed_bitwise_rs_stress, state)
             ulong P[53], sh[53];
             slong wn = n + 1, tries;
             int rl = (iter % 4 == 0) ? 0
-                     : 16 + (int) n_randint(state, FLINT_MAX(1, imax - 16));
+                     : 32 + (int) n_randint(state, FLINT_MAX(1, imax - 32));
 
             flint_mpn_zero(P, n);
             P[n] = 1;

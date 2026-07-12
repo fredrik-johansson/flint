@@ -33,9 +33,9 @@ TEST_FUNCTION_START(fixed_atan_bitwise_rs, state)
         int det = (iter < 24 * 9);
         slong n = det ? det_n
             : 1 + n_randint(state, (iter % 5 == 0) ? 80 : 16);
-        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 16))
+        int r = det ? FLINT_MAX(det_r, ((det_r == 0) ? 0 : 32))
             : (iter % 4 == 0) ? 0 :
-            (iter % 9 == 3) ? 16 + (int) n_randint(state, 17) :
+            (iter % 9 == 3) ? 32 + (int) n_randint(state, 17) :
             (iter % 7 == 2) ? FLINT_BITS * (1 + (int) n_randint(state, 7))
                             : 32 + (int) n_randint(state, 401);
         ulong x[81], res[81];

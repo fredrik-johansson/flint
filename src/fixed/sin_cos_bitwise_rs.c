@@ -150,7 +150,7 @@ fixed_sin_cos_bitwise_rs(nn_ptr ysin, nn_ptr ycos, nn_srcptr x,
     slong n, int r)
 {
     FLINT_ASSERT(n >= 1);
-    FLINT_ASSERT(r == 0 || r >= 16);
+    FLINT_ASSERT(r == 0 || r >= 32);
 
     /* Everything is done by the tangent half-angle reconstruction (see
        tan_bitwise_rs.c), which measured faster at every size tried,
