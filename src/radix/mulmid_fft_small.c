@@ -394,7 +394,8 @@ static void _radix_mul_mpn_ctx(
     P->R = R;
     P->sign = 0;
 
-    _fft_small_plan_set_window(P, zl, zh, zn, n_max(atrunc, btrunc));
+    _fft_small_plan_set_window(P, zl, zh, zn, n_max(atrunc, btrunc),
+                               (ulong) 4);
 
     /* need prod_of_primes >= bn * 4^modbits; the radix chinese
        remaindering handles at most 4 primes */

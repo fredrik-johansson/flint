@@ -1321,12 +1321,14 @@ void sd_fft_ctx_point_mul(
     vec8d m = vec8d_set_d(vec1d_reduce_0n_to_pmhn((slong)m_, Q->p));
     vec8d n    = vec8d_set_d(Q->p);
     vec8d ninv = vec8d_set_d(Q->pinv);
-    FLINT_ASSERT(depth >= LG_BLK_SZ);
-    for (ulong I = 0; I < n_pow2(depth - LG_BLK_SZ); I++)
+    /* flat over the whole transform: below one block the data is
+       simply shorter, the addressing is unchanged */
+    FLINT_ASSERT(depth >= 4);
     {
-        double* ax = a + sd_fft_ctx_blk_offset(I);
-        const double* bx = b + sd_fft_ctx_blk_offset(I);
-        ulong j = 0; do {
+    double* ax = a;
+    const double* bx = b;
+    ulong npts = n_pow2(depth);
+    ulong j = 0; do {
             vec8d x0, x1, b0, b1;
             x0 = vec8d_load(ax+j+0);
             x1 = vec8d_load(ax+j+8);
@@ -1338,7 +1340,7 @@ void sd_fft_ctx_point_mul(
             x1 = vec8d_mulmod(x1, b1, n, ninv);
             vec8d_store(ax+j+0, x0);
             vec8d_store(ax+j+8, x1);
-        } while (j += 16, j < BLK_SZ);
+        } while (j += 16, j < npts);
     }
 }
 
@@ -1351,12 +1353,13 @@ void sd_fft_ctx_point_sqr(
     vec8d m = vec8d_set_d(vec1d_reduce_0n_to_pmhn((slong)m_, Q->p));
     vec8d n    = vec8d_set_d(Q->p);
     vec8d ninv = vec8d_set_d(Q->pinv);
-    FLINT_ASSERT(depth >= LG_BLK_SZ);
+    /* flat, as above */
+    FLINT_ASSERT(depth >= 4);
 
-    for (ulong I = 0; I < n_pow2(depth - LG_BLK_SZ); I++)
     {
-        double* ax = a + sd_fft_ctx_blk_offset(I);
-        ulong j = 0; do {
+    double* ax = a;
+    ulong npts = n_pow2(depth);
+    ulong j = 0; do {
             vec8d x0, x1;
             x0 = vec8d_load(ax+j+0);
             x1 = vec8d_load(ax+j+8);
@@ -1366,7 +1369,7 @@ void sd_fft_ctx_point_sqr(
             x1 = vec8d_mulmod(x1, m, n, ninv);
             vec8d_store(ax+j+0, x0);
             vec8d_store(ax+j+8, x1);
-        } while (j += 16, j < BLK_SZ);
+        } while (j += 16, j < npts);
     }
 }
 
@@ -1928,7 +1931,7 @@ static void _op_mpn_fft_worker_func(void* varg)
 
     for (ulong l = W->start_pi; l < W->stop_pi; l++)
         sd_fft_trunc(P->R->ffts + l, W->X->data + l*P->stride, P->depth,
-                     W->atrunc, P->ztrunc);
+                     n_min(W->atrunc, P->ztrunc), P->ztrunc);
 }
 
 static void _op_mpn_slow_worker_func(void* varg)
@@ -1942,7 +1945,7 @@ static void _op_mpn_slow_worker_func(void* varg)
         slow_mpn_to_fft(R->ffts + l, W->X->data + l*P->stride, W->atrunc,
                         W->a, W->an, P->bits, R->slow_two_pow_tab[l]);
         sd_fft_trunc(R->ffts + l, W->X->data + l*P->stride, P->depth,
-                     W->atrunc, P->ztrunc);
+                     n_min(W->atrunc, P->ztrunc), P->ztrunc);
     }
 }
 
@@ -1953,6 +1956,9 @@ void fft_small_fft_mpn(fft_small_op_t X, const ulong* a, ulong an,
     ulong bits = P->bits;
     ulong np = P->np;
     ulong alen = n_cdiv(FLINT_BITS*an, bits);
+    /* the packing passes work in whole blocks; for sub-block
+       transforms the excess lands in the zeroed slab padding and the
+       transform itself runs at the plan's truncation */
     ulong atrunc = n_round_up(alen, BLK_SZ);
     to_ffts_func to_ffts = NULL;
     ulong i;
@@ -1966,7 +1972,10 @@ void fft_small_fft_mpn(fft_small_op_t X, const ulong* a, ulong an,
     FLINT_ASSERT(P->offset == 0);
     FLINT_ASSERT(X->np == np && X->offset == P->offset &&
                  X->depth == P->depth && X->stride == P->stride);
-    FLINT_ASSERT(atrunc <= P->ztrunc);
+    /* atrunc is the packing extent: whole blocks, whose excess over a
+       sub-block transform lands in the zeroed slab padding; the
+       transforms themselves run capped at the plan's truncation */
+    FLINT_ASSERT(atrunc <= P->stride);
 
     /* look for a vectorized packing profile matching (np, bits); the
        profile's bn_bound concerns the multiplication drivers' product
