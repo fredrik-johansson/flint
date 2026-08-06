@@ -11,6 +11,8 @@
 
 #include "ulong_extras.h"
 #include "fft.h"
+#include "fft_small.h"
+
 
 void fft_precache(mp_limb_t ** jj, slong depth, slong limbs, slong trunc,
                              mp_limb_t ** t1, mp_limb_t ** t2, mp_limb_t ** s1)
@@ -96,6 +98,82 @@ void fft_convolution_precache(mp_limb_t ** ii, mp_limb_t ** jj, slong depth,
       trunc2 = (trunc - 2*n)/sqrt;
 
       for (s = 0; s < trunc2; s++)
+      {
+         t = n_revbin(s, depth - depth/2 + 1);
+
+         for (u = 0; u < sqrt; u++)
+         {
+            j = 2*n + t*sqrt + u;
+            mpn_normmod_2expp1(ii[j], limbs);
+
+            fft_mulmod_2expp1(ii[j], ii[j], jj[j], n, w, *tt);
+         }
+      }
+
+      ifft_mfa_truncate_sqrt2(ii, n, w, t1, t2, s1, sqrt, trunc);
+
+      for (j = 0; j < trunc; j++)
+      {
+         mpn_div_2expmod_2expp1(ii[j], ii[j], limbs, depth + 2);
+         mpn_normmod_2expp1(ii[j], limbs);
+      }
+   }
+}
+
+/* fft_convolution_precache with an optional negacyclic pointwise
+   engine; negctx == NULL reproduces the classic behavior */
+void fft_convolution_precache_negmul(struct mpn_negmul_ctx_struct * negctx,
+                          mp_limb_t ** ii, mp_limb_t ** jj, slong depth,
+                              slong limbs, slong trunc, mp_limb_t ** t1,
+                          mp_limb_t ** t2, mp_limb_t ** s1, mp_limb_t ** tt)
+{
+   slong n = (WORD(1)<<depth), j, s, t, u, trunc2;
+   slong w = (limbs*FLINT_BITS)/n;
+   slong sqrt = (WORD(1)<<(depth/2));
+
+   if (depth <= 6)
+   {
+      trunc = 2*((trunc + 1)/2);
+
+      fft_truncate_sqrt2(ii, n, w, t1, t2, s1, trunc);
+
+      if (negctx != NULL)
+         _fft_negmul_pointwise(negctx, ii, jj, 0, trunc, limbs);
+      else for (j = 0; j < trunc; j++)
+      {
+         mpn_normmod_2expp1(ii[j], limbs);
+
+         fft_mulmod_2expp1(ii[j], ii[j], jj[j], n, w, *tt);
+      }
+
+      ifft_truncate_sqrt2(ii, n, w, t1, t2, s1, trunc);
+
+      for (j = 0; j < trunc; j++)
+      {
+         mpn_div_2expmod_2expp1(ii[j], ii[j], limbs, depth + 2);
+         mpn_normmod_2expp1(ii[j], limbs);
+      }
+   } else
+   {
+      trunc = 2*sqrt*((trunc + 2*sqrt - 1)/(2*sqrt));
+
+      fft_mfa_truncate_sqrt2(ii, n, w, t1, t2, s1, sqrt, trunc);
+
+      if (negctx != NULL)
+         _fft_negmul_pointwise(negctx, ii, jj, 0, 2*n, limbs);
+      else for (j = 0; j < 2*n; j++)
+      {
+         mpn_normmod_2expp1(ii[j], limbs);
+
+         fft_mulmod_2expp1(ii[j], ii[j], jj[j], n, w, *tt);
+      }
+
+      trunc2 = (trunc - 2*n)/sqrt;
+
+      if (negctx != NULL)
+         _fft_negmul_pointwise_rows(negctx, ii, jj, 2*n, sqrt, trunc2,
+                                    depth - depth/2 + 1, limbs);
+      else for (s = 0; s < trunc2; s++)
       {
          t = n_revbin(s, depth - depth/2 + 1);
 

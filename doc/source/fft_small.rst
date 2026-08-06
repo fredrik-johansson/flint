@@ -152,3 +152,74 @@ Transform plans and operands
     than exhaust memory; the matrix multiplication drivers respond by
     multiplying in blocks instead. Mutable for tuning; the default is
     4 GiB on 64-bit machines.
+
+
+Negacyclic pointwise multiplication
+-------------------------------------------------------------------------------
+
+These functions multiply residues modulo `2^N + 1` by splitting the
+operands into `m` digits of `b = N/m` bits, so that the product is a
+length-`m` negacyclic convolution of the digit sequences, computed via
+the small-prime FFT machinery of this module and Chinese remaindering.
+They serve as the pointwise stage of Schoenhage-Strassen convolutions:
+see :func:`fft_convolution_negmul` and the ``fmpz_poly`` multiplication
+functions, which engage this engine for large coefficient sizes.
+
+Operands and results occupy `n + 1 = N/\mathtt{FLINT\_BITS} + 1` limbs.
+An *operand* may have top limb `0` or `1` with arbitrary remaining
+limbs; its value is interpreted modulo `2^N + 1` (in particular the
+representation need not be reduced, and both representatives of a
+residue with top limb set are accepted). The *result* is returned
+fully reduced: the unique representative in `[0, 2^N]`, with top limb
+`1` exactly when the value is `2^N` and the remaining limbs then
+zero.
+
+.. function:: void mpn_negmul_ctx_init(mpn_negmul_ctx_struct * C, mpn_ctx_struct * R, slong N, slong m)
+
+    Initializes a context for multiplication modulo `2^N + 1` with
+    digit count *m*. Requires `N = mb` for an integer digit size *b*,
+    *m* a power of two at least 16, and *N* a multiple of
+    ``FLINT_BITS``. The number of FFT primes is chosen internally as
+    the smallest count, between 3 and 8, whose exact prime product
+    exceeds the coefficient bound `2^{2b + \log_2 m + 1}` and for
+    which a digit-splitting input pass is instantiated; fewer primes
+    means proportionally less work in every stage. Raises an exception
+    if no supported configuration exists for the given shape. The
+    primes and their transform contexts are taken from *R*, normally
+    ``get_default_mpn_ctx()``.
+
+.. function:: void mpn_negmul_ctx_init_auto(mpn_negmul_ctx_struct * C, mpn_ctx_struct * R, slong N)
+
+    As :func:`mpn_negmul_ctx_init`, choosing the digit count *m*
+    internally over the instantiated digit sizes dividing *N* by an
+    estimated-cost comparison. For power-of-two *N* the selection
+    moves from `(np, b) = (3, 64)` to `(6, 128)` at half the
+    transform length once three-prime capacity runs out, flattening
+    the large-*N* cost staircase. Raises an exception if no
+    supported splitting of *N* exists.
+
+.. function:: void mpn_negmul2(mpn_negmul_ctx_struct * C, nn_ptr z, nn_srcptr x, nn_srcptr y, mpn_negmul_scratch_struct * S)
+              void mpn_negmul_scratch_init(mpn_negmul_scratch_struct * S, const mpn_negmul_ctx_struct * C)
+              void mpn_negmul_scratch_clear(mpn_negmul_scratch_struct * S)
+
+    The context is read-only during multiplication; all mutable state
+    lives in a scratch object, so a single context may serve several
+    threads concurrently, each with its own scratch.
+    :func:`mpn_negmul` is equivalent to :func:`mpn_negmul2` with the
+    scratch owned by the context. The pointwise stage of the
+    ``fmpz_poly`` Schoenhage-Strassen convolutions multiplies its
+    coefficients in parallel over the available threads this way.
+
+.. function:: void mpn_negmul_ctx_clear(mpn_negmul_ctx_struct * C)
+
+    Releases the memory held by the context.
+
+.. function:: void mpn_negmul(mpn_negmul_ctx_struct * C, nn_ptr z, nn_srcptr x, nn_srcptr y)
+
+    Sets `z = xy \bmod 2^N + 1` for semi-reduced operands as described
+    above. Aliasing of *z* with *x* or *y* is permitted. The digit
+    residues are computed by the templated input passes of this
+    module, transformed, multiplied pointwise, inverse transformed,
+    recombined by Chinese remaindering, and folded back into the
+    semi-reduced representation.
+

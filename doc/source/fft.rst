@@ -578,3 +578,33 @@ FFT Precaching
     As per ``fft_convolution`` except that it is assumed ``fft_precache`` has
     been called on ``jj`` with the same parameters. This will then run faster
     than if ``fft_convolution`` had been run with the original ``jj``.
+.. function:: void fft_convolution_negmul(struct mpn_negmul_ctx_struct * negctx, mp_limb_t ** ii, mp_limb_t ** jj, slong depth, slong limbs, slong trunc, mp_limb_t ** t1, mp_limb_t ** t2, mp_limb_t ** s1, mp_limb_t ** tt)
+
+    As ``fft_convolution_basic``, except that when ``negctx`` is not
+    ``NULL`` the pointwise multiplications modulo `2^N + 1` are
+    performed by ``mpn_negmul`` with the given context instead of
+    ``fft_mulmod_2expp1``. Passing ``NULL`` reproduces the classic
+    behavior exactly. The context must have been initialized for
+    `N` equal to ``limbs * FLINT_BITS``.
+
+.. function:: void fft_convolution_precache_negmul(struct mpn_negmul_ctx_struct * negctx, mp_limb_t ** ii, mp_limb_t ** jj, slong depth, slong limbs, slong trunc, mp_limb_t ** t1, mp_limb_t ** t2, mp_limb_t ** s1, mp_limb_t ** tt)
+
+    As ``fft_convolution_precache`` with the same optional negacyclic
+    pointwise context as ``fft_convolution_negmul``.
+
+.. function:: slong fft_negmul_choose_limbs(slong tight, slong n_outer, slong * m_out)
+
+    Negacyclic-aware ring selection for Schoenhage-Strassen
+    convolutions. The instantiated digit sizes of the negacyclic
+    pointwise engine form a lattice of rings `N' = mb` with `m` a
+    power of two; among candidates whose growth over
+    ``fft_adjust_limbs(tight)`` stays within a per-prime-count cap,
+    the one minimizing an estimated cost is selected. On success
+    ``*m_out`` receives the digit count and the returned limb count
+    defines `N'`; otherwise ``*m_out`` is zero and the standard
+    Nussbaumer rounding is returned, so the caller keeps
+    ``fft_mulmod_2expp1``. The caps and cost weights are tuning
+    parameters, calibrated conservatively; on targets with tuned
+    assembly the measured advantage of the engine is larger and
+    admits looser caps.
+

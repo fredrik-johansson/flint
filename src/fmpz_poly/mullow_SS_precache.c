@@ -14,10 +14,12 @@
 #include "fmpz_vec.h"
 #include "fmpz_poly.h"
 #include "fft.h"
+#include "fft_small.h"
 
 void fmpz_poly_mul_SS_precache_init(fmpz_poly_mul_precache_t pre,
                               slong len1, slong bits1, const fmpz_poly_t poly2)
 {
+    slong negm;
     slong i, len_out, loglen2;
     slong output_bits, size;
     ulong size1, size2;
@@ -43,10 +45,20 @@ void fmpz_poly_mul_SS_precache_init(fmpz_poly_mul_precache_t pre,
     /* round up for sqrt2 trick */
     output_bits = (((output_bits - 1) >> (pre->loglen - 2)) + 1) << (pre->loglen - 2);
 
-    pre->limbs = (output_bits - 1) / FLINT_BITS + 1; /* initial size of FFT coeffs */
-
-    if (pre->limbs > FFT_MULMOD_2EXPP1_CUTOFF) /* can't be worse than next power of 2 limbs */
-        pre->limbs = (WORD(1) << FLINT_CLOG2(pre->limbs));
+    /* final ring selection happens before any allocation */
+    pre->limbs = (output_bits - 1) / FLINT_BITS + 1;
+    pre->limbs = fft_negmul_choose_limbs(pre->limbs, pre->n, &negm);
+    pre->negctx = NULL;
+#if FLINT_HAVE_FFT_SMALL
+    if (negm != 0)
+    {
+        pre->negctx = flint_malloc(sizeof(mpn_negmul_ctx_struct));
+        mpn_negmul_ctx_init(pre->negctx, get_default_mpn_ctx(),
+                            FLINT_BITS*pre->limbs, negm);
+    }
+#else
+    (void) negm;
+#endif
     size = pre->limbs + 1;
 
     /* allocate space for ffts */
@@ -83,8 +95,6 @@ void fmpz_poly_mul_SS_precache_init(fmpz_poly_mul_precache_t pre,
     output_bits = (((output_bits - 1) >> (pre->loglen - 2)) + 1) << (pre->loglen - 2);
 
     pre->limbs = (output_bits - 1) / FLINT_BITS + 1;
-    pre->limbs = fft_adjust_limbs(pre->limbs); /* round up limbs for Nussbaumer */
-
     fft_precache(pre->jj, pre->loglen - 2, pre->limbs, len_out, t1, t2, s1);
 
     fmpz_poly_init(pre->poly2);
@@ -93,6 +103,14 @@ void fmpz_poly_mul_SS_precache_init(fmpz_poly_mul_precache_t pre,
 
 void fmpz_poly_mul_precache_clear(fmpz_poly_mul_precache_t pre)
 {
+#if FLINT_HAVE_FFT_SMALL
+    if (pre->negctx != NULL)
+    {
+        mpn_negmul_ctx_clear(pre->negctx);
+        flint_free(pre->negctx);
+        pre->negctx = NULL;
+    }
+#endif
     flint_free(pre->jj);
     fmpz_poly_clear(pre->poly2);
 }
@@ -140,7 +158,7 @@ void _fmpz_poly_mullow_SS_precache(fmpz * output, const fmpz * input1,
     for (i = len1; i < 4*pre->n; i++)
         flint_mpn_zero(ii[i], size);
 
-    fft_convolution_precache(ii, pre->jj, pre->loglen - 2, pre->limbs,
+    fft_convolution_precache_negmul(pre->negctx, ii, pre->jj, pre->loglen - 2, pre->limbs,
                                                       len_out, t1, t2, s1, tt);
 
     _fmpz_vec_set_fft(output, trunc, ii, pre->limbs, 1); /* write output */

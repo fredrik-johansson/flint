@@ -9,7 +9,11 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include "fft_small.h"
 #include "thread_pool.h"
+
+struct mpn_negmul_ctx_struct;
+struct mpn_negmul_scratch_struct;
 #include "thread_support.h"
 #include "ulong_extras.h"
 #include "fft.h"
@@ -29,6 +33,8 @@ typedef struct
     mp_limb_t ** t1;
     mp_limb_t ** t2;
     mp_limb_t * tt;
+    struct mpn_negmul_ctx_struct * negctx;
+    struct mpn_negmul_scratch_struct * nscr;
 #if FLINT_USES_PTHREAD
     pthread_mutex_t * mutex;
 #endif
@@ -78,7 +84,13 @@ _fft_inner1_worker(void * arg_ptr)
                 mp_size_t t = i*n1 + j;
                 mpn_normmod_2expp1(ii[t], limbs);
                 if (ii != jj) mpn_normmod_2expp1(jj[t], limbs);
-                fft_mulmod_2expp1(ii[t], ii[t], jj[t], n, w, tt);
+                #if FLINT_HAVE_FFT_SMALL
+                if (arg.negctx != NULL)
+                    mpn_negmul2(arg.negctx, ii[t], ii[t], jj[t],
+                                arg.nscr);
+                else
+#endif
+                    fft_mulmod_2expp1(ii[t], ii[t], jj[t], n, w, tt);
             }
 
             ifft_radix2(ii + i*n1, n1/2, w*n2, t1, t2);
@@ -126,7 +138,13 @@ _fft_inner2_worker(void * arg_ptr)
                 mp_size_t t = i*n1 + j;
                 mpn_normmod_2expp1(ii[t], limbs);
                 if (ii != jj) mpn_normmod_2expp1(jj[t], limbs);
-                fft_mulmod_2expp1(ii[t], ii[t], jj[t], n, w, tt);
+                #if FLINT_HAVE_FFT_SMALL
+                if (arg.negctx != NULL)
+                    mpn_negmul2(arg.negctx, ii[t], ii[t], jj[t],
+                                arg.nscr);
+                else
+#endif
+                    fft_mulmod_2expp1(ii[t], ii[t], jj[t], n, w, tt);
             }
 
             ifft_radix2(ii + i*n1, n1/2, w*n2, t1, t2);
@@ -134,7 +152,9 @@ _fft_inner2_worker(void * arg_ptr)
     }
 }
 
-void fft_mfa_truncate_sqrt2_inner(mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
+static void
+_fft_mfa_truncate_sqrt2_inner_impl(struct mpn_negmul_ctx_struct * negctx,
+                   mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
                    flint_bitcnt_t w, mp_limb_t ** t1, mp_limb_t ** t2,
                   mp_limb_t ** FLINT_UNUSED(temp), mp_size_t n1, mp_size_t trunc, mp_limb_t ** tt)
 {
@@ -161,8 +181,17 @@ void fft_mfa_truncate_sqrt2_inner(mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
 
    /* convolutions on relevant rows */
 
+    /* Phase 1 has 2n/n1 columns and phase 2 has trunc2 rows of
+       work-stolen units; each unit is heavy at large limb counts
+       (n1 column transforms plus n1 pointwise multiplications), so
+       for the negacyclic engine one unit per thread is worthwhile.
+       The classic cap is kept unchanged. */
     num_threads = flint_request_threads(&threads,
-                             FLINT_MIN(flint_get_num_threads(), (trunc2 + 15)/16));
+                     negctx != NULL
+                       ? FLINT_MIN(flint_get_num_threads(),
+                                   FLINT_MAX((2*n)/n1, trunc2))
+                       : FLINT_MIN(flint_get_num_threads(),
+                                   (trunc2 + 15)/16));
 
     args = (fft_inner_arg_t *)
                        flint_malloc(sizeof(fft_inner_arg_t)*(num_threads + 1));
@@ -182,10 +211,24 @@ void fft_mfa_truncate_sqrt2_inner(mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
        args[i].t1 = t1 + i;
        args[i].t2 = t2 + i;
        args[i].tt = tt[i];
+       args[i].negctx = negctx;
+       args[i].nscr = NULL;
 #if FLINT_USES_PTHREAD
        args[i].mutex = &mutex;
 #endif
     }
+
+#if FLINT_HAVE_FFT_SMALL
+    if (negctx != NULL)
+    {
+        for (i = 0; i < num_threads + 1; i++)
+        {
+            args[i].nscr = flint_malloc(
+                             sizeof(mpn_negmul_scratch_struct));
+            mpn_negmul_scratch_init(args[i].nscr, negctx);
+        }
+    }
+#endif
 
     for (i = 0; i < num_threads; i++)
         thread_pool_wake(global_thread_pool, threads[i], 0,
@@ -220,9 +263,41 @@ void fft_mfa_truncate_sqrt2_inner(mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
 
     flint_give_back_threads(threads, num_threads);
 
+#if FLINT_HAVE_FFT_SMALL
+    if (negctx != NULL)
+    {
+        for (i = 0; i < num_threads + 1; i++)
+        {
+            mpn_negmul_scratch_clear(args[i].nscr);
+            flint_free(args[i].nscr);
+        }
+    }
+#endif
     flint_free(args);
 
 #if FLINT_USES_PTHREAD
     pthread_mutex_destroy(&mutex);
 #endif
 }
+
+void fft_mfa_truncate_sqrt2_inner(mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
+                   flint_bitcnt_t w, mp_limb_t ** t1, mp_limb_t ** t2, mp_limb_t ** s1,
+                                mp_size_t n1, mp_size_t trunc, mp_limb_t ** tt)
+{
+    _fft_mfa_truncate_sqrt2_inner_impl(NULL, ii, jj, n, w, t1, t2, s1,
+                                       n1, trunc, tt);
+}
+
+#if FLINT_HAVE_FFT_SMALL
+/* as fft_mfa_truncate_sqrt2_inner with the pointwise multiplications
+   performed by the negacyclic engine; each worker gets its own
+   scratch, the context being read-only during multiplication */
+void fft_mfa_truncate_sqrt2_inner_negmul(struct mpn_negmul_ctx_struct * negctx,
+                   mp_limb_t ** ii, mp_limb_t ** jj, mp_size_t n,
+                   flint_bitcnt_t w, mp_limb_t ** t1, mp_limb_t ** t2, mp_limb_t ** s1,
+                                mp_size_t n1, mp_size_t trunc, mp_limb_t ** tt)
+{
+    _fft_mfa_truncate_sqrt2_inner_impl(negctx, ii, jj, n, w, t1, t2, s1,
+                                       n1, trunc, tt);
+}
+#endif

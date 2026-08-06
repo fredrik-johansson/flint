@@ -788,6 +788,61 @@ int _fmpz_poly_mul_mid_default_mpn_ctx(
     const fmpz * a, slong an,
     const fmpz * b, slong bn);
 
+
+/* negacyclic pointwise engine (negacyclic.c) */
+typedef void (*from_ffts_func)(
+    ulong* z, ulong lo, ulong hi, ulong c_lo, ulong clen,
+    sd_fft_ctx_struct* Rffts, double* d, ulong dstride,
+    crt_data_struct* Rcrts,
+    ulong bits,
+    ulong start_easy, ulong stop_easy,
+    ulong* overhang, ulong* boundbuf);
+
+to_ffts_func _mpn_ctx_to_ffts_func(ulong np, ulong bits);
+from_ffts_func _mpn_ctx_from_ffts_func(ulong np);
+
+typedef struct mpn_negmul_scratch_struct
+{
+    double * buf;      /* transform buffers, 2 np data blocks */
+    nn_ptr w;          /* recomposition window */
+    double * digs;     /* digit doubles for b <= 50, else NULL */
+} mpn_negmul_scratch_struct;
+
+typedef mpn_negmul_scratch_struct mpn_negmul_scratch_t[1];
+
+typedef struct mpn_negmul_ctx_struct
+{
+    slong N, b, m, depth, np;
+    nn_ptr biaspoly;     /* precomputed bias polynomial (np == 4) */
+    slong whi;           /* recomposition limb count (np == 4) */
+    ulong biasres[8];    /* bias mod p_k */
+    ulong p[8];
+    nmod_t mod[8];
+    double * tw[8];      /* w^i, twisted input scale */
+    double * itw[8];     /* w^-i * m^-1, output scale */
+    slong * crt2;        /* scratch: two-prime corrections */
+    fmpz_t Pbig, Phalf;
+    mpn_ctx_struct * R;
+    slong dsz;
+    mpn_negmul_scratch_t scr;
+} mpn_negmul_ctx_struct;
+
+typedef mpn_negmul_ctx_struct mpn_negmul_ctx_t[1];
+
+slong mpn_negmul_choose_np(mpn_ctx_struct * R, slong b, slong depth);
+void mpn_negmul_ctx_init(mpn_negmul_ctx_struct * C,
+            mpn_ctx_struct * R, slong N, slong m);
+void mpn_negmul_ctx_init_auto(mpn_negmul_ctx_struct * C,
+            mpn_ctx_struct * R, slong N);
+void mpn_negmul_ctx_clear(mpn_negmul_ctx_struct * C);
+void mpn_negmul(mpn_negmul_ctx_struct * C, nn_ptr z,
+            nn_srcptr x, nn_srcptr y);
+void mpn_negmul2(mpn_negmul_ctx_struct * C, nn_ptr z, nn_srcptr x,
+            nn_srcptr y, mpn_negmul_scratch_struct * S);
+void mpn_negmul_scratch_init(mpn_negmul_scratch_struct * S,
+            const mpn_negmul_ctx_struct * C);
+void mpn_negmul_scratch_clear(mpn_negmul_scratch_struct * S);
+
 #ifdef __cplusplus
 }
 #endif
