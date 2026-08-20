@@ -111,6 +111,8 @@ int fmpz_lll_mpf(fmpz_mat_t B, fmpz_mat_t U, const fmpz_lll_t fl);
 
 int fmpz_lll_wrapper(fmpz_mat_t B, fmpz_mat_t U, const fmpz_lll_t fl);
 
+int fmpz_lll_blaster(fmpz_mat_t B, fmpz_mat_t U_out, const fmpz_lll_t fl);
+
 int fmpz_lll_advance_check_babai(int cur_kappa, int kappa, fmpz_mat_t B, fmpz_mat_t U, d_mat_t mu, d_mat_t r, double *s,
        d_mat_t appB, int *expo, fmpz_gram_t A,
        int a, int zeros, int kappamax, int n, const fmpz_lll_t fl);

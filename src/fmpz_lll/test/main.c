@@ -11,6 +11,7 @@
 
 /* Include functions *********************************************************/
 
+#include "t-blaster.c"
 #include "t-heuristic_dot.c"
 #include "t-lll.c"
 #include "t-lll_d.c"
@@ -30,6 +31,7 @@
 
 test_struct tests[] =
 {
+    TEST_FUNCTION(fmpz_lll_blaster),
     TEST_FUNCTION(fmpz_lll_heuristic_dot),
     TEST_FUNCTION(fmpz_lll),
     TEST_FUNCTION(fmpz_lll_d),
