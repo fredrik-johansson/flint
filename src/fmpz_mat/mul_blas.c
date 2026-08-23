@@ -14,11 +14,11 @@
 
 /* todo: squaring optimizations */
 
-#if FLINT_USES_BLAS && FLINT_BITS == 64
+#if FLINT_BITS == 64
 
 #include <stdint.h>
 #include <limits.h>
-#include <cblas.h>
+#include "machine_vectors.h"
 #include "nmod.h"
 #include "fmpz.h"
 #include "thread_pool.h"
@@ -141,8 +141,7 @@ red_single:
         flint_free(args);
     }
 
-    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                                       m, n, k, 1.0, dA, k, dB, n, 0.0, dC, n);
+    flint_dgemm(m, k, n, dA, k, dB, n, dC, n);
 
     for (i = 0; i < m; i++)
         for (j = 0; j < n; j++)
@@ -567,8 +566,7 @@ int _fmpz_mat_mul_blas(
         for (i = 0; i < num_workers; i++)
             thread_pool_wait(global_thread_pool, handles[i]);
 
-        cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans,
-                                       m, n, k, 1.0, dA, k, dB, n, 0.0, dC, n);
+        flint_dgemm(m, k, n, dA, k, dB, n, dC, n);
 
         for (i = 0; i < num_workers; i++)
             thread_pool_wake(global_thread_pool, handles[i], 0, _fromd_worker, &args[i]);

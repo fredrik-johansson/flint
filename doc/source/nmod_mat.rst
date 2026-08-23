@@ -382,7 +382,14 @@ Matrix multiplication
 
 .. function:: int nmod_mat_mul_blas(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
 
-    Tries to set `C = AB` using BLAS and returns `1` for success and `0` for failure. Dimensions must be compatible for matrix multiplication.
+    Tries to set `C = AB` by lifting to floating-point matrix
+    multiplication (:func:`flint_sgemm` or :func:`flint_dgemm`, which use
+    BLAS if FLINT was built with BLAS support and FLINT's own kernels
+    otherwise), with multimodular reduction and CRT when the entries do
+    not fit directly. Returns `1` for success and `0` for failure;
+    failure occurs when the dimensions or the modulus are too large, or
+    when FLINT is built with a 32-bit word size.
+    Dimensions must be compatible for matrix multiplication.
 
 .. function:: void nmod_mat_addmul(nmod_mat_t D, const nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
 

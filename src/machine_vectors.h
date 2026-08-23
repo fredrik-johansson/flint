@@ -16,18 +16,32 @@
 #define ALIGN_STRUCT(x) __attribute__((aligned(x)))
 
 #include <math.h>
+#include <string.h>
 
-#if defined(__GNUC__)
-# if defined(__AVX2__)
-#  include <immintrin.h>
-# elif defined(__ARM_NEON)
-#  include <arm_neon.h>
-# endif
-#elif defined(_MSC_VER)
-# if defined(__AVX2__)
-#  include <intrin.h>
-# elif defined(_M_ARM64)
-#  include <arm_neon.h>
+/*
+    FLINT_MACHINE_VECTORS_FORCE_GENERIC selects the generic backends even
+    on a target that has AVX2 or NEON; FLINT_MACHINE_VECTORS_STRICT_C
+    additionally selects the strict ISO C tier over GNU vector
+    extensions. Both are intended for testing and profiling.
+*/
+#if defined(FLINT_MACHINE_VECTORS_FORCE_GENERIC) \
+        || defined(FLINT_MACHINE_VECTORS_STRICT_C)
+# define FLINT_MACHINE_VECTORS_GENERIC 1
+#endif
+
+#if !defined(FLINT_MACHINE_VECTORS_GENERIC)
+# if defined(__GNUC__)
+#  if defined(__AVX2__)
+#   include <immintrin.h>
+#  elif defined(__ARM_NEON)
+#   include <arm_neon.h>
+#  endif
+# elif defined(_MSC_VER)
+#  if defined(__AVX2__)
+#   include <intrin.h>
+#  elif defined(_M_ARM64)
+#   include <arm_neon.h>
+#  endif
 # endif
 #endif
 
@@ -38,7 +52,7 @@
 extern "C" {
 #endif
 
-#if defined(__AVX2__)
+#if defined(__AVX2__) && !defined(FLINT_MACHINE_VECTORS_GENERIC)
 /*
     In general the machine vector types should either be passed by const ref or
     the whole function should be forced inline as some platforms have buggy
@@ -54,6 +68,24 @@ typedef double vec1d;
 typedef __m128d vec2d;
 typedef __m256d vec4d;
 typedef struct {__m256d e1, e2;} vec8d;
+
+typedef float vec1f;
+typedef __m128 vec4f;
+typedef __m256 vec8f;
+typedef struct {__m256 e1, e2;} vec16f;
+
+# if defined(__AVX512F__)
+/*
+    Types backed by a single zmm register. vec8d is already taken (and is
+    deliberately two ymm: one zmm has been found to reduce instruction level
+    parallelism in existing code), so zmm-backed types carry a "z" suffix.
+*/
+typedef __m512i vec8nz;
+typedef __m512d vec8dz;
+typedef struct {vec8dz e1, e2;} vec16dz;
+typedef __m512 vec16fz;
+typedef struct {vec16fz e1, e2;} vec32fz;
+# endif
 
 
 
@@ -774,6 +806,7 @@ EXTEND_VEC_DEF3(vec4n, vec8n, _addmod_limited)
 EXTEND_VEC_DEF4(vec4d, vec8d, _mulmod)
 EXTEND_VEC_DEF4(vec4d, vec8d, _nmulmod)
 
+
 #undef EXTEND_VEC_DEF4
 #undef EXTEND_VEC_DEF3
 #undef EXTEND_VEC_DEF2
@@ -809,7 +842,315 @@ FLINT_FORCE_INLINE vec8n vec8n_bit_and(vec8n a, vec8n b) {
 
 
 
-#elif defined(__ARM_NEON) || defined(_M_ARM64)
+
+/* vec1f -- AVX2 ***********************************************************/
+
+FLINT_FORCE_INLINE vec1f vec1f_load(const float* a) {
+    return a[0];
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_load_aligned(const float* a) {
+    return a[0];
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_load_unaligned(const float* a) {
+    return a[0];
+}
+
+FLINT_FORCE_INLINE void vec1f_store(float* z, vec1f a) {
+    z[0] = a;
+}
+
+FLINT_FORCE_INLINE void vec1f_store_aligned(float* z, vec1f a) {
+    z[0] = a;
+}
+
+FLINT_FORCE_INLINE void vec1f_store_unaligned(float* z, vec1f a) {
+    z[0] = a;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_zero(void) {
+    return 0.0f;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_set_f(float a) {
+    return a;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_add(vec1f a, vec1f b) {
+    return a + b;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_sub(vec1f a, vec1f b) {
+    return a - b;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_mul(vec1f a, vec1f b) {
+    return a * b;
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_fmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_fnmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(-a, b, c);
+}
+
+FLINT_FORCE_INLINE vec1f vec1f_floor(vec1f a) {
+    return floorf(a);
+}
+
+/* vec4f -- AVX2 ***********************************************************/
+
+FLINT_FORCE_INLINE vec4f vec4f_load(const float* a) {
+    return _mm_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_load_aligned(const float* a) {
+    return _mm_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_load_unaligned(const float* a) {
+    return _mm_loadu_ps(a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store(float* z, vec4f a) {
+    _mm_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store_aligned(float* z, vec4f a) {
+    _mm_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store_unaligned(float* z, vec4f a) {
+    _mm_storeu_ps(z, a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_zero(void) {
+    return _mm_setzero_ps();
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_set_f(float a) {
+    return _mm_set1_ps(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_add(vec4f a, vec4f b) {
+    return _mm_add_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_sub(vec4f a, vec4f b) {
+    return _mm_sub_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_mul(vec4f a, vec4f b) {
+    return _mm_mul_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_fmadd(vec4f a, vec4f b, vec4f c) {
+    return _mm_fmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_fnmadd(vec4f a, vec4f b, vec4f c) {
+    return _mm_fnmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_floor(vec4f a) {
+    return _mm_floor_ps(a);
+}
+
+/* vec8f -- AVX2 ***********************************************************/
+
+FLINT_FORCE_INLINE vec8f vec8f_load(const float* a) {
+    return _mm256_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_load_aligned(const float* a) {
+    return _mm256_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_load_unaligned(const float* a) {
+    return _mm256_loadu_ps(a);
+}
+
+FLINT_FORCE_INLINE void vec8f_store(float* z, vec8f a) {
+    _mm256_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec8f_store_aligned(float* z, vec8f a) {
+    _mm256_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec8f_store_unaligned(float* z, vec8f a) {
+    _mm256_storeu_ps(z, a);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_zero(void) {
+    return _mm256_setzero_ps();
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_set_f(float a) {
+    return _mm256_set1_ps(a);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_add(vec8f a, vec8f b) {
+    return _mm256_add_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_sub(vec8f a, vec8f b) {
+    return _mm256_sub_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_mul(vec8f a, vec8f b) {
+    return _mm256_mul_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_fmadd(vec8f a, vec8f b, vec8f c) {
+    return _mm256_fmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_fnmadd(vec8f a, vec8f b, vec8f c) {
+    return _mm256_fnmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_floor(vec8f a) {
+    return _mm256_floor_ps(a);
+}
+
+/* floor for the double types -- AVX2 **************************************/
+
+FLINT_FORCE_INLINE vec1d vec1d_floor(vec1d a) {
+    return floor(a);
+}
+
+FLINT_FORCE_INLINE vec2d vec2d_floor(vec2d a) {
+    return _mm_floor_pd(a);
+}
+
+FLINT_FORCE_INLINE vec4d vec4d_floor(vec4d a) {
+    return _mm256_floor_pd(a);
+}
+
+#if defined(__AVX512F__)
+/* vec8dz -- AVX512F *******************************************************/
+
+FLINT_FORCE_INLINE vec8dz vec8dz_load(const double* a) {
+    return _mm512_load_pd(a);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_load_aligned(const double* a) {
+    return _mm512_load_pd(a);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_load_unaligned(const double* a) {
+    return _mm512_loadu_pd(a);
+}
+
+FLINT_FORCE_INLINE void vec8dz_store(double* z, vec8dz a) {
+    _mm512_store_pd(z, a);
+}
+
+FLINT_FORCE_INLINE void vec8dz_store_aligned(double* z, vec8dz a) {
+    _mm512_store_pd(z, a);
+}
+
+FLINT_FORCE_INLINE void vec8dz_store_unaligned(double* z, vec8dz a) {
+    _mm512_storeu_pd(z, a);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_zero(void) {
+    return _mm512_setzero_pd();
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_set_d(double a) {
+    return _mm512_set1_pd(a);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_add(vec8dz a, vec8dz b) {
+    return _mm512_add_pd(a, b);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_sub(vec8dz a, vec8dz b) {
+    return _mm512_sub_pd(a, b);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_mul(vec8dz a, vec8dz b) {
+    return _mm512_mul_pd(a, b);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_fmadd(vec8dz a, vec8dz b, vec8dz c) {
+    return _mm512_fmadd_pd(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_fnmadd(vec8dz a, vec8dz b, vec8dz c) {
+    return _mm512_fnmadd_pd(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec8dz vec8dz_floor(vec8dz a) {
+    return _mm512_floor_pd(a);
+}
+
+/* vec16fz -- AVX512F ******************************************************/
+
+FLINT_FORCE_INLINE vec16fz vec16fz_load(const float* a) {
+    return _mm512_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_load_aligned(const float* a) {
+    return _mm512_load_ps(a);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_load_unaligned(const float* a) {
+    return _mm512_loadu_ps(a);
+}
+
+FLINT_FORCE_INLINE void vec16fz_store(float* z, vec16fz a) {
+    _mm512_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec16fz_store_aligned(float* z, vec16fz a) {
+    _mm512_store_ps(z, a);
+}
+
+FLINT_FORCE_INLINE void vec16fz_store_unaligned(float* z, vec16fz a) {
+    _mm512_storeu_ps(z, a);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_zero(void) {
+    return _mm512_setzero_ps();
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_set_f(float a) {
+    return _mm512_set1_ps(a);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_add(vec16fz a, vec16fz b) {
+    return _mm512_add_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_sub(vec16fz a, vec16fz b) {
+    return _mm512_sub_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_mul(vec16fz a, vec16fz b) {
+    return _mm512_mul_ps(a, b);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_fmadd(vec16fz a, vec16fz b, vec16fz c) {
+    return _mm512_fmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_fnmadd(vec16fz a, vec16fz b, vec16fz c) {
+    return _mm512_fnmadd_ps(a, b, c);
+}
+
+FLINT_FORCE_INLINE vec16fz vec16fz_floor(vec16fz a) {
+    return _mm512_floor_ps(a);
+}
+#endif
+
+#elif (defined(__ARM_NEON) || defined(_M_ARM64)) \
+        && !defined(FLINT_MACHINE_VECTORS_GENERIC)
 
 typedef ulong vec1n;
 typedef uint64x2_t vec2n;
@@ -820,6 +1161,11 @@ typedef double vec1d;
 typedef float64x2_t vec2d;
 typedef struct {vec2d e1, e2;} vec4d;
 typedef struct {vec4d e1, e2;} vec8d;
+
+typedef float vec1f;
+typedef float32x4_t vec4f;
+typedef struct {vec4f e1, e2;} vec8f;
+typedef struct {vec8f e1, e2;} vec16f;
 
 #define EXTEND_VEC_DEF0(U, V, f) \
 FLINT_FORCE_INLINE V V##f(void) { \
@@ -1619,6 +1965,139 @@ FLINT_FORCE_INLINE vec8n vec8n_bit_shift_right(vec8n a, ulong n)
 #endif
 
 
+
+/* vec1f -- NEON/ARM64 *****************************************************/
+
+FLINT_FORCE_INLINE vec1f vec1f_load(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1f vec1f_load_aligned(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1f vec1f_load_unaligned(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE void vec1f_store(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1f_store_aligned(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1f_store_unaligned(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE vec1f vec1f_zero(void) { return 0.0f; }
+FLINT_FORCE_INLINE vec1f vec1f_set_f(float a) { return a; }
+FLINT_FORCE_INLINE vec1f vec1f_add(vec1f a, vec1f b) { return a + b; }
+FLINT_FORCE_INLINE vec1f vec1f_sub(vec1f a, vec1f b) { return a - b; }
+FLINT_FORCE_INLINE vec1f vec1f_mul(vec1f a, vec1f b) { return a * b; }
+FLINT_FORCE_INLINE vec1f vec1f_fmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(a, b, c);
+}
+FLINT_FORCE_INLINE vec1f vec1f_fnmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(-a, b, c);
+}
+FLINT_FORCE_INLINE vec1f vec1f_floor(vec1f a) { return floorf(a); }
+
+/* vec4f -- NEON/ARM64 *****************************************************/
+
+FLINT_FORCE_INLINE vec4f vec4f_load(const float* a) {
+    return vld1q_f32(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_load_aligned(const float* a) {
+    return vld1q_f32(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_load_unaligned(const float* a) {
+    return vld1q_f32(a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store(float* z, vec4f a) {
+    vst1q_f32(z, a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store_aligned(float* z, vec4f a) {
+    vst1q_f32(z, a);
+}
+
+FLINT_FORCE_INLINE void vec4f_store_unaligned(float* z, vec4f a) {
+    vst1q_f32(z, a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_zero(void) {
+    return vdupq_n_f32(0.0f);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_set_f(float a) {
+    return vdupq_n_f32(a);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_add(vec4f a, vec4f b) {
+    return vaddq_f32(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_sub(vec4f a, vec4f b) {
+    return vsubq_f32(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_mul(vec4f a, vec4f b) {
+    return vmulq_f32(a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_fmadd(vec4f a, vec4f b, vec4f c) {
+    return vfmaq_f32(c, a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_fnmadd(vec4f a, vec4f b, vec4f c) {
+    return vfmsq_f32(c, a, b);
+}
+
+FLINT_FORCE_INLINE vec4f vec4f_floor(vec4f a) {
+    return vrndmq_f32(a);
+}
+
+/* floor for the double types -- NEON/ARM64 ********************************/
+
+FLINT_FORCE_INLINE vec1d vec1d_floor(vec1d a) {
+    return floor(a);
+}
+
+FLINT_FORCE_INLINE vec2d vec2d_floor(vec2d a) {
+    return vrndmq_f64(a);
+}
+
+/* vec8f -- NEON/ARM64 (pair of vec4f) *************************************/
+
+EXTEND_VEC_DEF0(vec4f, vec8f, _zero)
+EXTEND_VEC_DEF1(vec4f, vec8f, _floor)
+EXTEND_VEC_DEF2(vec4f, vec8f, _add)
+EXTEND_VEC_DEF2(vec4f, vec8f, _sub)
+EXTEND_VEC_DEF2(vec4f, vec8f, _mul)
+EXTEND_VEC_DEF3(vec4f, vec8f, _fmadd)
+EXTEND_VEC_DEF3(vec4f, vec8f, _fnmadd)
+
+FLINT_FORCE_INLINE vec8f vec8f_set_f(float a) {
+    vec8f z = {vec4f_set_f(a), vec4f_set_f(a)};
+    return z;
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_load_unaligned(const float* a) {
+    vec8f z = {vec4f_load_unaligned(a), vec4f_load_unaligned(a + 4)};
+    return z;
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_load_aligned(const float* a) {
+    vec8f z = {vec4f_load_aligned(a), vec4f_load_aligned(a + 4)};
+    return z;
+}
+
+FLINT_FORCE_INLINE vec8f vec8f_load(const float* a) {
+    return vec8f_load_aligned(a);
+}
+
+FLINT_FORCE_INLINE void vec8f_store_unaligned(float* z, vec8f a) {
+    vec4f_store_unaligned(z, a.e1);
+    vec4f_store_unaligned(z + 4, a.e2);
+}
+
+FLINT_FORCE_INLINE void vec8f_store_aligned(float* z, vec8f a) {
+    vec4f_store_aligned(z, a.e1);
+    vec4f_store_aligned(z + 4, a.e2);
+}
+
+FLINT_FORCE_INLINE void vec8f_store(float* z, vec8f a) {
+    vec8f_store_aligned(z, a);
+}
+
 #undef EXTEND_VEC_DEF4
 #undef EXTEND_VEC_DEF3
 #undef EXTEND_VEC_DEF2
@@ -1628,10 +2107,326 @@ FLINT_FORCE_INLINE vec8n vec8n_bit_shift_right(vec8n a, ulong n)
 
 #else
 
-#error machine_vector.h not implemented
+/*
+    Generic backends, so that this header is usable on every platform rather
+    than only AVX2 and NEON. Two tiers:
+
+    (a) GNU vector extensions (GCC/Clang on any architecture: RISC-V, POWER,
+        s390x, ARM without NEON, ...). These are compiler extensions rather
+        than target intrinsics, so one source maps onto whatever SIMD the
+        target actually has, and -- importantly -- the operations are already
+        vector operations, so the compiler does not try to auto-vectorize
+        loops over them in unprofitable ways.
+
+    (b) Strict ISO C structs, for any other compiler. Correct everywhere;
+        quality of codegen is up to the compiler's own auto-vectorizer.
+        Define FLINT_MACHINE_VECTORS_STRICT_C to force this tier.
+
+    These tiers currently implement the subset of the interface needed by
+    flint_sgemm/flint_dgemm: load/store (plain, aligned, unaligned), zero,
+    set_d/set_f, add, sub, mul, fmadd, fnmadd, floor, for
+    vec1d/vec2d/vec4d/vec8d and vec1f/vec4f/vec8f/vec16f. Other operations are
+    deliberately absent rather than emulated badly; add them here as
+    callers need them.
+*/
+
+typedef double vec1d;
+typedef float vec1f;
+
+#if defined(__GNUC__) && !defined(FLINT_MACHINE_VECTORS_STRICT_C)
+
+# define FLINT_MACHINE_VECTORS_GNU_VECTOR_EXTENSIONS 1
+
+/*
+    These vectors may be wider than the target's native SIMD width, which
+    is intentional (extra instruction level parallelism, and the compiler
+    splits them). All functions here are force-inlined, so the psabi
+    warning about passing such types across function boundaries does not
+    apply to any code we actually generate.
+*/
+# if defined(__GNUC__) && !defined(__clang__)
+#  pragma GCC diagnostic push
+#  pragma GCC diagnostic ignored "-Wpsabi"
+# endif
+
+typedef double vec2d __attribute__((vector_size(16)));
+typedef double vec4d __attribute__((vector_size(32)));
+typedef float vec4f __attribute__((vector_size(16)));
+typedef float vec8f __attribute__((vector_size(32)));
+
+# define VEC_GENERIC_DEF(V, S, N, SUF, FLOOR1) \
+FLINT_FORCE_INLINE V V##_load_unaligned(const S* a) { \
+    V z; memcpy(&z, a, sizeof(z)); return z; \
+} \
+FLINT_FORCE_INLINE V V##_load_aligned(const S* a) { \
+    V z; memcpy(&z, a, sizeof(z)); return z; \
+} \
+FLINT_FORCE_INLINE V V##_load(const S* a) { \
+    return V##_load_aligned(a); \
+} \
+FLINT_FORCE_INLINE void V##_store_unaligned(S* z, V a) { \
+    memcpy(z, &a, sizeof(a)); \
+} \
+FLINT_FORCE_INLINE void V##_store_aligned(S* z, V a) { \
+    memcpy(z, &a, sizeof(a)); \
+} \
+FLINT_FORCE_INLINE void V##_store(S* z, V a) { \
+    V##_store_aligned(z, a); \
+} \
+FLINT_FORCE_INLINE V V##_zero(void) { V z = {0}; return z; } \
+FLINT_FORCE_INLINE V V##_set_##SUF(S a) { V z = {0}; return z + a; } \
+FLINT_FORCE_INLINE V V##_add(V a, V b) { return a + b; } \
+FLINT_FORCE_INLINE V V##_sub(V a, V b) { return a - b; } \
+FLINT_FORCE_INLINE V V##_mul(V a, V b) { return a * b; } \
+FLINT_FORCE_INLINE V V##_fmadd(V a, V b, V c) { return a * b + c; } \
+FLINT_FORCE_INLINE V V##_fnmadd(V a, V b, V c) { return c - a * b; } \
+FLINT_FORCE_INLINE V V##_floor(V a) { \
+    for (int i = 0; i < N; i++) a[i] = FLOOR1(a[i]); \
+    return a; \
+}
+
+#else
+
+typedef struct {double v[2];} vec2d;
+typedef struct {double v[4];} vec4d;
+typedef struct {float v[4];} vec4f;
+typedef struct {float v[8];} vec8f;
+
+/*
+    The elementwise operations are written as straight-line code rather
+    than loops: whether they become SIMD instructions is up to the
+    compiler's SLP vectorizer, and an unrolled basic block is
+    considerably more reliable across compilers and versions than a loop
+    the vectorizer must first unroll. This tier is only reached on
+    compilers without GNU vector extensions, so the generated code is
+    otherwise outside our control.
+*/
+
+# define VEC_SC_EACH2(F) F(0) F(1)
+# define VEC_SC_EACH4(F) F(0) F(1) F(2) F(3)
+# define VEC_SC_EACH8(F) F(0) F(1) F(2) F(3) F(4) F(5) F(6) F(7)
+
+# define VEC_SC_LOAD(i) z.v[i] = a[i];
+# define VEC_SC_STORE(i) z[i] = a.v[i];
+# define VEC_SC_ZERO(i) z.v[i] = 0;
+# define VEC_SC_SET1(i) z.v[i] = a;
+# define VEC_SC_ADD(i) z.v[i] = a.v[i] + b.v[i];
+# define VEC_SC_SUB(i) z.v[i] = a.v[i] - b.v[i];
+# define VEC_SC_MUL(i) z.v[i] = a.v[i] * b.v[i];
+# define VEC_SC_FMADD(i) z.v[i] = a.v[i] * b.v[i] + c.v[i];
+# define VEC_SC_FNMADD(i) z.v[i] = c.v[i] - a.v[i] * b.v[i];
+
+# define VEC_GENERIC_DEF(V, S, N, SUF, FLOOR1) \
+FLINT_FORCE_INLINE V V##_load_unaligned(const S* a) { \
+    V z; VEC_SC_EACH##N(VEC_SC_LOAD) return z; \
+} \
+FLINT_FORCE_INLINE V V##_load_aligned(const S* a) { \
+    return V##_load_unaligned(a); \
+} \
+FLINT_FORCE_INLINE V V##_load(const S* a) { \
+    return V##_load_unaligned(a); \
+} \
+FLINT_FORCE_INLINE void V##_store_unaligned(S* z, V a) { \
+    VEC_SC_EACH##N(VEC_SC_STORE) \
+} \
+FLINT_FORCE_INLINE void V##_store_aligned(S* z, V a) { \
+    V##_store_unaligned(z, a); \
+} \
+FLINT_FORCE_INLINE void V##_store(S* z, V a) { \
+    V##_store_unaligned(z, a); \
+} \
+FLINT_FORCE_INLINE V V##_zero(void) { \
+    V z; VEC_SC_EACH##N(VEC_SC_ZERO) return z; \
+} \
+FLINT_FORCE_INLINE V V##_set_##SUF(S a) { \
+    V z; VEC_SC_EACH##N(VEC_SC_SET1) return z; \
+} \
+FLINT_FORCE_INLINE V V##_add(V a, V b) { \
+    V z; VEC_SC_EACH##N(VEC_SC_ADD) return z; \
+} \
+FLINT_FORCE_INLINE V V##_sub(V a, V b) { \
+    V z; VEC_SC_EACH##N(VEC_SC_SUB) return z; \
+} \
+FLINT_FORCE_INLINE V V##_mul(V a, V b) { \
+    V z; VEC_SC_EACH##N(VEC_SC_MUL) return z; \
+} \
+FLINT_FORCE_INLINE V V##_fmadd(V a, V b, V c) { \
+    V z; VEC_SC_EACH##N(VEC_SC_FMADD) return z; \
+} \
+FLINT_FORCE_INLINE V V##_fnmadd(V a, V b, V c) { \
+    V z; VEC_SC_EACH##N(VEC_SC_FNMADD) return z; \
+} \
+FLINT_FORCE_INLINE V V##_floor(V a) { \
+    int i; \
+    for (i = 0; i < N; i++) \
+        a.v[i] = FLOOR1(a.v[i]); \
+    return a; \
+}
 
 #endif
 
+typedef struct {vec4d e1, e2;} vec8d;
+typedef struct {vec8f e1, e2;} vec16f;
+
+/* vec1d, vec1f -- generic *************************************************/
+
+FLINT_FORCE_INLINE vec1d vec1d_load(const double* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1d vec1d_load_aligned(const double* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1d vec1d_load_unaligned(const double* a) { return a[0]; }
+FLINT_FORCE_INLINE void vec1d_store(double* z, vec1d a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1d_store_aligned(double* z, vec1d a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1d_store_unaligned(double* z, vec1d a) { z[0] = a; }
+FLINT_FORCE_INLINE vec1d vec1d_zero(void) { return 0.0; }
+FLINT_FORCE_INLINE vec1d vec1d_set_d(double a) { return a; }
+FLINT_FORCE_INLINE vec1d vec1d_add(vec1d a, vec1d b) { return a + b; }
+FLINT_FORCE_INLINE vec1d vec1d_sub(vec1d a, vec1d b) { return a - b; }
+FLINT_FORCE_INLINE vec1d vec1d_mul(vec1d a, vec1d b) { return a * b; }
+FLINT_FORCE_INLINE vec1d vec1d_fmadd(vec1d a, vec1d b, vec1d c) {
+    return fma(a, b, c);
+}
+FLINT_FORCE_INLINE vec1d vec1d_fnmadd(vec1d a, vec1d b, vec1d c) {
+    return fma(-a, b, c);
+}
+FLINT_FORCE_INLINE vec1d vec1d_floor(vec1d a) { return floor(a); }
+
+FLINT_FORCE_INLINE vec1f vec1f_load(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1f vec1f_load_aligned(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE vec1f vec1f_load_unaligned(const float* a) { return a[0]; }
+FLINT_FORCE_INLINE void vec1f_store(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1f_store_aligned(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE void vec1f_store_unaligned(float* z, vec1f a) { z[0] = a; }
+FLINT_FORCE_INLINE vec1f vec1f_zero(void) { return 0.0f; }
+FLINT_FORCE_INLINE vec1f vec1f_set_f(float a) { return a; }
+FLINT_FORCE_INLINE vec1f vec1f_add(vec1f a, vec1f b) { return a + b; }
+FLINT_FORCE_INLINE vec1f vec1f_sub(vec1f a, vec1f b) { return a - b; }
+FLINT_FORCE_INLINE vec1f vec1f_mul(vec1f a, vec1f b) { return a * b; }
+FLINT_FORCE_INLINE vec1f vec1f_fmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(a, b, c);
+}
+FLINT_FORCE_INLINE vec1f vec1f_fnmadd(vec1f a, vec1f b, vec1f c) {
+    return fmaf(-a, b, c);
+}
+FLINT_FORCE_INLINE vec1f vec1f_floor(vec1f a) { return floorf(a); }
+
+/* vec4d, vec4f, vec8f -- generic ******************************************/
+
+VEC_GENERIC_DEF(vec2d, double, 2, d, floor)
+VEC_GENERIC_DEF(vec4d, double, 4, d, floor)
+VEC_GENERIC_DEF(vec4f, float, 4, f, floorf)
+VEC_GENERIC_DEF(vec8f, float, 8, f, floorf)
+
+#undef VEC_GENERIC_DEF
+
+/* vec8d, vec16f -- generic (pairs) ****************************************/
+
+#define VEC_GENERIC_PAIR_DEF(U, V, S, SUF) \
+FLINT_FORCE_INLINE V V##_load_unaligned(const S* a) { \
+    V z = {U##_load_unaligned(a), U##_load_unaligned(a + sizeof(U)/sizeof(S))}; \
+    return z; \
+} \
+FLINT_FORCE_INLINE V V##_load_aligned(const S* a) { \
+    V z = {U##_load_aligned(a), U##_load_aligned(a + sizeof(U)/sizeof(S))}; \
+    return z; \
+} \
+FLINT_FORCE_INLINE V V##_load(const S* a) { return V##_load_aligned(a); } \
+FLINT_FORCE_INLINE void V##_store_unaligned(S* z, V a) { \
+    U##_store_unaligned(z, a.e1); \
+    U##_store_unaligned(z + sizeof(U)/sizeof(S), a.e2); \
+} \
+FLINT_FORCE_INLINE void V##_store_aligned(S* z, V a) { \
+    U##_store_aligned(z, a.e1); \
+    U##_store_aligned(z + sizeof(U)/sizeof(S), a.e2); \
+} \
+FLINT_FORCE_INLINE void V##_store(S* z, V a) { V##_store_aligned(z, a); } \
+FLINT_FORCE_INLINE V V##_zero(void) { \
+    V z = {U##_zero(), U##_zero()}; return z; \
+} \
+FLINT_FORCE_INLINE V V##_set_##SUF(S a) { \
+    V z = {U##_set_##SUF(a), U##_set_##SUF(a)}; return z; \
+} \
+FLINT_FORCE_INLINE V V##_add(V a, V b) { \
+    V z = {U##_add(a.e1, b.e1), U##_add(a.e2, b.e2)}; return z; \
+} \
+FLINT_FORCE_INLINE V V##_sub(V a, V b) { \
+    V z = {U##_sub(a.e1, b.e1), U##_sub(a.e2, b.e2)}; return z; \
+} \
+FLINT_FORCE_INLINE V V##_mul(V a, V b) { \
+    V z = {U##_mul(a.e1, b.e1), U##_mul(a.e2, b.e2)}; return z; \
+} \
+FLINT_FORCE_INLINE V V##_fmadd(V a, V b, V c) { \
+    V z = {U##_fmadd(a.e1, b.e1, c.e1), U##_fmadd(a.e2, b.e2, c.e2)}; \
+    return z; \
+} \
+FLINT_FORCE_INLINE V V##_fnmadd(V a, V b, V c) { \
+    V z = {U##_fnmadd(a.e1, b.e1, c.e1), U##_fnmadd(a.e2, b.e2, c.e2)}; \
+    return z; \
+} \
+FLINT_FORCE_INLINE V V##_floor(V a) { \
+    V z = {U##_floor(a.e1), U##_floor(a.e2)}; return z; \
+}
+
+VEC_GENERIC_PAIR_DEF(vec4d, vec8d, double, d)
+VEC_GENERIC_PAIR_DEF(vec8f, vec16f, float, f)
+
+#undef VEC_GENERIC_PAIR_DEF
+
+#if defined(FLINT_MACHINE_VECTORS_GNU_VECTOR_EXTENSIONS) \
+        && defined(__GNUC__) && !defined(__clang__)
+# pragma GCC diagnostic pop
+#endif
+
+#endif
+
+
+
+/* gemm ********************************************************************/
+
+/*
+    C = A * B for row-major matrices with no transposes and no
+    accumulation: C is m x n, A is m x k, B is k x n, with leading
+    dimensions ldc, lda, ldb. Equivalent to cblas_sgemm/cblas_dgemm with
+    CblasRowMajor, CblasNoTrans, CblasNoTrans, alpha = 1, beta = 0.
+    These are always available; they use FLINT's thread pool according to
+    flint_get_num_threads().
+*/
+/*
+    Three interchangeable implementations of each. The _blas versions
+    call cblas (and abort if FLINT was built without BLAS); the
+    _fallback versions are FLINT's own kernels, always available. The
+    unsuffixed versions dispatch on flint_gemm_use_blas, which is
+    initialized to FLINT_USES_BLAS and may be set at runtime.
+*/
+FLINT_DLL extern int flint_gemm_use_blas;
+
+void flint_sgemm(slong m, slong k, slong n,
+                 const float * A, slong lda,
+                 const float * B, slong ldb,
+                 float * C, slong ldc);
+
+void flint_dgemm(slong m, slong k, slong n,
+                 const double * A, slong lda,
+                 const double * B, slong ldb,
+                 double * C, slong ldc);
+
+void flint_sgemm_blas(slong m, slong k, slong n,
+                      const float * A, slong lda,
+                      const float * B, slong ldb,
+                      float * C, slong ldc);
+
+void flint_dgemm_blas(slong m, slong k, slong n,
+                      const double * A, slong lda,
+                      const double * B, slong ldb,
+                      double * C, slong ldc);
+
+void flint_sgemm_fallback(slong m, slong k, slong n,
+                          const float * A, slong lda,
+                          const float * B, slong ldb,
+                          float * C, slong ldc);
+
+void flint_dgemm_fallback(slong m, slong k, slong n,
+                          const double * A, slong lda,
+                          const double * B, slong ldb,
+                          double * C, slong ldc);
 
 #ifdef __cplusplus
 }
