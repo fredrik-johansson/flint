@@ -474,7 +474,7 @@ int _fmpz_mat_mul_blas(
     slong num_primes;
     fmpz_comb_t comb;
     thread_pool_handle * handles;
-    slong num_workers;
+    slong num_workers, max_workers;
     _worker_arg * args;
 
     FLINT_ASSERT(sign == 0 || sign == 1);
@@ -508,6 +508,7 @@ int _fmpz_mat_mul_blas(
     dC = (double *) flint_calloc(m*n, sizeof(double));
 
     num_workers = flint_request_threads(&handles, INT_MAX);
+    max_workers = num_workers;
 
     args = FLINT_ARRAY_ALLOC(num_workers + 1, _worker_arg);
     for (start = 0, i = 0; i <= num_workers; start = stop, i++)
@@ -566,7 +567,40 @@ int _fmpz_mat_mul_blas(
         for (i = 0; i < num_workers; i++)
             thread_pool_wait(global_thread_pool, handles[i]);
 
-        flint_dgemm(m, k, n, dA, k, dB, n, dC, n);
+        /*
+            The fallback gemm threads through FLINT's pool itself, so
+            the workers held for the conversions must be returned
+            before the call or it finds the pool empty and runs on one
+            thread. (An external BLAS schedules its own threads and
+            does not care.) The re-request is capped by the first
+            grant, so the args array stays large enough; if fewer
+            workers come back, the work is redistributed below.
+        */
+        {
+            slong prev_workers = num_workers;
+
+            flint_give_back_threads(handles, num_workers);
+
+            flint_dgemm(m, k, n, dA, k, dB, n, dC, n);
+
+            num_workers = flint_request_threads(&handles, max_workers + 1);
+
+            if (num_workers != prev_workers)
+            {
+                for (start = 0, i = 0; i <= num_workers; start = stop, i++)
+                {
+                    args[i].l = l;
+                    args[i].prime = primes[l];
+                    args[i].Cstartrow = ((i + 0)*m)/(num_workers + 1);
+                    args[i].Cstoprow  = ((i + 1)*m)/(num_workers + 1);
+                    stop = _thread_pool_find_work_2(m, k, k, n,
+                                                    i + 1, num_workers + 1);
+                    _thread_pool_distribute_work_2(start, stop,
+                                  &args[i].Astartrow, &args[i].Astoprow, m,
+                                  &args[i].Bstartrow, &args[i].Bstoprow, k);
+                }
+            }
+        }
 
         for (i = 0; i < num_workers; i++)
             thread_pool_wake(global_thread_pool, handles[i], 0, _fromd_worker, &args[i]);
