@@ -20,6 +20,7 @@
 #define NMOD_MAT_INLINE static inline
 #endif
 
+#include <stdint.h>
 #include "nmod_types.h"
 
 #ifdef __cplusplus
@@ -178,6 +179,12 @@ void nmod_mat_scalar_addmul_ui(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_
 void nmod_mat_mul(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B);
 
 int nmod_mat_mul_blas(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B);
+
+void _nmod_mat_mul_u8(uint8_t * C, slong Cstride,
+                 const uint8_t * A, slong Astride,
+                 const uint8_t * B, slong Bstride,
+                 slong m, slong k, slong n, nmod_t mod);
+void nmod_mat_mul_u8(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B);
 
 void nmod_mat_mul_classical(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B);
 

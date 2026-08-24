@@ -391,6 +391,29 @@ Matrix multiplication
     when FLINT is built with a 32-bit word size.
     Dimensions must be compatible for matrix multiplication.
 
+.. function:: void nmod_mat_mul_u8(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
+
+    Sets `C = AB` using kernels specialized to moduli up to `255`,
+    which the modulus of `C` must not exceed. Moduli `2` and `3` pack
+    the entries into bit representations directly (a
+    method-of-four-Russians leaf under a Strassen recursion,
+    parallelized over a tile grid of shared packed operands when
+    several threads are available); moduli up to `15` use an
+    in-register table-lookup kernel on a byte image of the entries;
+    larger moduli lift to single precision for :func:`flint_sgemm`.
+    Aliasing of `A` and `B` (squaring) is detected and skips duplicate
+    conversions. Dimensions must be compatible for matrix
+    multiplication.
+
+.. function:: void _nmod_mat_mul_u8(uint8_t * C, slong Cstride, const uint8_t * A, slong Astride, const uint8_t * B, slong Bstride, slong m, slong k, slong n, nmod_t mod)
+
+    Underlying multiplication on byte matrices with arbitrary row
+    strides: sets the `m \times n` matrix `C` to `AB` where `A` is
+    `m \times k` and `B` is `k \times n`, all entries reduced modulo
+    ``mod.n``, which must not exceed `255`. This entry point skips the
+    ``ulong``-to-byte conversions of :func:`nmod_mat_mul_u8` and is the
+    natural interface for byte-entry matrix types.
+
 .. function:: void nmod_mat_addmul(nmod_mat_t D, const nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
 
     Sets `D = C + AB`. `C` and `D` may be aliased with each other but
