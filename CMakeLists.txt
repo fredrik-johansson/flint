@@ -206,6 +206,7 @@ endif()
 set(_BUILD_DIRS
     generic_files
     thread_pool                     thread_support
+    machine_vectors
 
     ulong_extras
     long_extras

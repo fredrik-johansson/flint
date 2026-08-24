@@ -15,10 +15,7 @@
 #include "nmod_mat.h"
 #include "thread_support.h"
 
-#if FLINT_USES_BLAS
-# include <cblas.h>
-# include "longlong.h"
-#endif
+#include "longlong.h"
 
 void
 nmod_mat_mul(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
@@ -34,10 +31,11 @@ nmod_mat_mul(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
     FLINT_ASSERT(C->c == B->c);
     FLINT_ASSERT(A->c == B->r);
 
-#if FLINT_USES_BLAS
     /*
         tuning is based on several assumptions:
-        (1) blas_num_threads >= flint_num_threads.
+        (1) the gemm used by nmod_mat_mul_blas is at least as parallel
+            as the rest of FLINT (it uses FLINT's thread pool, or an
+            external BLAS with at least flint_num_threads threads).
         (2) nmod_mat_mul_blas (with crt) only beats
             nmod_mat_mul_classical on square multiplications
             of large enough dimension
@@ -69,7 +67,6 @@ nmod_mat_mul(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
         if (min_dim > cutoff && nmod_mat_mul_blas(C, A, B))
             return;
     }
-#endif
 
     if (C == A || C == B)
     {

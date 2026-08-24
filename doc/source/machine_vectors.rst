@@ -3,8 +3,46 @@
 **machine_vectors.h** -- SIMD-accelerated operations on fixed-length vectors
 ===============================================================================
 
-This module currently requires building FLINT with support for
-AVX2 or NEON instructions.
+Vector types and operations mapping onto the target's SIMD instructions,
+together with the ``flint_sgemm`` and ``flint_dgemm`` matrix
+multiplication kernels built on top of them.
+
+Backends are selected automatically: AVX2 (and AVX512 for the ``vec8dz``
+family) on x86, NEON on ARM, and otherwise a generic backend, using GNU
+vector extensions where the compiler supports them and plain ISO C
+structs elsewhere. The AVX2 and NEON backends require a 64-bit word
+size, since their integer vectors have :type:`ulong` lanes; a 32-bit
+build uses the generic backends, which provide only the floating-point
+types. The generic backends implement only the subset of the
+interface required by ``flint_sgemm``/``flint_dgemm``; the full
+interface, as used by ``fft_small``, still requires AVX2 or NEON.
+
+For the vector operations to use the target's instructions, FLINT must
+be built with appropriate compiler flags. ``configure`` chooses these
+from the detected CPU; ``--enable-avx2`` and ``--enable-avx512`` force
+them on.
+
+Defining ``FLINT_MACHINE_VECTORS_FORCE_GENERIC`` before including this
+header selects the generic backend even on a target with AVX2 or NEON,
+and ``FLINT_MACHINE_VECTORS_STRICT_C`` additionally selects the ISO C
+tier over GNU vector extensions. These are intended for testing and
+profiling the portable code paths.
+
+The strict ISO C tier has no way to express a vector operation, so
+whether its operations become SIMD instructions is entirely up to the
+compiler's SLP vectorizer; its performance therefore varies between
+compilers and compiler versions, unlike the other backends. It exists
+so that the header works on compilers without GNU vector extensions,
+and is not the fallback used on GCC or clang.
+
+The generic backends express a fused multiply-add as ``a * b + c``,
+which a compiler fuses into an FMA instruction only when floating-point
+contraction is enabled. GCC in a strict ISO mode, which is how FLINT is
+built, does not contract by default; code using these operations in a
+performance-critical loop should request contraction, as
+``machine_vectors/gemm.c`` does with ``#pragma GCC optimize
+("fp-contract=fast")``. The AVX2, AVX512 and NEON backends use fused
+intrinsics and are unaffected.
 
 Some functions may require that vectors are aligned in memory.
 
@@ -24,6 +62,27 @@ Types
           vec8d
 
     Vector with 1, 2, 4, or 8 ``double`` entries.
+
+.. type:: vec1f
+          vec4f
+          vec8f
+          vec16f
+
+    Vector with 1, 4, 8, or 16 ``float`` entries.
+
+.. type:: vec8dz
+          vec16dz
+          vec16fz
+          vec32fz
+          vec8nz
+
+    Vectors backed by AVX512 registers, available only when building
+    with AVX512F support: 8 or 16 ``double`` entries, 16 or 32 ``float``
+    entries, and 8 :type:`ulong` entries respectively. The ``z`` suffix
+    distinguishes these from the equally-named types built from pairs of
+    narrower registers; ``vec8d``, for instance, remains a pair of AVX2
+    registers, which gives more instruction level parallelism in
+    existing code.
 
 Printing
 -------------------------------------------------------------------------------
@@ -282,3 +341,55 @@ Other assumptions are not yet documented.
               vec8n vec8n_addmod_limited(vec8n a, vec8n b, vec8n n)
 
     Return `a + b \bmod n` in `[0,n)`, assuming that `n < 2^{63}`.
+
+Matrix multiplication
+-------------------------------------------------------------------------------
+
+These functions compute a matrix product in single or double precision.
+They are always available: when FLINT is built with BLAS, the default is
+to call it, and otherwise FLINT's own kernels are used. The intended use
+is as a building block for exact linear algebra over `\mathbb{Z}` and
+`\mathbb{Z}/n\mathbb{Z}`, for example in :func:`nmod_mat_mul_blas` and
+:func:`fmpz_mat_mul_blas`.
+
+All of these functions compute `C = AB` for row-major matrices, where
+*C* is *m* by *n*, *A* is *m* by *k* and *B* is *k* by *n*, with
+*ldc*, *lda* and *ldb* the respective leading dimensions (the number of
+entries between the start of consecutive rows, which must be at least
+the number of columns). No transposition or accumulation is performed:
+the previous contents of *C* are overwritten, and `k = 0` sets *C* to
+zero. This is equivalent to ``cblas_sgemm`` or ``cblas_dgemm`` called
+with ``CblasRowMajor``, ``CblasNoTrans``, ``CblasNoTrans``, ``alpha``
+equal to 1 and ``beta`` equal to 0. Aliasing of *C* with *A* or *B* is
+not allowed.
+
+The FLINT kernels are multithreaded internally according to
+:func:`flint_get_num_threads`, using FLINT's thread pool. They handle
+arbitrary dimensions, including thin and unbalanced shapes, without
+requiring any padding or alignment of the input.
+
+.. function:: void flint_sgemm(slong m, slong k, slong n, const float * A, slong lda, const float * B, slong ldb, float * C, slong ldc)
+              void flint_dgemm(slong m, slong k, slong n, const double * A, slong lda, const double * B, slong ldb, double * C, slong ldc)
+
+    Sets `C = AB`, calling either the BLAS or the FLINT implementation
+    according to :var:`flint_gemm_use_blas`.
+
+.. function:: void flint_sgemm_blas(slong m, slong k, slong n, const float * A, slong lda, const float * B, slong ldb, float * C, slong ldc)
+              void flint_dgemm_blas(slong m, slong k, slong n, const double * A, slong lda, const double * B, slong ldb, double * C, slong ldc)
+
+    Sets `C = AB` using ``cblas_sgemm`` or ``cblas_dgemm``. These raise
+    an exception if FLINT was built without BLAS support.
+
+.. function:: void flint_sgemm_fallback(slong m, slong k, slong n, const float * A, slong lda, const float * B, slong ldb, float * C, slong ldc)
+              void flint_dgemm_fallback(slong m, slong k, slong n, const double * A, slong lda, const double * B, slong ldb, double * C, slong ldc)
+
+    Sets `C = AB` using FLINT's own kernels, which are always available.
+
+.. var:: int flint_gemm_use_blas
+
+    Selects the implementation used by :func:`flint_sgemm` and
+    :func:`flint_dgemm`. It is initialized to 1 if FLINT was built with
+    BLAS support and 0 otherwise, and may be set to either value at
+    runtime, for example to compare the two implementations. Setting it
+    to 1 in a build without BLAS support will result in an exception
+    when a gemm is attempted.

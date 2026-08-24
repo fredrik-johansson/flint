@@ -168,6 +168,7 @@ HEADLESS_DIRS := generic_files
 
 HEADER_DIRS	:=	\
 		thread_pool			thread_support					\
+		machine_vectors									\
 															\
 		ulong_extras		long_extras			perm		\
 		double_extras		d_vec				d_mat		\
