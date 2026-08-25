@@ -3565,6 +3565,24 @@ _nmod_mat_mul_u8(uint8_t * C, slong Cstride,
         return;
     }
 
+    /* Some of the algorithms below support aliasing, but to keep things
+       simple let's just make a copy. */
+    if (C == A || C == B)
+    {
+        uint8_t * Ct;
+        TMP_INIT;
+
+        TMP_START;
+        Ct = (uint8_t *) TMP_ALLOC(m * n);
+        _nmod_mat_mul_u8(Ct, n, A, Astride, B, Bstride, m, k, n, mod);
+
+        for (i = 0; i < m; i++)
+            memcpy(C + i * Cstride, Ct + i * n, n);
+
+        TMP_END;
+        return;
+    }
+
     /*
         Moduli 2 and 3: the threaded path shares the packed operands
         across a tile grid (see packed_mul_threaded); when the grid

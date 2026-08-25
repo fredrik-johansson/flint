@@ -401,9 +401,8 @@ Matrix multiplication
     several threads are available); moduli up to `15` use an
     in-register table-lookup kernel on a byte image of the entries;
     larger moduli lift to single precision for :func:`flint_sgemm`.
-    Aliasing of `A` and `B` (squaring) is detected and skips duplicate
-    conversions. Dimensions must be compatible for matrix
-    multiplication.
+    Aliasing of the operands is supported. Dimensions must be compatible
+    for matrix multiplication.
 
 .. function:: void _nmod_mat_mul_u8(uint8_t * C, slong Cstride, const uint8_t * A, slong Astride, const uint8_t * B, slong Bstride, slong m, slong k, slong n, nmod_t mod)
 
@@ -412,7 +411,9 @@ Matrix multiplication
     `m \times k` and `B` is `k \times n`, all entries reduced modulo
     ``mod.n``, which must not exceed `255`. This entry point skips the
     ``ulong``-to-byte conversions of :func:`nmod_mat_mul_u8` and is the
-    natural interface for byte-entry matrix types.
+    natural interface for byte-entry matrix types. Exact aliasing of
+    `C` with `A` or `B` is supported (arbitrary partial overlap is
+    not).
 
 .. function:: void nmod_mat_addmul(nmod_mat_t D, const nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
 

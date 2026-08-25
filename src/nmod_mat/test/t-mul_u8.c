@@ -128,6 +128,57 @@ check_dims(slong m, slong k, slong n, ulong p, flint_rand_t state,
     nmod_mat_clear(B);
 }
 
+/*
+    Aliased raw-entry calls (C == A, C == B, and the aliased square
+    C == A == B) against the unaliased product; d x d so both
+    aliasings are dimensionally possible.
+*/
+static void
+check_aliased(slong d, ulong p, flint_rand_t state, const char * ctx)
+{
+    nmod_t mod;
+    uint8_t * M;
+    uint8_t * N;
+    uint8_t * ref;
+    slong i, mode;
+
+    nmod_init(&mod, p);
+    M = flint_malloc(3 * d * d);
+    N = M + d * d;
+    ref = N + d * d;
+
+    for (mode = 0; mode < 3; mode++)
+    {
+        for (i = 0; i < d * d; i++)
+        {
+            M[i] = (uint8_t) n_randint(state, p);
+            N[i] = (uint8_t) n_randint(state, p);
+        }
+
+        if (mode == 0)      /* C == A */
+        {
+            _nmod_mat_mul_u8(ref, d, M, d, N, d, d, d, d, mod);
+            _nmod_mat_mul_u8(M, d, M, d, N, d, d, d, d, mod);
+        }
+        else if (mode == 1) /* C == B */
+        {
+            _nmod_mat_mul_u8(ref, d, M, d, N, d, d, d, d, mod);
+            _nmod_mat_mul_u8(N, d, M, d, N, d, d, d, d, mod);
+        }
+        else                /* C == A == B */
+        {
+            _nmod_mat_mul_u8(ref, d, M, d, M, d, d, d, d, mod);
+            _nmod_mat_mul_u8(M, d, M, d, M, d, d, d, d, mod);
+        }
+
+        if (memcmp(mode == 1 ? N : M, ref, d * d) != 0)
+        { flint_printf("FAIL: aliased (%s): d: %wd, mod: %wu, "
+                       "mode: %wd\n", ctx, d, p, mode); flint_abort(); }
+    }
+
+    flint_free(M);
+}
+
 TEST_FUNCTION_START(nmod_mat_mul_u8, state)
 {
     slong i;
@@ -289,6 +340,24 @@ TEST_FUNCTION_START(nmod_mat_mul_u8, state)
                      state, "sgemm squaring");
     }
     check_dims(4, 35000, 4, 251, state, "sgemm accumulator fold");
+
+    /* aliased raw-entry calls across the engines: shuffle basecase
+       and byte Strassen (buffered), sgemm, and -- exempt from the
+       buffer -- the packed moduli, serial and threaded */
+    for (i = 0; i < flint_test_multiplier(); i++)
+    {
+        check_aliased(40 + n_randint(state, 60),
+                      5 + n_randint(state, 11), state, "shuffle");
+        check_aliased(200 + n_randint(state, 120),
+                      5 + n_randint(state, 11), state, "byte strassen");
+        check_aliased(200 + n_randint(state, 120),
+                      17 + n_randint(state, 239), state, "sgemm");
+        check_aliased(100 + n_randint(state, 200), 2, state, "gf2");
+        check_aliased(250 + n_randint(state, 200), 3, state, "gf3");
+    }
+    flint_set_num_threads(3);
+    check_aliased(2048, 2, state, "gf2 threaded aliased");
+    flint_set_num_threads(1);
 
     /* the flat shared-operand gemm engages above 256 x 256 with
        several threads when one exact sgemm covers the product; the

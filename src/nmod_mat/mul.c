@@ -25,11 +25,22 @@ nmod_mat_mul(nmod_mat_t C, const nmod_mat_t A, const nmod_mat_t B)
     slong n = B->c;
     slong min_dim = FLINT_MIN(FLINT_MIN(m, k), n);
     slong cutoff;
-    slong flint_num_threads = flint_get_num_threads();
 
     FLINT_ASSERT(C->r == A->r);
     FLINT_ASSERT(C->c == B->c);
     FLINT_ASSERT(A->c == B->r);
+
+    /* Todo: optimize nmod_mat_mul_blas. For mod.n >= 17, nmod_mat_mul_blas
+       should be faster up to dim about 1000-2000 as nmod_mat_mul_u8 does
+       the same sgemm but with an extra uint8 roundtrip. Currently
+       mul_blas narrowly loses to mul_u8 due to slow modular reductions. */
+    if (C->mod.n <= 255 && min_dim >= 8)
+    {
+        nmod_mat_mul_u8(C, A, B);
+        return;
+    }
+
+    slong flint_num_threads = flint_get_num_threads();
 
     /*
         tuning is based on several assumptions:
