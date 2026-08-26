@@ -808,12 +808,28 @@ _nmod8_poly_mullow(uint8_t * res, const uint8_t * A, slong Alen, const uint8_t *
     return _nmod8_poly_mulmid(res, A, Alen, B, Blen, 0, len, ctx);
 }
 
-/* todo: tuning for rectangular matrices */
+#include "nmod_mat.h"
+
 static int
 _nmod8_mat_mul(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
 {
-    if (A->r >= 256 && A->c >= 256 && B->c >= 256)
-        return gr_mat_mul_strassen(C, A, B, ctx);
+    slong ar, ac, br, bc;
+
+    ar = gr_mat_nrows(A, ctx);
+    ac = gr_mat_ncols(A, ctx);
+    br = gr_mat_nrows(B, ctx);
+    bc = gr_mat_ncols(B, ctx);
+
+    if (ar >= 8 && ac >= 8 && bc >= 8)
+    {
+        if (ac != br || ar != gr_mat_nrows(C, ctx) || bc != gr_mat_ncols(C, ctx))
+            return GR_DOMAIN;
+
+        _nmod_mat_mul_u8(C->entries, C->stride, A->entries, A->stride, B->entries, B->stride,
+            ar, ac, bc, NMOD8_CTX(ctx));
+
+        return GR_SUCCESS;
+    }
     else
         return gr_mat_mul_classical(C, A, B, ctx);
 }
