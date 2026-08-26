@@ -419,13 +419,21 @@ FLINT_FORCE_INLINE void CAT3(_big_addmul, n, m)(ulong r[], ulong t[], ulong C[],
     } \
 }
 
+DEFINE_IT(1, 1)
 DEFINE_IT(2, 1)
+DEFINE_IT(2, 2)
 DEFINE_IT(3, 2)
+DEFINE_IT(3, 3)
 DEFINE_IT(4, 3)
 DEFINE_IT(4, 4)
 DEFINE_IT(5, 4)
+DEFINE_IT(5, 5)
 DEFINE_IT(6, 5)
+DEFINE_IT(6, 6)
 DEFINE_IT(7, 6)
+DEFINE_IT(7, 7)
+DEFINE_IT(8, 7)
+DEFINE_IT(8, 8)
 #undef DEFINE_IT
 
 
@@ -456,6 +464,7 @@ DEFINE_IT(4, 3)
 DEFINE_IT(5, 4)
 DEFINE_IT(6, 5)
 DEFINE_IT(7, 6)
+DEFINE_IT(8, 7)
 #undef DEFINE_IT
 
 /*
