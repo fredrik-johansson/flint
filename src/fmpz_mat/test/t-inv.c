@@ -42,6 +42,7 @@ TEST_FUNCTION_START(fmpz_mat_inv, state)
 
     for (i = 0; i < 1000 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = n_randint(state, 10);
 
         fmpz_mat_init(A, m, m);
@@ -102,6 +103,7 @@ TEST_FUNCTION_START(fmpz_mat_inv, state)
     /* Test singular systems */
     for (i = 0; i < 1000 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = 1 + n_randint(state, 10);
         r = n_randint(state, m);
 
@@ -138,6 +140,8 @@ TEST_FUNCTION_START(fmpz_mat_inv, state)
         fmpz_mat_clear(B);
         fmpz_clear(den);
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }

@@ -20,6 +20,7 @@ TEST_FUNCTION_START(fmpz_mat_rank, state)
     /* Maximally sparse matrices of given rank */
     for (i = 0; i < 50 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = n_randint(state, 35);
         n = n_randint(state, 35);
 
@@ -43,6 +44,7 @@ TEST_FUNCTION_START(fmpz_mat_rank, state)
     /* Dense */
     for (i = 0; i < 50 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = n_randint(state, 35);
         n = n_randint(state, 35);
 
@@ -63,6 +65,8 @@ TEST_FUNCTION_START(fmpz_mat_rank, state)
             fmpz_mat_clear(A);
         }
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }

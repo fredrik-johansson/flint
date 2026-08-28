@@ -17,7 +17,6 @@
 #include "fmpz_mat.h"
 
 /* Enable to exercise corner cases */
-#define DEBUG_USE_SMALL_PRIMES 0
 
 
 static ulong
@@ -70,11 +69,7 @@ fmpz_mat_det_modular_given_divisor(fmpz_t det, const fmpz_mat_t A,
     fmpz_zero(x);
     fmpz_one(prod);
 
-#if DEBUG_USE_SMALL_PRIMES
-    p = UWORD(1);
-#else
-    p = UWORD(1) << NMOD_MAT_OPTIMAL_MODULUS_BITS;
-#endif
+    p = FMPZ_MAT_STARTING_PRIME();
 
     slong * P;
     slong * pivs;
