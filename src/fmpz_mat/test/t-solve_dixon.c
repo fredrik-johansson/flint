@@ -22,6 +22,7 @@ TEST_FUNCTION_START(fmpz_mat_solve_dixon, state)
 
     for (i = 0; i < 100 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = n_randint(state, 20);
         n = n_randint(state, 20);
 
@@ -74,6 +75,7 @@ TEST_FUNCTION_START(fmpz_mat_solve_dixon, state)
     /* Test singular systems */
     for (i = 0; i < 100 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = 1 + n_randint(state, 10);
         n = 1 + n_randint(state, 10);
         r = n_randint(state, m);
@@ -103,6 +105,8 @@ TEST_FUNCTION_START(fmpz_mat_solve_dixon, state)
         fmpz_mat_clear(X);
         fmpz_clear(mod);
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }

@@ -20,6 +20,7 @@ TEST_FUNCTION_START(fmpz_mat_det_divisor, state)
 
     for (i = 0; i < 1000 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         fmpz_mat_t A;
         fmpz_t det, d, q, r;
         slong m, bits;
@@ -73,6 +74,8 @@ TEST_FUNCTION_START(fmpz_mat_det_divisor, state)
         fmpz_clear(q);
         fmpz_clear(r);
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }

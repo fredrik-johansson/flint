@@ -21,6 +21,7 @@ TEST_FUNCTION_START(fmpz_mat_nullspace, state)
     /* small dimension */
     for (i = 0; i < 1000 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = n_randint(state, 10);
         n = n_randint(state, 10);
 
@@ -82,6 +83,7 @@ TEST_FUNCTION_START(fmpz_mat_nullspace, state)
     /* larger dimension */
     for (i = 0; i < 10 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         m = 25 + n_randint(state, 10);
         n = 25 + n_randint(state, 10);
 
@@ -139,6 +141,8 @@ TEST_FUNCTION_START(fmpz_mat_nullspace, state)
             fmpz_mat_clear(B);
         }
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }
