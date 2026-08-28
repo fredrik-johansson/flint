@@ -21,6 +21,7 @@ TEST_FUNCTION_START(fmpq_mat_solve, state)
     /* Solve nonsingular systems */
     for (i = 0; i < 100 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         fmpq_mat_t A, B, X, AX;
         fmpq_t d;
         int success;
@@ -82,6 +83,7 @@ TEST_FUNCTION_START(fmpq_mat_solve, state)
     /* Check singular systems */
     for (i = 0; i < 100 * flint_test_multiplier(); i++)
     {
+        flint_fmpz_mat_force_small_primes = n_randint(state, 2);
         fmpq_mat_t A, B, X;
         fmpz_mat_t M;
         fmpz_t den;
@@ -132,6 +134,8 @@ TEST_FUNCTION_START(fmpq_mat_solve, state)
         fmpz_mat_clear(M);
         fmpz_clear(den);
     }
+
+    flint_fmpz_mat_force_small_primes = 0;
 
     TEST_FUNCTION_END(state);
 }

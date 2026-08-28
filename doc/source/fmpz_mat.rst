@@ -963,6 +963,55 @@ to be a divisor of the determinant of `A`. If `A` is singular,
 vector or matrix will have undefined values. No aliasing is
 allowed between arguments.
 
+**Output-sensitive solving.** The solvers ``fmpz_mat_solve_dixon_den``
+(p-adic lifting [Dix1982]_) and ``fmpz_mat_solve_multi_mod_den``
+(Chinese remaindering) compute the solution `x` of `Ax = B` modulo a
+growing modulus `m` (`p^i`, respectively a product of word-size primes)
+and terminate as soon as the actual solution is determined, which for
+small solutions happens long before `m` reaches the worst-case
+Hadamard-type bounds `N \ge \lVert \hat X \rVert`,
+`D \ge \operatorname{den}` of ``fmpz_mat_solve_bound`` (lifting to
+`m > 2ND` always suffices). Early termination is driven by a *probe*: a
+random projection `s = \sum_{k,j} u_{k,j} x_{k,j} \bmod m` with fixed
+weights `u_{k,j} \in [1, 2^4]`, maintained incrementally at negligible
+cost. Rational reconstruction of the single scalar `s` reveals the common
+denominator and the size of the solution (up to a per-attempt failure
+probability at most `\min(1/q, 2^{-4})` for each prime power `q` dividing
+the denominator, corrected by retrying with a doubled denominator margin).
+When two consecutive probes agree, the full solution `\hat X` with running
+common denominator ``den`` is reconstructed from `x \bmod m` and accepted
+if
+
+.. math::
+
+    n \lVert A \rVert \lVert \hat X \rVert +
+        \operatorname{den} \lVert B \rVert < m,
+
+where `\lVert \cdot \rVert` is the max-norm: every entry of
+`A \hat X - \operatorname{den} B` is divisible by `m` by construction and
+smaller than `m` in absolute value by the inequality, hence zero. This
+termination criterion goes back to [Cab1971]_ and is also used in
+[CheSto2005]_ and [Stef2010]_; it makes wrong probe results harmless, as
+no uncertified output is possible. When the inequality is not attainable
+at the current precision, the solvers verify a reconstructed candidate by
+an explicit product instead whenever a cost model deems that cheaper than
+further lifting. During the first few steps, when the modulus is too
+small for the probe to be informative, reconstruction is attempted
+unconditionally with balanced bounds.
+
+The Dixon solver additionally adapts its digit size: lifting starts with
+word-size digits modulo a 30-bit prime (halving the factorisation cost at
+equal cost per lifted bit), re-factors modulo a 59-bit prime when the
+explicit inverse is formed, and switches to `p^k` digits (Newton inverse
+modulo `q = p^k`, matrix-vector products via precomputed residue tables),
+doubling `k` while profitable. Each change is gated on the residual
+having shrunk to its steady-state size and on the lifting since the last
+change having cost a fixed multiple of the estimated cost of the change,
+which bounds the overhead of unnecessary changes for solutions of any
+size. All costs are estimated in word operations with the model
+`M(a,b) \approx \min(c_1 ab, c_2 (a+b))` for an `a \times b` limb
+multiplication, with empirically calibrated constants.
+
 .. function:: int fmpz_mat_solve(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
 
     Solves the equation `AX = B` for nonsingular `A`. More precisely, computes
