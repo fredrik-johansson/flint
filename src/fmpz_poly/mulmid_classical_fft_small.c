@@ -18,6 +18,8 @@
 #include "fft_small.h"
 #include "gr.h"
 
+#if FLINT_HAVE_FFT_SMALL
+
 static nn_srcptr
 _coeff_limbs(const fmpz * f, ulong * scratch, slong * n, int * sgn)
 {
@@ -79,6 +81,8 @@ _get_coeff(fmpz * f, gr_ptr elem, gr_ctx_t ctx)
     _fmpz_demote_val(f);
     return GR_SUCCESS;
 }
+
+#endif
 
 int
 _fmpz_poly_mulmid_classical_fft_small(fmpz * res,
