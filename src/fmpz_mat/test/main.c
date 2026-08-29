@@ -68,6 +68,7 @@
 #include "t-is_empty.c"
 #include "t-is_one.c"
 #include "t-is_spd.c"
+#include "t-is_singular.c"
 #include "t-is_square.c"
 #include "t-is_zero.c"
 #include "t-kronecker_product.c"
@@ -175,6 +176,7 @@ test_struct tests[] =
     TEST_FUNCTION(fmpz_mat_is_empty),
     TEST_FUNCTION(fmpz_mat_is_one),
     TEST_FUNCTION(fmpz_mat_is_spd),
+    TEST_FUNCTION(fmpz_mat_is_singular),
     TEST_FUNCTION(fmpz_mat_is_square),
     TEST_FUNCTION(fmpz_mat_is_zero),
     TEST_FUNCTION(fmpz_mat_kronecker_product),
