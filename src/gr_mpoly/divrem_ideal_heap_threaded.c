@@ -1785,7 +1785,8 @@ static int _gr_mpoly_divrem_ideal_heap_threaded_dispatch(
 
     /* fall back to the single-threaded algorithm for small inputs, or when
        the coefficient ring does not allow concurrent operations */
-    if (A->length < 2 || B[0].length < 2 || gr_ctx_is_threadsafe(cctx) != T_TRUE)
+    if (!GR_MPOLY_THREADED_DIVISION ||
+        A->length < 2 || B[0].length < 2 || gr_ctx_is_threadsafe(cctx) != T_TRUE)
         return _gr_mpoly_divrem_ideal_serial(Q, R, A, B, len, nonfield, ctx);
 
     thread_limit = A->length/32;

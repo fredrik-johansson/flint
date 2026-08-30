@@ -2281,7 +2281,8 @@ int gr_mpoly_divides_heap_threaded(
 
     /* fall back to the single-threaded algorithm for small inputs, or when
        the coefficient ring does not allow concurrent operations */
-    if (B->length < 2 || A->length < 2 || gr_ctx_is_threadsafe(cctx) != T_TRUE)
+    if (!GR_MPOLY_THREADED_DIVISION ||
+        B->length < 2 || A->length < 2 || gr_ctx_is_threadsafe(cctx) != T_TRUE)
         return gr_mpoly_divides_heap(Q, A, B, ctx);
 
     thread_limit = A->length/32;
