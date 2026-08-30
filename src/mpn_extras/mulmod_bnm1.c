@@ -79,7 +79,7 @@ void
 flint_mpn_mulmod_bnm1(nn_ptr rp, mp_size_t rn, nn_srcptr ap, mp_size_t an,
                       nn_srcptr bp, mp_size_t bn, nn_ptr tp)
 {
-    mp_size_t h, ah, bh;
+    mp_size_t h;
     nn_ptr a1, b1, a2, b2, v, s;
     int ca, cb, vtop, stop;
     ulong cy, br;
@@ -128,9 +128,7 @@ flint_mpn_mulmod_bnm1(nn_ptr rp, mp_size_t rn, nn_srcptr ap, mp_size_t an,
         } \
     } while (0)
 
-    ah = an;
-    bh = bn;
-    RESIDUES(a1, a2, ca, ap, ah);
+    RESIDUES(a1, a2, ca, ap, an);
     if (ap == bp && an == bn)
     {
         b1 = a1;
@@ -138,7 +136,7 @@ flint_mpn_mulmod_bnm1(nn_ptr rp, mp_size_t rn, nn_srcptr ap, mp_size_t an,
         cb = ca;
     }
     else
-        RESIDUES(b1, b2, cb, bp, bh);
+        RESIDUES(b1, b2, cb, bp, bn);
 #undef RESIDUES
 
     /* u = a1 * b1 mod B^h - 1, into the low half of rp */
@@ -146,7 +144,7 @@ flint_mpn_mulmod_bnm1(nn_ptr rp, mp_size_t rn, nn_srcptr ap, mp_size_t an,
 
     /* v = a2 * b2 mod B^h + 1, value vtop*B^h + v in [0, B^h] */
     vtop = flint_mpn_mulmod_2expp1_basecase(v, a2, b2,
-                    ca | (cb << 1), FLINT_BITS * h, tp);
+                    (ca << 1) | cb, FLINT_BITS * h, tp);
 
     /* s = (u - v)/2 mod B^h + 1, in [0, B^h]: h + 1 limbs */
     flint_mpn_copyi(s, rp, h);

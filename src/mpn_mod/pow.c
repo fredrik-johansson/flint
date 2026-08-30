@@ -12,15 +12,25 @@
 #include "fmpz.h"
 #include "mpn_extras.h"
 #include "mpn_mod.h"
+#include "gr_generic.h"
 
 /* powering via flint_mpn_powm_preinvn on the context's precomputed
    inverse: no per-call setup for small exponents */
+
+/* Below this many exponent bits the context's own mul and sqr, which
+   are specialised for a few limbs, stay ahead of the division-based
+   basecase reached through flint_mpn_powm_preinvn. Measured crossover
+   is around 9 bits, fairly flat over 2 to 16 limbs. */
+#define MPN_MOD_POW_BINEXP_EBITS 8
 
 int
 mpn_mod_pow_ui(nn_ptr res, nn_srcptr x, ulong e, gr_ctx_t ctx)
 {
     mp_size_t n = MPN_MOD_CTX_NLIMBS(ctx);
     ulong rp[MPN_MOD_MAX_LIMBS];
+
+    if ((e >> MPN_MOD_POW_BINEXP_EBITS) == 0)
+        return gr_generic_pow_ui(res, x, e, ctx);
 
     flint_mpn_powm_preinvn(rp, x, &e, 1, MPN_MOD_CTX_MODULUS(ctx), n,
                            MPN_MOD_CTX_MODULUS_PREINV(ctx),

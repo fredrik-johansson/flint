@@ -248,7 +248,6 @@ _fmpz_powm_ui(fmpz_t res, const fmpz_t x, ulong e, const fmpz_t m)
     }
 }
 
-
 void fmpz_powm_ui(fmpz_t f, const fmpz_t g, ulong e, const fmpz_t m)
 {
     if (fmpz_sgn(m) <= 0)

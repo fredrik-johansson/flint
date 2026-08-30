@@ -467,7 +467,6 @@ Montgomery reduction and modular exponentiation
     stopping at odd or small sizes with a plain multiplication; the
     cost is about `0.6` multiplications of size ``rn``.
 
-
 .. function:: void _flint_mpn_binvert(nn_ptr v, nn_srcptr m, mp_size_t n)
 
     Sets `v = m^{-1} \bmod B^n` for odd `m` of `n` limbs, by Hensel
@@ -495,11 +494,15 @@ Montgomery reduction and modular exponentiation
     As :func:`flint_mpn_powm`, taking the precomputed inverse ``dinv``
     of `m 2^{norm}` from :func:`flint_mpn_preinvn` with
     ``norm = clz(m[mn-1])``, as stored for instance in an
-    ``fmpz_preinvn_t``. Exponents of at most a few dozen bits are
-    computed on the supplied inverse with no per-call precomputation,
-    which is several times faster than ``mpz_powm`` for exponents like
-    `2` or `3`; larger exponents fall through to the Montgomery
-    machinery of :func:`flint_mpn_powm`, whose setup then amortizes.
+    ``fmpz_preinvn_t``. Both entry points share a single dispatcher, so
+    this one differs only in having an inverse to hand: exponents small
+    enough that the division-based basecase wins are run on the supplied
+    inverse with no per-call precomputation, and `2`, `3` and `4` skip
+    the sliding-window bookkeeping entirely. The cutoff tracks the point
+    where :func:`flint_mpn_powm` hands a small modulus to ``mpz_powm``,
+    since past that there is nothing for the inverse to save. Larger
+    exponents fall through to the Montgomery machinery, whose setup then
+    amortizes.
 
 .. function:: void flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en, nn_srcptr m, mp_size_t mn)
 
@@ -510,8 +513,9 @@ Montgomery reduction and modular exponentiation
     aliasing of `r` with the inputs is permitted.
 
     Even moduli are handled by CRT between the odd part and the power
-    of two; the odd part is computed by the *redc* stage below. Single-limb moduli
-    use plain ``nmod`` arithmetic.
+    of two; the odd part is computed by the *redc* stage below.
+    Single-limb moduli with a single-limb exponent use plain ``nmod``
+    arithmetic.
 
 .. function:: void _flint_mpn_powm_basecase(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en, nn_srcptr m, mp_size_t mn)
               void _flint_mpn_powm_redc(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en, nn_srcptr m, mp_size_t mn)

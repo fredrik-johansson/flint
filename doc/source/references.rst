@@ -373,11 +373,11 @@ References
 
 .. [vdH2006] \J. van der Hoeven, "Computations with effective real numbers". Theoretical Computer Science, Volume 351, Issue 1, 14 February 2006, Pages 52-60. https://doi.org/10.1016/j.tcs.2005.09.060
 
-All referenced works: [DEGR2024]_, [HanZim2004b]_, [AbbottBronsteinMulders1999]_, [Apostol1997]_, [Ari2011]_, [Ari2012]_, [Arn2010]_, [Arn2012]_, [ArnoldMonagan2011]_,
+All referenced works: [AbbottBronsteinMulders1999]_, [Apostol1997]_, [Ari2011]_, [Ari2012]_, [Arn2010]_, [Arn2012]_, [ArnoldMonagan2011]_,
 [BBC1997]_, [BBC2000]_, [BBK2014]_, [BD1992]_, [BF2020]_, [BCOSSS2007]_, [BFSS2006]_, [BJ2013]_, [BM1980]_, [BZ1992]_, [BZ2011]_, [BaiWag1980]_, [BerTas2010]_,
 [Bin1996]_, [Blo2009]_, [Bodrato2010]_, [Boe2020]_, [Bog2012]_, [Bol1887]_, [Bor1987]_, [Bor2000]_, [Bre1978]_, [Bre1979]_, [Bre2010]_,
 [BrentKung1978]_, [BuhlerCrandallSompolski1992]_, [CFG2017]_, [CFG2019]_, [CGHJK1996]_, [CP2005]_, [Car1995]_, [Car2004]_, [Chen2003]_,
-[Cho1999]_, [Coh1996]_, [Coh2000]_, [Col1971]_, [CraPom2005]_, [DHBHS2004]_, [DYF1999]_, [DelegliseNicolasZimmermann2009]_,
+[Cho1999]_, [Coh1996]_, [Coh2000]_, [Col1971]_, [CraPom2005]_, [DHBHS2004]_, [DYF1999]_, [DEGR2024]_, [DelegliseNicolasZimmermann2009]_,
 [DomKanTro1987]_, [Dup2006]_, [Dus1999]_, [EHJ2016]_, [EM2004]_, [EK2025]_, [Fie2007]_, [FieHof2014]_, [Fil1992]_, [GCL1992]_,
 [GG2003]_, [GS2003]_, [GVL1996]_, [Gas2018]_, [Gly2010]_, [Gos1974]_, [GowWag2008]_, [GraMol2010]_, [HM2017]_, [HS1967]_, [HZ2004]_,
 [HanZim2004]_, [HanZim2004b]_, [Har2010]_, [HZ2011]_, [Har2012]_, [Har2015]_, [Har2018]_, [Hart2010]_, [Hen1956]_, [Hoe2001]_, [Hoe2009]_,

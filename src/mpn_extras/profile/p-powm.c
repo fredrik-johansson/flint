@@ -45,8 +45,8 @@ int main(void)
 
     flint_printf("powm, 256-bit exponent, times in ms "
                  "(sqr = one flint_mpn_sqr at mn):\n");
-    flint_printf("%10s %8s %9s %9s %9s %9s %9s %11s\n",
-                 "bits", "sqr", "basecase", "redc", "(unused)", "mpz",
+    flint_printf("%10s %8s %9s %9s %9s %9s %11s\n",
+                 "bits", "sqr", "basecase", "redc", "mpz",
                  "redc(b=3)", "ms/bit");
 
     for (si = 0; si < nsizes; si++)
@@ -56,7 +56,7 @@ int main(void)
         mpz_t mz, bz, ez, rz;
         timeit_t ts;
         slong i, reps = FLINT_MAX(1, 4000 / mn), sreps;
-        double t_sqr, t_bc, t_redc, t_fft, t_mpz, t_fft3;
+        double t_sqr, t_bc, t_redc, t_mpz, t_fft3;
         flint_bitcnt_t ebits;
 
         m = flint_malloc(mn * sizeof(ulong));
@@ -88,7 +88,6 @@ int main(void)
 
         t_bc = time_one(_flint_mpn_powm_basecase, r, b, e, en, m, mn, reps);
         t_redc = time_one(_flint_mpn_powm_redc, r, b, e, en, m, mn, reps);
-        t_fft = 0.0;
         {
             timeit_t t;
             timeit_start(t);
@@ -102,8 +101,8 @@ int main(void)
         b[0] = 3;
         t_fft3 = time_one(_flint_mpn_powm_redc, r, b, e, en, m, mn, reps);
 
-        flint_printf("%10wd %8.2f %9.1f %9.1f %9.1f %9.1f %9.1f %11.4f\n",
-                     (slong) mn * FLINT_BITS, t_sqr, t_bc, t_redc, t_fft,
+        flint_printf("%10wd %8.2f %9.1f %9.1f %9.1f %9.1f %11.4f\n",
+                     (slong) mn * FLINT_BITS, t_sqr, t_bc, t_redc,
                      t_mpz, t_fft3, t_fft3 / ebits);
 
         mpz_clear(mz); mpz_clear(bz); mpz_clear(ez); mpz_clear(rz);

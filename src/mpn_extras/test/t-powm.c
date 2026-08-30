@@ -153,5 +153,144 @@ TEST_FUNCTION_START(flint_mpn_powm, state)
         flint_free(r); flint_free(r2); flint_free(q);
     }
 
+    /* A modulus m = m_odd * 2^t whose odd part is a single limb sends
+       one limb into _flint_mpn_powm_redc. With a small base and an
+       exponent long enough for a width-6 window, the scalar table holds
+       two-limb entries, so mul_scalar_mod multiplies a one-limb residue
+       by a two-limb scalar. The exponent must exceed 538 bits for
+       powm_select_k to reach k = 6, which the loop above never does at
+       these modulus sizes. */
+    for (slong iter = 0; iter < 20 * flint_test_multiplier(); iter++)
+    {
+        mp_size_t mn = 111 + n_randint(state, 40);
+        mp_size_t en = 10 + n_randint(state, 10);
+        nn_ptr m, b, e, r, cmp;
+        mpz_t mz, bz, ez, rz, cz;
+        ulong modd;
+        slong i;
+
+        m = FLINT_ARRAY_ALLOC(mn, ulong);
+        b = FLINT_ARRAY_ALLOC(mn, ulong);
+        e = FLINT_ARRAY_ALLOC(en, ulong);
+        r = FLINT_ARRAY_ALLOC(mn, ulong);
+        cmp = FLINT_ARRAY_ALLOC(mn, ulong);
+
+        /* m = modd * 2^t with modd odd and modd > 3, so that the base
+           below survives reduction mod modd unchanged */
+        modd = 5 + 2 * n_randint(state, 15);
+        flint_mpn_zero(m, mn);
+        m[mn - 1] = modd << (FLINT_BITS - 6);
+
+        for (i = 0; i < en; i++)
+            e[i] = n_randtest_not_zero(state);
+
+        /* base 3 exactly: two bits wide, so the window stays at k = 6 and
+           the top table entries b^41, ..., b^63 spill into two limbs.
+           Base 2 gives one-limb powers of two, and base 4 is three bits
+           wide, which caps the window at k = 5 and stays in one limb. */
+        flint_mpn_zero(b, mn);
+        b[0] = 3;
+
+        flint_mpn_powm(r, b, e, en, m, mn);
+
+        mpz_init(mz); mpz_init(bz); mpz_init(ez); mpz_init(rz); mpz_init(cz);
+        mpz_import(mz, mn, -1, sizeof(ulong), 0, 0, m);
+        mpz_import(bz, mn, -1, sizeof(ulong), 0, 0, b);
+        mpz_import(ez, en, -1, sizeof(ulong), 0, 0, e);
+        mpz_powm(rz, bz, ez, mz);
+        mpz_import(cz, mn, -1, sizeof(ulong), 0, 0, r);
+
+        if (mpz_cmp(rz, cz) != 0)
+            TEST_FUNCTION_FAIL("single-limb odd part: mn = %wd, en = %wd, "
+                               "modd = %wu\n", mn, en, modd);
+
+        mpz_clear(mz); mpz_clear(bz); mpz_clear(ez);
+        mpz_clear(rz); mpz_clear(cz);
+        flint_free(m); flint_free(b); flint_free(e);
+        flint_free(r); flint_free(cmp);
+    }
+
+    /* flint_mpn_powm_preinvn must agree with flint_mpn_powm everywhere,
+       including at the exponent-size cutoffs where one consumes the
+       supplied inverse and the other recomputes or falls back to mpz.
+       Exponents are swept bit by bit across those cutoffs, and the norm
+       is varied so the shift paths are covered. */
+    for (slong iter = 0; iter < 30 * flint_test_multiplier(); iter++)
+    {
+        mp_size_t mn = 2 + n_randint(state, 20);
+        nn_ptr m, b, e, r1, r2, msh, dinv;
+        flint_bitcnt_t norm;
+        slong i, k;
+
+        m = FLINT_ARRAY_ALLOC(mn, ulong);
+        b = FLINT_ARRAY_ALLOC(mn, ulong);
+        e = FLINT_ARRAY_ALLOC(2, ulong);
+        r1 = FLINT_ARRAY_ALLOC(mn, ulong);
+        r2 = FLINT_ARRAY_ALLOC(mn, ulong);
+        msh = FLINT_ARRAY_ALLOC(mn, ulong);
+        dinv = FLINT_ARRAY_ALLOC(mn, ulong);
+
+        flint_mpn_rrandom(m, state, mn);
+        m[mn - 1] |= UWORD(1) << (FLINT_BITS - 1);
+        m[mn - 1] >>= n_randint(state, FLINT_BITS);
+        if (m[mn - 1] == 0)
+            m[mn - 1] = 1;
+        if (n_randint(state, 2))
+            m[0] |= 1;
+
+        norm = flint_clz(m[mn - 1]);
+        if (norm)
+            mpn_lshift(msh, m, mn, norm);
+        else
+            flint_mpn_copyi(msh, m, mn);
+        flint_mpn_preinvn(dinv, msh, mn);
+
+        flint_mpn_rrandom(b, state, mn);
+        if (mpn_cmp(b, m, mn) >= 0)
+            mpn_sub_n(b, b, m, mn);
+        if (mpn_cmp(b, m, mn) >= 0)
+            goto cleanup;
+
+        /* 1 bit through 30 bits brackets every cutoff in the dispatcher */
+        for (k = 1; k <= 30; k++)
+        {
+            e[0] = (UWORD(1) << (k - 1)) | (n_randtest(state)
+                        & ((UWORD(1) << (k - 1)) - 1));
+            e[1] = 0;
+
+            flint_mpn_powm(r1, b, e, 1, m, mn);
+            flint_mpn_powm_preinvn(r2, b, e, 1, m, mn, dinv, norm);
+
+            for (i = 0; i < mn; i++)
+                if (r1[i] != r2[i])
+                    TEST_FUNCTION_FAIL("powm vs powm_preinvn: mn = %wd, "
+                                       "norm = %wu, ebits = %wd, e = %wu\n",
+                                       mn, (ulong) norm, k, e[0]);
+        }
+
+        /* tiny bases and tiny exponents share the fast branches */
+        for (k = 0; k <= 5; k++)
+        {
+            flint_mpn_zero(b, mn);
+            b[0] = (ulong) k;
+            if (mpn_cmp(b, m, mn) >= 0)
+                continue;
+            for (i = 0; i <= 5; i++)
+            {
+                e[0] = (ulong) i;
+                flint_mpn_powm(r1, b, e, 1, m, mn);
+                flint_mpn_powm_preinvn(r2, b, e, 1, m, mn, dinv, norm);
+                if (mpn_cmp(r1, r2, mn) != 0)
+                    TEST_FUNCTION_FAIL("powm vs powm_preinvn: mn = %wd, "
+                                       "b = %wd, e = %wd\n", mn, k, i);
+            }
+        }
+
+cleanup:
+        flint_free(m); flint_free(b); flint_free(e);
+        flint_free(r1); flint_free(r2);
+        flint_free(msh); flint_free(dinv);
+    }
+
     TEST_FUNCTION_END(state);
 }

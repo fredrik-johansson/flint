@@ -90,5 +90,57 @@ TEST_FUNCTION_START(flint_mpn_mulmod_bnm1, state)
         flint_free(ref); flint_free(v); flint_free(tp);
     }
 
+    /* An operand whose residue mod B^h + 1 is exactly B^h (that is,
+       x_hi = x_lo + 1, of which x = B^h is the simplest instance) is the
+       only case where the top-bit flags handed to
+       flint_mpn_mulmod_2expp1_basecase are not both equal, so it is the
+       only case that distinguishes their order. Random operands never
+       hit it. */
+    for (slong iter = 0; iter < 100 * flint_test_multiplier(); iter++)
+    {
+        mp_size_t n = 33 + n_randint(state, 160);
+        mp_size_t rn = flint_mpn_mulmod_bnm1_next_size(n);
+        mp_size_t h = rn / 2;
+        nn_ptr a, b, r, ref, v, tp;
+        mp_size_t i;
+        int which;
+
+        if (rn & 1)
+            continue;
+
+        a = FLINT_ARRAY_ALLOC(rn, ulong);
+        b = FLINT_ARRAY_ALLOC(rn, ulong);
+        r = FLINT_ARRAY_ALLOC(2 * rn, ulong);
+        ref = FLINT_ARRAY_ALLOC(rn, ulong);
+        v = FLINT_ARRAY_ALLOC(2 * rn, ulong);
+        tp = FLINT_ARRAY_ALLOC(flint_mpn_mulmod_bnm1_itch(rn), ulong);
+
+        /* a: low half random, high half equal to it plus one */
+        flint_mpn_rrandom(a, state, h);
+        flint_mpn_copyi(a + h, a, h);
+        mpn_add_1(a + h, a + h, h, 1);
+        flint_mpn_rrandom(b, state, rn);
+
+        /* exercise the flag in either operand position */
+        which = n_randint(state, 2);
+        if (which)
+        {
+            nn_ptr t = a; a = b; b = t;
+        }
+
+        flint_mpn_mulmod_bnm1(r, rn, a, rn, b, rn, tp);
+
+        mpn_mul_n(v, a, b, rn);
+        canon_bnm1(ref, v, 2 * rn, rn);
+        canon_bnm1(v, r, rn, rn);
+
+        if (mpn_cmp(v, ref, rn) != 0)
+            TEST_FUNCTION_FAIL("residue B^h: rn = %wd, operand = %d\n",
+                               rn, which);
+
+        flint_free(a); flint_free(b); flint_free(r);
+        flint_free(ref); flint_free(v); flint_free(tp);
+    }
+
     TEST_FUNCTION_END(state);
 }

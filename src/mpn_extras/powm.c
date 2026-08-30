@@ -44,6 +44,18 @@
    setup (binvert, Montgomery conversions, fold initialization) */
 #define FLINT_MPN_POWM_PREINVN_REDC_EBITS 24
 
+/* above this many exponent bits, GMP's redc assembly wins for a
+   modulus of at most FLINT_MPN_POWM_MPZ_FALLBACK_LIMBS limbs. A
+   caller-supplied inverse is therefore useful up to exactly this many
+   bits at those sizes and no further; the two constants have to move
+   together, or the preinvn entry point ends up handing work to a path
+   that recomputes the inverse it was given. */
+#define FLINT_MPN_POWM_MPZ_FALLBACK_EBITS 16
+
+/* at more limbs than this the supplied inverse stays ahead of the mpz
+   fallback all the way to FLINT_MPN_POWM_PREINVN_REDC_EBITS */
+#define FLINT_MPN_POWM_PREINVN_SMALL_LIMBS 12
+
 /* fold tiers, from in-situ per-reduction timings: mulders mulhigh,
    then flint_mpn_mulmod_bnm1 (small working set, no fixed transform
    costs), then the cached chain or cyclic-plan fold */
@@ -126,7 +138,7 @@ next_window(nn_srcptr e, slong * i, int k, slong * nsqr)
     mulmod_preinvn's), and since C*d < B^rn - 1 for rn > n it is the
     canonical value of (X - q*d) mod (B^rn - 1), with q*d computed by
     flint_mpn_mulmod_bnm1 at about 0.6 multiplications. Needs no
-    precomputation beyond dinv. scratch: 5n + itch(rn) + 4rn limbs.
+    precomputation beyond dinv. scratch: 3n + 1 + 2rn + itch(rn) limbs.
 */
 static void
 mulmod_preinvn_fold(nn_ptr r, nn_srcptr a, nn_srcptr b, mp_size_t n,
@@ -280,6 +292,65 @@ powm_basecase_core(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
     TMP_END;
 }
 
+/*
+    Small exponents on a caller-supplied inverse, with no per-call
+    precomputation. Requires mn >= 2 and e >= 2 with the trivial cases
+    already peeled off by powm_dispatch.
+*/
+static void
+powm_preinvn_small(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
+                   nn_srcptr m, mp_size_t mn, nn_srcptr dinv,
+                   flint_bitcnt_t norm)
+{
+    nn_srcptr msh;
+    TMP_INIT;
+
+    TMP_START;
+
+    /* flint_mpn_mulmod_preinvn wants m shifted left by norm; when norm
+       is zero, which is the usual case for a normalised modulus, it is
+       already in that form and needs no copy */
+    if (norm == 0)
+        msh = m;
+    else
+    {
+        nn_ptr t = TMP_ALLOC(mn * sizeof(ulong));
+        mpn_lshift(t, m, mn, norm);
+        msh = t;
+    }
+
+    /* Squares and cubes are common enough in generic ring code that the
+       window bookkeeping of powm_basecase_core is a measurable share of
+       the cost; run them directly instead. */
+    if (en == 1 && e[0] <= 4)
+    {
+        nn_ptr x = TMP_ALLOC(2 * mn * sizeof(ulong));
+        nn_ptr y = x + mn;
+
+        FLINT_ASSERT(e[0] >= 2);
+
+        if (norm)
+            mpn_lshift(x, b, mn, norm);
+        else
+            flint_mpn_copyi(x, b, mn);
+
+        flint_mpn_mulmod_preinvn(y, x, x, mn, msh, dinv, norm);
+        if (e[0] == 3)
+            flint_mpn_mulmod_preinvn(y, y, x, mn, msh, dinv, norm);
+        else if (e[0] == 4)
+            flint_mpn_mulmod_preinvn(y, y, y, mn, msh, dinv, norm);
+
+        if (norm)
+            mpn_rshift(r, y, mn, norm);
+        else
+            flint_mpn_copyi(r, y, mn);
+    }
+    else
+        powm_basecase_core(r, b, e, en, msh, mn, dinv, norm);
+
+    TMP_END;
+}
+
 void
 _flint_mpn_powm_basecase(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
                          nn_srcptr m, mp_size_t mn)
@@ -319,7 +390,10 @@ mul_scalar_mod(nn_ptr acc, nn_srcptr s, int sl, nn_srcptr m, mp_size_t n,
     }
     else
     {
-        flint_mpn_mul(scratch, acc, n, s, sl);
+        if (n >= sl)
+            flint_mpn_mul(scratch, acc, n, s, sl);
+        else
+            flint_mpn_mul(scratch, s, sl, acc, n);
         mpn_tdiv_qr(q, acc, 0, scratch, n + sl, m, n);
     }
 }
@@ -411,7 +485,6 @@ chain_mul(powm_chain_struct * H, slong lev, nn_ptr S, nn_srcptr x,
     nn_ptr x1, x2, v, sb;
     ulong br, cy;
     int vtop, stop;
-    mp_size_t i;
 
     if (s <= H->base)
     {
@@ -450,7 +523,7 @@ chain_mul(powm_chain_struct * H, slong lev, nn_ptr S, nn_srcptr x,
                                             H->Fm[lev], H->scr + lev);
     else
     {
-        int c = (x2[h] != 0) | ((H->m2[lev][h] != 0) << 1);
+        int c = ((x2[h] != 0) << 1) | (H->m2[lev][h] != 0);
         v[h] = (ulong) flint_mpn_mulmod_2expp1_basecase(v, x2,
                     H->m2[lev], c, FLINT_BITS * h, work);
     }
@@ -488,8 +561,6 @@ chain_mul(powm_chain_struct * H, slong lev, nn_ptr S, nn_srcptr x,
     br = mpn_sub(S, S, s, sb, h + 1);
     while (br)
         br = mpn_sub_1(S, S, s, 1);
-
-    (void) i;
 }
 
 typedef struct
@@ -985,14 +1056,21 @@ powm_2exp(nn_ptr x, nn_srcptr b2, nn_srcptr e, mp_size_t en,
 }
 
 /*
-    r = b^e mod m. r, b, m: mn limbs with m normalized and b < m;
-    e: en limbs. No aliasing of r with the inputs.
+    Shared dispatcher for both public entry points. dinv, when not NULL,
+    is the flint_mpn_preinvn inverse of m shifted left by norm; when it
+    is NULL there is no precomputed inverse and norm is ignored.
+
+    Keeping one dispatcher matters for more than tidiness: the cheap
+    special cases below have to be tried before the exponent-size tiers,
+    and the tier that consumes a supplied inverse has to sit exactly
+    where the no-inverse path would otherwise recompute one.
 */
-void
-flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
-               nn_srcptr m, mp_size_t mn)
+static void
+powm_dispatch(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
+              nn_srcptr m, mp_size_t mn, nn_srcptr dinv,
+              flint_bitcnt_t norm)
 {
-    flint_bitcnt_t val2;
+    flint_bitcnt_t val2, ebits;
     mp_size_t i0, on, t2l;
 
     FLINT_ASSERT(mn >= 1);
@@ -1054,15 +1132,28 @@ flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
         return;
     }
 
+    ebits = (en - 1) * FLINT_BITS + FLINT_BIT_COUNT(e[en - 1]);
+
+    /* With an inverse in hand, run the division-based basecase on it
+       rather than falling through to a tier that would recompute one.
+       For a small modulus that is worth doing exactly as far as the mpz
+       fallback below, which takes over from there. */
+    if (dinv != NULL && mn >= 2
+        && ebits <= (mn <= FLINT_MPN_POWM_PREINVN_SMALL_LIMBS
+                     ? (flint_bitcnt_t) FLINT_MPN_POWM_MPZ_FALLBACK_EBITS
+                     : (flint_bitcnt_t) FLINT_MPN_POWM_PREINVN_REDC_EBITS))
+    {
+        powm_preinvn_small(r, b, e, en, m, mn, dinv, norm);
+        return;
+    }
+
     /* Todo: for a few-limb modulus and a large exponent, GMP's
        redc_1/redc_2 assembly currently wins; fall back to mpz_powm
        until we have dedicated small-n Montgomery code. mn == 1 with a
        multi-limb exponent takes this path too. */
     if (mn <= FLINT_MPN_POWM_MPZ_FALLBACK_LIMBS)
     {
-        flint_bitcnt_t ebits2 = (en - 1) * FLINT_BITS
-                                + FLINT_BIT_COUNT(e[en - 1]);
-        if (ebits2 > 16)
+        if (ebits > FLINT_MPN_POWM_MPZ_FALLBACK_EBITS)
         {
             mpz_t rz;
             mpz_t bz, ez, mz;
@@ -1081,17 +1172,12 @@ flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
         }
     }
 
-    /* small exponents: the division-based basecase (computing its own
-       preinvn inverse) beats the Montgomery setup; see
-       flint_mpn_powm_preinvn for the caller-supplied-inverse variant */
+    /* small exponents with no inverse to hand: the division-based
+       basecase computes its own and still beats the Montgomery setup */
+    if (ebits <= FLINT_MPN_POWM_PREINVN_REDC_EBITS)
     {
-        flint_bitcnt_t ebits3 = (en - 1) * FLINT_BITS
-                                + FLINT_BIT_COUNT(e[en - 1]);
-        if (ebits3 <= FLINT_MPN_POWM_PREINVN_REDC_EBITS)
-        {
-            _flint_mpn_powm_basecase(r, b, e, en, m, mn);
-            return;
-        }
+        _flint_mpn_powm_basecase(r, b, e, en, m, mn);
+        return;
     }
 
     for (i0 = 0; m[i0] == 0; i0++)
@@ -1209,48 +1295,31 @@ flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
     exponents fall through to the Montgomery machinery, whose setup
     then amortizes.
 */
+/*
+    r = b^e mod m. r, b, m: mn limbs with m normalized and b < m;
+    e: en limbs. No aliasing of r with the inputs.
+*/
+void
+flint_mpn_powm(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
+               nn_srcptr m, mp_size_t mn)
+{
+    powm_dispatch(r, b, e, en, m, mn, NULL, 0);
+}
+
+/*
+    r = b^e mod m with dinv the flint_mpn_preinvn inverse of m shifted
+    left by norm = clz(m[mn-1]), as stored for instance in an
+    fmpz_preinvn_t. Conventions as flint_mpn_powm. Small exponents run
+    on the supplied inverse with no per-call precomputation; large
+    exponents fall through to the Montgomery machinery, whose setup
+    then amortizes.
+*/
 void
 flint_mpn_powm_preinvn(nn_ptr r, nn_srcptr b, nn_srcptr e, mp_size_t en,
                        nn_srcptr m, mp_size_t mn, nn_srcptr dinv,
                        flint_bitcnt_t norm)
 {
-    flint_bitcnt_t ebits;
-
-    FLINT_ASSERT(mn >= 1);
-    FLINT_ASSERT(m[mn - 1] != 0);
     FLINT_ASSERT(norm == (flint_bitcnt_t) flint_clz(m[mn - 1]));
 
-    while (en > 0 && e[en - 1] == 0)
-        en--;
-
-    if ((mn == 1 && m[0] == 1) || en == 0 || flint_mpn_zero_p(b, mn)
-        || (en == 1 && e[0] == 1) || mn == 1)
-    {
-        flint_mpn_powm(r, b, e, en, m, mn);
-        return;
-    }
-
-    ebits = (en - 1) * FLINT_BITS + FLINT_BIT_COUNT(e[en - 1]);
-
-    /* for tiny moduli the mpz fallback of flint_mpn_powm takes over
-       from fewer exponent bits */
-    if (ebits <= (mn <= 12 ? (flint_bitcnt_t) 8
-                           : (flint_bitcnt_t)
-                             FLINT_MPN_POWM_PREINVN_REDC_EBITS))
-    {
-        nn_ptr msh;
-        TMP_INIT;
-
-        TMP_START;
-        msh = TMP_ALLOC(mn * sizeof(ulong));
-        if (norm)
-            mpn_lshift(msh, m, mn, norm);
-        else
-            flint_mpn_copyi(msh, m, mn);
-        powm_basecase_core(r, b, e, en, msh, mn, dinv, norm);
-        TMP_END;
-    }
-    else
-        flint_mpn_powm(r, b, e, en, m, mn);
+    powm_dispatch(r, b, e, en, m, mn, dinv, norm);
 }
-
