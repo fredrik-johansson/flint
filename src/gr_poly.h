@@ -459,6 +459,7 @@ WARN_UNUSED_RESULT int _gr_poly_compose_horner(gr_ptr res, gr_srcptr poly1, slon
 WARN_UNUSED_RESULT int gr_poly_compose_horner(gr_poly_t res, const gr_poly_t poly1, const gr_poly_t poly2, gr_ctx_t ctx);
 WARN_UNUSED_RESULT int _gr_poly_compose_divconquer(gr_ptr res, gr_srcptr poly1, slong len1, gr_srcptr poly2, slong len2, gr_ctx_t ctx);
 WARN_UNUSED_RESULT int gr_poly_compose_divconquer(gr_poly_t res, const gr_poly_t poly1, const gr_poly_t poly2, gr_ctx_t ctx);
+WARN_UNUSED_RESULT int _gr_poly_inflate(gr_ptr poly, slong len, slong n, gr_ctx_t ctx);
 WARN_UNUSED_RESULT int _gr_poly_compose(gr_ptr res, gr_srcptr poly1, slong len1, gr_srcptr poly2, slong len2, gr_ctx_t ctx);
 WARN_UNUSED_RESULT int gr_poly_compose(gr_poly_t res, const gr_poly_t poly1, const gr_poly_t poly2, gr_ctx_t ctx);
 

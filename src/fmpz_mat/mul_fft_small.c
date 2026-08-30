@@ -64,6 +64,8 @@
     accepts any input it can compute.
 */
 
+#if FLINT_HAVE_FFT_SMALL
+
 static int
 _set_entry(gr_ptr elem, const fmpz * e, gr_ctx_t tctx)
 {
@@ -133,6 +135,8 @@ _export_entry(fmpz * e, gr_ptr acc, slong lo_limbs, int add_into,
     }
     return 1;
 }
+
+#endif
 
 static int
 _fmpz_mat_mul_fft_small(fmpz_mat_t C, const fmpz_mat_t A, const fmpz_mat_t B,

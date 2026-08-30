@@ -539,6 +539,9 @@ flint_mpn_mul(mp_ptr r, mp_srcptr x, mp_size_t xn, mp_srcptr y, mp_size_t yn)
     FLINT_ASSERT(r != x);
     FLINT_ASSERT(r != y);
 
+    if (yn > xn)
+        FLINT_UNREACHABLE;
+
     if (FLINT_MUL_USE_FUNC_TAB && FLINT_HAVE_MUL_FUNC(xn, yn))
         return FLINT_MPN_MUL_HARD(r, x, xn, y, yn);
     else

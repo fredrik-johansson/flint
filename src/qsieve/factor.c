@@ -109,14 +109,6 @@ qsieve_refine_is_complete(const fmpz_t n, fmpz * facs, slong num_facs)
    return complete;
 }
 
-static int compare_facs(const void * a, const void * b)
-{
-   fmpz * x = (fmpz *) a;
-   fmpz * y = (fmpz *) b;
-
-   return fmpz_cmp(x, y);
-}
-
 /*
    Finds at least one nontrivial factor of n using the self initialising
    multiple polynomial quadratic sieve with single large prime variation,
@@ -598,4 +590,3 @@ void qsieve_factor(fmpz_factor_t factors, const fmpz_t n)
         qsieve_tune[i][4],  /* sieve_size   */
         qsieve_tune[i][5]); /* sieve_bits   */
 }
-

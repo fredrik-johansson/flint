@@ -21,6 +21,13 @@
 #define HASH_MULT (2654435761U)       /* hash function, taken from 'msieve' */
 #define HASH(a) ((ulong)((((unsigned int) a) * HASH_MULT) >> qs_inf->hash_shift))
 
+static void
+_qsieve_read(void * data, size_t size, size_t count, FILE * file)
+{
+    if (fread(data, size, count, file) != count)
+        flint_throw(FLINT_ERROR, "Failed to read relation data\n");
+}
+
 /******************************************************************************
  *
  *  Some helper function, used for debugging
@@ -194,22 +201,22 @@ relation_t qsieve_parse_relation(qs_t qs_inf)
 
     /* NOTE: We can use qs_inf->small_primes here instead of reading. */
     /* Get number of small primes */
-    fread(&rel.small_primes, sizeof(slong), 1, (FILE *) qs_inf->siqs);
+    _qsieve_read(&rel.small_primes, sizeof(slong), 1, (FILE *) qs_inf->siqs);
 
     /* Get small primes */
     rel.small = flint_malloc(rel.small_primes * sizeof(slong));
-    fread(rel.small, sizeof(slong), rel.small_primes, (FILE *) qs_inf->siqs);
+    _qsieve_read(rel.small, sizeof(slong), rel.small_primes, (FILE *) qs_inf->siqs);
 
     /* Get number of factors */
-    fread(&rel.num_factors, sizeof(slong), 1, (FILE *) qs_inf->siqs);
+    _qsieve_read(&rel.num_factors, sizeof(slong), 1, (FILE *) qs_inf->siqs);
 
     /* Get factors */
     rel.factor = flint_malloc(rel.num_factors * sizeof(fac_t));
-    fread(rel.factor, sizeof(fac_t), rel.num_factors, (FILE *) qs_inf->siqs);
+    _qsieve_read(rel.factor, sizeof(fac_t), rel.num_factors, (FILE *) qs_inf->siqs);
 
     /* Get Ysz */
     Ysz = 0;
-    fread(&Ysz, sizeof(slong), 1, (FILE *) qs_inf->siqs);
+    _qsieve_read(&Ysz, sizeof(slong), 1, (FILE *) qs_inf->siqs);
 
     /* Get Y */
     fmpz_init(rel.Y);
@@ -217,7 +224,7 @@ relation_t qsieve_parse_relation(qs_t qs_inf)
     {
         ulong abslimb = 0;
 
-        fread(&abslimb, sizeof(ulong), 1, (FILE *) qs_inf->siqs);
+        _qsieve_read(&abslimb, sizeof(ulong), 1, (FILE *) qs_inf->siqs);
 
 #if COEFF_MAX != -COEFF_MIN
 # error
@@ -234,7 +241,7 @@ relation_t qsieve_parse_relation(qs_t qs_inf)
         mY->_mp_size = Ysz;
         ptr = FLINT_MPZ_REALLOC(mY, FLINT_ABS(Ysz));
 
-        fread(ptr, sizeof(ulong), FLINT_ABS(Ysz), (FILE *) qs_inf->siqs);
+        _qsieve_read(ptr, sizeof(ulong), FLINT_ABS(Ysz), (FILE *) qs_inf->siqs);
         *rel.Y = PTR_TO_COEFF(mY);
     }
 
@@ -502,7 +509,7 @@ int qsieve_process_relation(qs_t qs_inf)
         if (siqs_eof)
             break;
 
-        fread(&prime, sizeof(ulong), 1, (FILE *) qs_inf->siqs);
+        _qsieve_read(&prime, sizeof(ulong), 1, (FILE *) qs_inf->siqs);
         entry = qsieve_get_table_entry(qs_inf, prime);
 
         if (num_relations == rel_size)
