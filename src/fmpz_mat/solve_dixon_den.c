@@ -163,13 +163,6 @@ _fmpz_mat_reconstruct_matwise(fmpz_mat_t Z, fmpz_t den,
 }
 
 /*
-    Estimated cost, in word-operation units, of an n x n by n x cols
-    matrix product with entries of ka and kb limbs: the minimum of
-    entrywise integer multiplication and the multimodular algorithm
-    (products modulo ~ 64 (ka + kb) / 58 word-size primes, plus the
-    reduction of the inputs and the reconstruction of the output).
-*/
-/*
     R = A reduced into the symmetric residue system mod the modulus of ctx.
     fmpz_mod_mat_set_fmpz_mat uses the precomputed inverse in ctx, which is
     noticeably faster than plain division for large fixed moduli.
@@ -197,6 +190,13 @@ _fmpz_mat_solve_verify_cost(slong bits_A, slong bits_Z)
     return FMPZ_MAT_SOLVE_MUL_COST(KA, KZ) / (double) KA;
 }
 
+/*
+    Estimated cost, in word-operation units, of an n x n by n x cols
+    matrix product with entries of ka and kb limbs: the minimum of
+    entrywise integer multiplication and the multimodular algorithm
+    (products modulo ~ 64 (ka + kb) / 58 word-size primes, plus the
+    reduction of the inputs and the reconstruction of the output).
+*/
 static double
 _fmpz_mat_solve_matmul_cost(slong n, slong cols, slong ka, slong kb)
 {
@@ -259,7 +259,7 @@ _fmpz_mat_solve_attempt_worthwhile(const fmpz_t m, const fmpz_t snum,
     slong bits_Z, mbits = fmpz_bits(m), cert_bits, steps_needed;
 
     /* numerators after clearing the probe denominator: the probe numerator
-       is a sum of n cols terms with weights < 2^10 */
+       is a sum of n cols terms with weights < 2^4 */
     bits_Z = fmpz_bits(snum) - 4 - FLINT_BIT_COUNT(n * cols);
     if (bits_Z < 0)
         bits_Z = 0;
@@ -484,7 +484,7 @@ dixon_mm_mul(fmpz_mat_t out, dixon_mm_struct * mm, const fmpz_mat_t in)
     fmpz_mat_multi_mod_ui((nmod_mat_t *) mm->in_mod, mm->np, in);
     /* thread_limit 1 makes flint_parallel_do a serial loop */
     flint_parallel_do(dixon_mm_mul_worker, mm, mm->np,
-        FLINT_MAX(1, (slong) ((double) mm->np * mm->n * mm->n * mm->cols / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)),
+        FLINT_MIN(FLINT_MAX(1, (slong) ((double) mm->np * mm->n * mm->n * mm->cols / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)), 1024),
         FLINT_PARALLEL_UNIFORM);
     fmpz_mat_multi_CRT_ui(out, (nmod_mat_t *) mm->out_mod, mm->np, 1);
 }
@@ -698,6 +698,8 @@ _fmpz_mat_solve_dixon_den_lu(fmpz_mat_t Z, fmpz_t den,
        use cheap mul_1 products so in practice the crossover is later;
        n + 2n/cols (empirical) bounds the overhead on medium-size
        solutions while still switching early enough on long lifts. */
+    /* number of initial steps during which no digit-size change is
+       considered (the residual has not reached its steady state yet) */
     slong warmup, bits_A;
     double newton_est;   /* estimated cost of the switch, in seconds */
     fmpz_mod_ctx_t qctx;
@@ -1121,7 +1123,8 @@ _fmpz_mat_solve_dixon_den_lu(fmpz_mat_t Z, fmpz_t den,
             filled[j] = 0;
         }
 
-        /* probe: s += p^i * (u . y[:,0]); u_k < 2^10, y < 2^64 */
+        /* probe: s += p^i * (u . y), over all entries of y; u < 2^4 and
+           the digits y are < 2^64 */
         fmpz_zero(t);
         for (k = 0; k < n; k++)
             for (j = 0; j < cols; j++)
@@ -1170,7 +1173,14 @@ _fmpz_mat_solve_dixon_den_lu(fmpz_mat_t Z, fmpz_t den,
             DIXON_VERB("  full bound reached at i %wd (%wd bits)\n", i, fmpz_bits(ppow));
             fmpz_one(t);
             if (!x_valid) { _dixon_materialise(x, lev, filled, nlev, pow2, x0, pshift); x_valid = 1; }
-            _fmpz_mat_reconstruct_matwise(Zt, den, x, ppow, N, D, t);
+            /* The reconstruction is unique for m > 2 N D and the true
+               solution satisfies the bounds, so this cannot fail; report
+               failure rather than a wrong answer if it ever does. */
+            if (!_fmpz_mat_reconstruct_matwise(Zt, den, x, ppow, N, D, t))
+            {
+                found = 0;
+                goto dixon_done;
+            }
             fmpz_mat_swap(Z, Zt);
             goto dixon_done;
         }
@@ -1206,8 +1216,6 @@ _fmpz_mat_solve_dixon_den_lu(fmpz_mat_t Z, fmpz_t den,
                single successful probe is confident enough to attempt on;
                agreement with the previous probe only resets the back-off */
             if (probe_ok)
-                probe_stable = 1;
-            else if (0)
                 probe_stable = 1;
             else
             {
@@ -1280,7 +1288,7 @@ _fmpz_mat_solve_dixon_den_lu(fmpz_mat_t Z, fmpz_t den,
                 ay_args.Ay_mod = Ay_mod;
                 ay_args.y_mod = y_mod;
                 flint_parallel_do(dixon_ay_worker, &ay_args, num_primes,
-                    FLINT_MAX(1, (slong) ((double) num_primes * n * n * cols / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)),
+                    FLINT_MIN(FLINT_MAX(1, (slong) ((double) num_primes * n * n * cols / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)), 1024),
                     FLINT_PARALLEL_UNIFORM);
             }
             fmpz_mat_multi_CRT_ui(Ay, Ay_mod, num_primes, 1);
@@ -1356,6 +1364,8 @@ dixon_done:
     return found;
 }
 
+#undef DIXON_MAX_LEVELS
+
 /* Multimodular matvecs with precomputed residues cost O(n^2 num_primes)
    per product plus O(n M(bits) log) for reducing and reconstructing the
    vector entries; the latter dominates for small n and huge entries. */
@@ -1366,7 +1376,7 @@ _fmpz_mat_solve_dixon_use_mm(slong n, slong bits)
 }
 
 /* Number of word-size digits per lifting step. */
-slong
+static slong
 _fmpz_mat_solve_dixon_choose_k(const fmpz_mat_t A, const fmpz_mat_t B)
 {
     (void) B;
@@ -1386,7 +1396,7 @@ _fmpz_mat_solve_dixon_choose_k(const fmpz_mat_t A, const fmpz_mat_t B)
 
 /* max_steps > 0 limits the number of lifting steps; returns -1 if the
    limit was reached without finding the solution. */
-int
+static int
 _fmpz_mat_solve_dixon_den_limited(fmpz_mat_t X, fmpz_t den,
                         const fmpz_mat_t A, const fmpz_mat_t B, slong max_steps)
 {

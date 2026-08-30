@@ -49,7 +49,7 @@ cs_lu_worker(slong k, void * arg)
     a->rankb[k] = nmod_mat_lu(a->permb[k], a->LUb + k, 0);
 }
 
-int
+static int
 _fmpz_mat_can_solve_generic(fmpz_mat_t X, fmpz_t den,
                         const fmpz_mat_t A, const fmpz_mat_t B, square_solver_fn solve)
 {
@@ -70,6 +70,11 @@ _fmpz_mat_can_solve_generic(fmpz_mat_t X, fmpz_t den,
     slong nbatch = 0, ibatch = 0, batch_size = 1, nalloc_batch = 0, batch_limit;
     fmpz_mat_t Arank, Brank, Zrank, Anp, Bnp, T;
     fmpz_t det_bound;
+
+    if (A->r != B->r || A->c != X->r || X->c != B->c)
+    {
+        flint_throw(FLINT_ERROR, "Exception (fmpz_mat_can_solve). Incompatible matrix dimensions.\n");
+    }
 
     m = A->r;
     n = A->c;
@@ -142,7 +147,7 @@ _fmpz_mat_can_solve_generic(fmpz_mat_t X, fmpz_t den,
             largs.rankb = rankb;
             largs.m = m;
             flint_parallel_do(cs_lu_worker, &largs, batch_size,
-                FLINT_MAX(1, (slong) ((double) batch_size * m * n * FLINT_MIN(m, n) / 3 / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)),
+                FLINT_MIN(FLINT_MAX(1, (slong) ((double) batch_size * m * n * FLINT_MIN(m, n) / 3 / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)), 1024),
                 FLINT_PARALLEL_UNIFORM);
             nbatch = batch_size;
             ibatch = 0;
@@ -355,6 +360,8 @@ bad_prime: ;
 
     return result;
 }
+
+#undef CS_BATCH
 
 int
 fmpz_mat_can_solve_dixon_den(fmpz_mat_t X, fmpz_t den,

@@ -375,7 +375,6 @@ int _fmpz_mat_reconstruct_matwise(fmpz_mat_t Z, fmpz_t den, const fmpz_mat_t x, 
 int _fmpz_mat_solve_probe_reconstruct(fmpz_t num, fmpz_t den, const fmpz_t s, const fmpz_t m, const fmpz_t den_prev, int have_prev);
 int _fmpz_mat_solve_attempt_worthwhile(const fmpz_t m, const fmpz_t snum, const fmpz_t sden, const fmpz_t Amax, const fmpz_t Bmax, slong n, slong cols, slong step_bits, double step_cost);
 int _fmpz_mat_solve_reconstruct_attempt(fmpz_mat_t Z, fmpz_t den, const fmpz_mat_t x, const fmpz_t m, const fmpz_t N, const fmpz_t D, const fmpz_t sden, const fmpz_t Amax, const fmpz_t Bmax, const fmpz_mat_t A, const fmpz_mat_t B, slong step_bits, double step_cost, slong den_margin_bits);
-int _fmpz_mat_solve_dixon_den_limited(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B, slong max_steps);
 int fmpz_mat_solve_dixon_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B);
 int fmpz_mat_solve_multi_mod_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B);
 
@@ -401,13 +400,15 @@ void fmpz_mat_get_nmod_mat(nmod_mat_t Amod, const fmpz_mat_t A);
 
 void fmpz_mat_CRT_ui(fmpz_mat_t res, const fmpz_mat_t mat1, const fmpz_t m1, const nmod_mat_t mat2, int sign);
 
-/* Testing hook: when nonzero, the multimodular and p-adic algorithms for
-   solving, determinants, rank etc. start from p = 2 instead of ~2^60 so that
-   bad primes (singular reductions, wrong ranks) are actually exercised. The
-   test code toggles this randomly. Matrix multiplication is not affected. */
+/* Testing hook, not part of the public API: when nonzero, the multimodular
+   and p-adic algorithms for solving, determinants, rank etc. start from
+   p = 2 instead of a word-size prime so that bad primes (singular
+   reductions, wrong ranks) are actually exercised. The test code toggles
+   this randomly. Matrix multiplication is not affected. */
 FLINT_DLL extern int flint_fmpz_mat_force_small_primes;
 
-
+/* fmpz_comb has poor basecase code; only use it when it's worth it.
+   Fixme: improve fmpz_comb so that this isn't necessary. */
 
 /* Minimum (entries * primes) that warrant spawning a worker for multimodular
    reduction/CRT. */

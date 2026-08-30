@@ -729,7 +729,8 @@ Determinant
 .. function:: int fmpz_mat_is_singular(const fmpz_mat_t A)
 
     Returns whether the square matrix `A` is singular, i.e. whether
-    `\det(A) = 0`, without computing the determinant. Nonsingularity is
+    `\det(A) = 0`, without computing the determinant. An exception is
+    raised if `A` is not square. Nonsingularity is
     certified by a full rank modulo a single prime; singularity is
     certified by exhibiting an exact nonzero kernel vector, constructed
     from the rank structure modulo a prime by one small system solve. Both
@@ -1071,6 +1072,8 @@ doubling `k` while profitable.
     such that the reduced numerators and denominators `n/d` in
     `A^{-1} B` satisfy the bounds `0 \le |n| \le N` and `0 \le d \le D`.
 
+    Assumes that `A` is square and nonsingular.
+
 .. function:: int fmpz_mat_solve_dixon(fmpz_mat_t X, fmpz_t M, const fmpz_mat_t A, const fmpz_mat_t B)
 
     Solves `AX = B` given a nonsingular square matrix `A` and a matrix `B` of
@@ -1125,6 +1128,18 @@ doubling `k` while profitable.
 
     Uses a Chinese remainder algorithm with early termination once the lifting
     stabilises.
+
+.. function:: int fmpz_mat_can_solve_dixon_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
+
+    Returns `1` if the system `AX = B` can be solved. If so it computes
+    (``X``, ``den``) such that `AX = B \times \operatorname{den}`. The
+    computed denominator will not generally be minimal.
+
+    Solves the square subsystems that arise with ``p``-adic lifting; see
+    ``fmpz_mat_can_solve_multi_mod_den`` for the algorithm.
+
+    Note that the matrices `A` and `B` may have any shape as long as they have
+    the same number of rows.
 
 .. function:: int fmpz_mat_can_solve_multi_mod_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
 

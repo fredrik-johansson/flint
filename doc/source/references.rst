@@ -157,10 +157,6 @@ References
 
 .. [HJ2024] \J. van der Hoeven and F. Johansson, "Fast multiple precision exp(x) with precomputations", 2024 IEEE 31st Symposium on Computer Arithmetic (ARITH) (2024), https://hal.science/hal-04454093
 
-.. [MulSto2004] \T. Mulders and A. Storjohann, "Certified dense linear system solving", Journal of Symbolic Computation 37:4 (2004) 485-510
-
-.. [Stef2010] \D. E. Steffy, "Exact solutions to linear systems of equations using output sensitive lifting", ACM Communications in Computer Algebra 44:3/4 (2010) 160-182
-
 .. [Zun2025] \J. Zuniga, "Fast Ramanujan-type Series for Logarithms. Part I", 2025, https://arxiv.org/abs/2506.08245
 
 .. [HM2017] \J. van der Hoeven and B. Mourrain. "Efficient certification of numeric solutions to eigenproblems", MACIS 2017, 81-94, (2017), https://hal.archives-ouvertes.fr/hal-01579079
@@ -271,6 +267,8 @@ References
 
 .. [Mul2000] \Thom Mulders : On Short Multiplications and Divisions, AAECC vol. 11 (2000) 69--88
 
+.. [MulSto2004] \T. Mulders and A. Storjohann, "Certified dense linear system solving", Journal of Symbolic Computation 37:4 (2004) 485-510
+
 .. [Mum1983] \D. Mumford, *Tata Lectures on Theta I*, Birkhäuser, 1983. https://doi.org/10.1007/978-1-4899-2843-6
 
 .. [Mum1984] \D. Mumford, *Tata Lectures on Theta II*, Birkhäuser, 1984. https://doi.org/10.1007/978-0-8176-4578-6
@@ -330,6 +328,8 @@ References
 .. [Ste2002] \A. Steel. "A new scheme for computing with algebraically closed fields". In: Fieker C., Kohel D.R. (eds) Algorithmic Number Theory. ANTS 2002. Lecture Notes in Computer Science, vol 2369. Springer, Berlin, Heidelberg. https://doi.org/10.1007/3-540-45455-1_38
 
 .. [Ste2010] \A. Steel. "Computing with algebraically closed fields". Journal of Symbolic Computation 45 (2010) 342-372. https://doi.org/10.1016/j.jsc.2009.09.005
+
+.. [Stef2010] \D. E. Steffy, "Exact solutions to linear systems of equations using output sensitive lifting", ACM Communications in Computer Algebra 44:3/4 (2010) 160-182
 
 .. [Stehle2010] \Stehlé, Damien : Floating-Point LLL: Theoretical and Practical Aspects, in Nguyen, Phong Q. and Vallée, Brigitte : The LLL Algorithm: Survey and Applications (2010) 179--213
 

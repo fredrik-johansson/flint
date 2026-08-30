@@ -25,6 +25,7 @@
 
 #include "t-add_sub.c"
 #include "t-can_solve_fflu.c"
+#include "t-can_solve_dixon_den.c"
 #include "t-can_solve_multi_mod_den.c"
 #include "t-charpoly_berkowitz.c"
 #include "t-charpoly_bound.c"
@@ -133,6 +134,7 @@ test_struct tests[] =
 {
     TEST_FUNCTION(fmpz_mat_add_sub),
     TEST_FUNCTION(fmpz_mat_can_solve_fflu),
+    TEST_FUNCTION(fmpz_mat_can_solve_dixon_den),
     TEST_FUNCTION(fmpz_mat_can_solve_multi_mod_den),
     TEST_FUNCTION(fmpz_mat_charpoly_berkowitz),
     TEST_FUNCTION(fmpz_mat_charpoly_bound),

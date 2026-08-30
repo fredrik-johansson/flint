@@ -118,14 +118,12 @@ mm_solve_worker(slong k, void * arg)
     new prime, and when it stabilises the full solution is reconstructed
     and certified (see _fmpz_mat_solve_reconstruct_attempt).
 */
-static void
+static int
 _fmpz_mat_solve_multi_mod_den(fmpz_mat_t Z, fmpz_t den,
         const fmpz_mat_t A, const fmpz_mat_t B,
-        nmod_mat_t Xmod, nmod_mat_t Amod, nmod_mat_t Bmod, ulong p,
-        const fmpz_t N, const fmpz_t D)
+        nmod_mat_t Xmod, ulong p, const fmpz_t N, const fmpz_t D)
 {
-    (void) Amod;
-    (void) Bmod;
+    int found = 1;
     fmpz_t bound, pprod, Amax, Bmax, s, sprod, snum, sden, snum_prev, sden_prev, t;
     /* attempts reconstruct into Zt, swapped into Z only on success, so
        that Z may alias A or B (as fmpz_mat_inv does) */
@@ -221,7 +219,14 @@ _fmpz_mat_solve_multi_mod_den(fmpz_mat_t Z, fmpz_t den,
         {
             fmpz_mat_multi_CRT_ui(x, res, i, 1);
             fmpz_one(t);
-            _fmpz_mat_reconstruct_matwise(Zt, den, x, pprod, N, D, t);
+            /* The reconstruction is unique for m > 2 N D and the true
+               solution satisfies the bounds, so this cannot fail; report
+               failure rather than a wrong answer if it ever does. */
+            if (!_fmpz_mat_reconstruct_matwise(Zt, den, x, pprod, N, D, t))
+            {
+                found = 0;
+                goto done;
+            }
             fmpz_mat_swap(Z, Zt);
             goto done;
         }
@@ -314,7 +319,7 @@ _fmpz_mat_solve_multi_mod_den(fmpz_mat_t Z, fmpz_t den,
                 sargs.ok = okbatch;
                 /* thread_limit 1 makes flint_parallel_do a serial loop */
                 flint_parallel_do(mm_solve_worker, &sargs, batch_size,
-                    FLINT_MAX(1, (slong) ((double) batch_size * n * n * (n / 3 + cols) / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)),
+                    FLINT_MIN(FLINT_MAX(1, (slong) ((double) batch_size * n * n * (n / 3 + cols) / FMPZ_MAT_SOLVE_MIN_WORK_PER_THREAD)), 1024),
                     FLINT_PARALLEL_UNIFORM);
                 nbatch = batch_size;
                 ibatch = 0;
@@ -336,9 +341,13 @@ _fmpz_mat_solve_multi_mod_den(fmpz_mat_t Z, fmpz_t den,
             alloc *= 2;
             res = (nmod_mat_t *) flint_realloc(res, sizeof(nmod_mat_t) * alloc);
         }
-        /* keep the residues (swap, no copy) */
+        /* keep the residues (swap, no copy): the empty matrix given to
+           res[i] ends up in Xmod, which is then given its proper size
+           again (clearing it first, since an empty nmod_mat may still own
+           an allocation) */
         nmod_mat_init(res[i], 0, 0, p);
         nmod_mat_swap(res[i], Xmod);
+        nmod_mat_clear(Xmod);
         nmod_mat_init(Xmod, n, cols, p);
         x_valid = 0;
 
@@ -380,7 +389,11 @@ done:
     fmpz_clear(t);
     fmpz_mat_clear(x);
     fmpz_mat_clear(Zt);
+
+    return found;
 }
+
+#undef MM_BATCH
 
 int
 fmpz_mat_solve_multi_mod_den(fmpz_mat_t X, fmpz_t den,
@@ -411,7 +424,10 @@ fmpz_mat_solve_multi_mod_den(fmpz_mat_t X, fmpz_t den,
 
     p = _find_good_prime_and_solve(Xmod, Amod, Bmod, A, B, D);
     if (p != 0)
-        _fmpz_mat_solve_multi_mod_den(X, den, A, B, Xmod, Amod, Bmod, p, N, D);
+    {
+        if (!_fmpz_mat_solve_multi_mod_den(X, den, A, B, Xmod, p, N, D))
+            p = 0;
+    }
 
     nmod_mat_clear(Xmod);
     nmod_mat_clear(Bmod);

@@ -19,9 +19,9 @@
     the common denominator det(A), are (up to sign) determinants of the
     matrix A with one column replaced by a column of B. Hadamard's bound
     for such a determinant is the product of the column norms of A with
-    one factor replaced by the largest column norm of B; we bound it by
-    min(row bound, column bound) * max column norm of B, where the row and
-    column bounds are Hadamard bounds for det(A) itself. All norms are
+    one factor replaced by the largest column norm of B, which is what we
+    use for N; note that the row Hadamard bound, which is also valid for
+    D = |det(A)|, may not be substituted here. All norms are
     accumulated in mag_t arithmetic (an upper bound with a few guard bits),
     so no multiprecision operations on huge entries are needed.
 */
@@ -69,8 +69,9 @@ fmpz_mat_solve_bound(fmpz_t N, fmpz_t D,
         mag_sqrt(t, rnorms + i);
         mag_mul(rbound, rbound, t);
     }
-    mag_min(rbound, rbound, cbound);
-    mag_get_fmpz(D, rbound);
+    /* both Hadamard products bound |det(A)| */
+    mag_min(t, rbound, cbound);
+    mag_get_fmpz(D, t);
 
     /* largest column norm of B */
     mag_zero(u);
@@ -79,13 +80,20 @@ fmpz_mat_solve_bound(fmpz_t N, fmpz_t D,
         mag_zero(t);
         for (i = 0; i < m; i++)
         {
-            mag_set_fmpz(cbound, fmpz_mat_entry(B, i, j));
-            mag_fast_addmul(t, cbound, cbound);
+            mag_set_fmpz(rbound, fmpz_mat_entry(B, i, j));
+            mag_fast_addmul(t, rbound, rbound);
         }
         mag_max(u, u, t);
     }
     mag_sqrt(u, u);
-    mag_mul(u, u, rbound);
+    /* Only the column bound may be used here: the numerator is a
+       determinant of A with one COLUMN replaced by a column of B, and
+       Hadamard applied to its columns replaces one column norm of A by
+       the norm of that column of B. The row Hadamard product does not
+       bound the corresponding cofactor vector (only sqrt(n) times it
+       does), so min(row, col) would be unsound for N even though it is
+       correct for D. */
+    mag_mul(u, u, cbound);
     mag_get_fmpz(N, u);
 
     _mag_vec_clear(rnorms, m);

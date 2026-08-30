@@ -22,6 +22,11 @@ fmpq_mat_can_solve_fmpz_mat_dixon(fmpq_mat_t X,
     fmpz_t den;
     int success;
 
+    if (A->r != B->r || A->c != X->r || X->c != B->c)
+    {
+        flint_throw(FLINT_ERROR, "Exception (fmpq_mat_can_solve_fmpz_mat_dixon). Incompatible matrix dimensions.\n");
+    }
+
     fmpz_mat_init(Z, A->c, B->c);
     fmpz_init(den);
 
@@ -40,6 +45,11 @@ fmpq_mat_can_solve_dixon(fmpq_mat_t X, const fmpq_mat_t A, const fmpq_mat_t B)
     fmpz_mat_t Anum;
     fmpz_mat_t Bnum;
     int success;
+
+    if (A->r != B->r || A->c != X->r || X->c != B->c)
+    {
+        flint_throw(FLINT_ERROR, "Exception (fmpq_mat_can_solve_dixon). Incompatible matrix dimensions.\n");
+    }
 
     if (A->r == 0 || B->c == 0)
     {

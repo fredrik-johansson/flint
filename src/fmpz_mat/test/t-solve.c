@@ -41,6 +41,51 @@ TEST_FUNCTION_START(fmpz_mat_solve, state)
 
         success = fmpz_mat_solve(X, den, A, B);
 
+        /* X is allowed to alias A or B; both must give the same result */
+        {
+            fmpz_mat_t Xa, Xb;
+            fmpz_t dena, denb;
+            int successa, successb;
+
+            fmpz_mat_init_set(Xa, A);
+            fmpz_mat_init_set(Xb, B);
+            fmpz_init(dena);
+            fmpz_init(denb);
+
+            successb = fmpz_mat_solve(Xb, denb, A, Xb);
+            if (successb != success || (success && (!fmpz_equal(denb, den)
+                    || !fmpz_mat_equal(Xb, X))))
+            {
+                flint_printf("FAIL:\n");
+                flint_printf("aliased solve (X == B) differs\n");
+                fmpz_mat_print_pretty(A), flint_printf("\n");
+                fmpz_mat_print_pretty(B), flint_printf("\n");
+                fflush(stdout);
+                flint_abort();
+            }
+
+            /* X aliasing A needs matching dimensions */
+            if (m == n)
+            {
+                successa = fmpz_mat_solve(Xa, dena, Xa, B);
+                if (successa != success || (success && (!fmpz_equal(dena, den)
+                        || !fmpz_mat_equal(Xa, X))))
+                {
+                    flint_printf("FAIL:\n");
+                    flint_printf("aliased solve (X == A) differs\n");
+                    fmpz_mat_print_pretty(A), flint_printf("\n");
+                    fmpz_mat_print_pretty(B), flint_printf("\n");
+                    fflush(stdout);
+                    flint_abort();
+                }
+            }
+
+            fmpz_mat_clear(Xa);
+            fmpz_mat_clear(Xb);
+            fmpz_clear(dena);
+            fmpz_clear(denb);
+        }
+
         fmpz_mat_mul(AX, A, X);
         fmpz_mat_scalar_divexact_fmpz(AX, AX, den);
 
