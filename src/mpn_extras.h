@@ -475,7 +475,7 @@ mp_limb_t mpn_rsh1sub_n(mp_ptr, mp_srcptr, mp_srcptr, mp_size_t);
 # define FLINT_MPN_MUL_FUNC_TAB_WIDTH 17
 # define FLINT_MPN_SQR_FUNC_TAB_WIDTH 14
 
-# define FLINT_HAVE_MUL_FUNC(n, m) ((n) <= 16 && (m) < FLINT_MPN_MUL_FUNC_TAB_WIDTH)
+# define FLINT_HAVE_MUL_FUNC(n, m) ((n) <= 16)
 # define FLINT_HAVE_MUL_N_FUNC(n) ((n) <= 16)
 # define FLINT_HAVE_SQR_FUNC(n) ((n) <= FLINT_MPN_SQR_FUNC_TAB_WIDTH)
 
@@ -500,8 +500,7 @@ mp_limb_t flint_mpn_mul_2(mp_ptr, mp_srcptr, mp_size_t, mp_srcptr);
 # define FLINT_MPN_MUL_FUNC_TAB_WIDTH 8
 # define FLINT_MPN_SQR_FUNC_TAB_WIDTH 0
 
-# define FLINT_HAVE_MUL_FUNC(n, m) ((m) < FLINT_MPN_MUL_FUNC_TAB_WIDTH && \
-                                    ((n) <= 7 || ((n) <= 14 && (m) == 1)))
+# define FLINT_HAVE_MUL_FUNC(n, m) ((n) <= 7 || ((n) <= 14 && (m) == 1))
 # define FLINT_HAVE_MUL_N_FUNC(n) ((n) <= 7)
 # define FLINT_HAVE_SQR_FUNC(n) (0)
 
@@ -539,6 +538,9 @@ flint_mpn_mul(mp_ptr r, mp_srcptr x, mp_size_t xn, mp_srcptr y, mp_size_t yn)
     FLINT_ASSERT(yn >= 1);
     FLINT_ASSERT(r != x);
     FLINT_ASSERT(r != y);
+
+    if (yn > xn)
+        FLINT_UNREACHABLE;
 
     if (FLINT_MUL_USE_FUNC_TAB && FLINT_HAVE_MUL_FUNC(xn, yn))
         return FLINT_MPN_MUL_HARD(r, x, xn, y, yn);
