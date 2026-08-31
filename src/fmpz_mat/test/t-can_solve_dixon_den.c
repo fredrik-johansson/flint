@@ -14,7 +14,7 @@
 #include "fmpz.h"
 #include "fmpz_mat.h"
 
-TEST_FUNCTION_START(fmpz_mat_can_solve_multi_mod_den, state)
+TEST_FUNCTION_START(fmpz_mat_can_solve_dixon_den, state)
 {
     fmpz_mat_t A, X, B, AX;
     fmpz_t den;
@@ -42,7 +42,7 @@ TEST_FUNCTION_START(fmpz_mat_can_solve_multi_mod_den, state)
         if (n_randint(state, 2))
             fmpz_mat_randops(A, state, 1+n_randint(state, 1 + m*m));
 
-        success = fmpz_mat_can_solve_multi_mod_den(X, den, A, B);
+        success = fmpz_mat_can_solve_dixon_den(X, den, A, B);
 
         if (success)
         {
@@ -96,7 +96,7 @@ TEST_FUNCTION_START(fmpz_mat_can_solve_multi_mod_den, state)
         fmpz_randtest_not_zero(den, state, 20);
         fmpz_mat_scalar_mul_fmpz(A, A, den);
 
-        success = fmpz_mat_can_solve_multi_mod_den(X, den, A, B);
+        success = fmpz_mat_can_solve_dixon_den(X, den, A, B);
 
         if (success)
         {

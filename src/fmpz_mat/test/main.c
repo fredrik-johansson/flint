@@ -25,6 +25,7 @@
 
 #include "t-add_sub.c"
 #include "t-can_solve_fflu.c"
+#include "t-can_solve_dixon_den.c"
 #include "t-can_solve_multi_mod_den.c"
 #include "t-charpoly_berkowitz.c"
 #include "t-charpoly_bound.c"
@@ -68,6 +69,7 @@
 #include "t-is_empty.c"
 #include "t-is_one.c"
 #include "t-is_spd.c"
+#include "t-is_singular.c"
 #include "t-is_square.c"
 #include "t-is_zero.c"
 #include "t-kronecker_product.c"
@@ -132,6 +134,7 @@ test_struct tests[] =
 {
     TEST_FUNCTION(fmpz_mat_add_sub),
     TEST_FUNCTION(fmpz_mat_can_solve_fflu),
+    TEST_FUNCTION(fmpz_mat_can_solve_dixon_den),
     TEST_FUNCTION(fmpz_mat_can_solve_multi_mod_den),
     TEST_FUNCTION(fmpz_mat_charpoly_berkowitz),
     TEST_FUNCTION(fmpz_mat_charpoly_bound),
@@ -175,6 +178,7 @@ test_struct tests[] =
     TEST_FUNCTION(fmpz_mat_is_empty),
     TEST_FUNCTION(fmpz_mat_is_one),
     TEST_FUNCTION(fmpz_mat_is_spd),
+    TEST_FUNCTION(fmpz_mat_is_singular),
     TEST_FUNCTION(fmpz_mat_is_square),
     TEST_FUNCTION(fmpz_mat_is_zero),
     TEST_FUNCTION(fmpz_mat_kronecker_product),

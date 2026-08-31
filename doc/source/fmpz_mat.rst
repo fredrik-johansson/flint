@@ -726,6 +726,17 @@ Determinant
 --------------------------------------------------------------------------------
 
 
+.. function:: int fmpz_mat_is_singular(const fmpz_mat_t A)
+
+    Returns whether the square matrix `A` is singular, i.e. whether
+    `\det(A) = 0`, without computing the determinant. An exception is
+    raised if `A` is not square. Nonsingularity is
+    certified by a full rank modulo a single prime; singularity is
+    certified by exhibiting an exact nonzero kernel vector, constructed
+    from the rank structure modulo a prime by one small system solve. Both
+    certificates are unconditional; in the negligibly rare case that a
+    prime underestimates the rank, further primes are tried, boundedly.
+
 .. function:: void fmpz_mat_det(fmpz_t det, const fmpz_mat_t A)
 
     Sets ``det`` to the determinant of the square matrix `A`.
@@ -963,19 +974,65 @@ to be a divisor of the determinant of `A`. If `A` is singular,
 vector or matrix will have undefined values. No aliasing is
 allowed between arguments.
 
+**Output-sensitive solving.** The solvers ``fmpz_mat_solve_dixon_den``
+(p-adic lifting [Dix1982]_) and ``fmpz_mat_solve_multi_mod_den``
+(Chinese remaindering) compute the solution `x` of `Ax = B` modulo a
+growing modulus `m` (`p^i`, respectively a product of word-size primes)
+and terminate as soon as the actual solution is determined, which for
+small solutions happens long before `m` reaches the worst-case
+Hadamard-type bounds `N \ge \lVert \hat X \rVert`,
+`D \ge \operatorname{den}` of ``fmpz_mat_solve_bound`` (lifting to
+`m > 2ND` always suffices). Early termination is driven by a *probe*: a
+random projection `s = \sum_{k,j} u_{k,j} x_{k,j} \bmod m` with fixed
+weights `u_{k,j} \in [1, 2^4]`, maintained incrementally at negligible
+cost. Rational reconstruction of the single scalar `s` reveals the common
+denominator and the size of the solution (up to a per-attempt failure
+probability at most `\min(1/q, 2^{-4})` for each prime power `q` dividing
+the denominator, corrected by retrying with a doubled denominator margin).
+When two consecutive probes agree, the full solution `\hat X` with running
+common denominator ``den`` is reconstructed from `x \bmod m` and accepted
+if
+
+.. math::
+
+    n \lVert A \rVert \lVert \hat X \rVert +
+        \operatorname{den} \lVert B \rVert < m,
+
+where `\lVert \cdot \rVert` is the max-norm: every entry of
+`A \hat X - \operatorname{den} B` is divisible by `m` by construction and
+smaller than `m` in absolute value by the inequality, hence zero. This
+termination criterion goes back to [Cab1971]_ and is also used in
+[CheSto2005]_ and [Stef2010]_; it makes wrong probe results harmless, as
+no uncertified output is possible. When the inequality is not attainable
+at the current precision, the solvers verify a reconstructed candidate by
+an explicit product instead whenever a cost model deems that cheaper than
+further lifting. During the first few steps, when the modulus is too
+small for the probe to be informative, reconstruction is attempted
+unconditionally with balanced bounds.
+
+The Dixon solver additionally adapts its digit size: lifting starts with
+word-size digits modulo a 30-bit prime (halving the factorisation cost at
+equal cost per lifted bit), re-factors modulo a 59-bit prime when the
+explicit inverse is formed, and switches to `p^k` digits (Newton inverse
+modulo `q = p^k`, matrix-vector products via precomputed residue tables),
+doubling `k` while profitable.
+
 .. function:: int fmpz_mat_solve(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
 
     Solves the equation `AX = B` for nonsingular `A`. More precisely, computes
     (``X``, ``den``) such that `AX = B \times \operatorname{den}`.
     Returns 1 if `A` is nonsingular and 0 if `A` is singular.
-    The computed denominator will not generally be minimal.
+    The denominator always divides `\det(A)`, but is only guaranteed to be
+    minimal (and positive) for the modular algorithms used for larger
+    systems; the fraction-free algorithms used for small systems return
+    `\pm \det(A)`.
 
-    This function uses Cramer's rule for small systems and
-    fraction-free LU decomposition followed by fraction-free forward
-    and back substitution for larger systems.
+    This function uses Cramer's rule for very small systems, fraction-free
+    LU decomposition for small systems, and the output-sensitive modular
+    algorithms ``fmpz_mat_solve_multi_mod_den`` (for many right-hand sides)
+    and ``fmpz_mat_solve_dixon_den`` otherwise.
 
-    Note that for very large systems, it is faster to compute a modular
-    solution using ``fmpz_mat_solve_dixon``.
+    ``X`` is allowed to alias ``A`` or ``B``.
 
 .. function:: int fmpz_mat_solve_fflu(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
 
@@ -1015,6 +1072,8 @@ allowed between arguments.
     such that the reduced numerators and denominators `n/d` in
     `A^{-1} B` satisfy the bounds `0 \le |n| \le N` and `0 \le d \le D`.
 
+    Assumes that `A` is square and nonsingular.
+
 .. function:: int fmpz_mat_solve_dixon(fmpz_mat_t X, fmpz_t M, const fmpz_mat_t A, const fmpz_mat_t B)
 
     Solves `AX = B` given a nonsingular square matrix `A` and a matrix `B` of
@@ -1052,7 +1111,9 @@ allowed between arguments.
     Solves the equation `AX = B` for nonsingular `A`. More precisely, computes
     (``X``, ``den``) such that `AX = B \times \operatorname{den}`.
     Returns 1 if `A` is nonsingular and 0 if `A` is singular.
-    The computed denominator will not generally be minimal.
+    The denominator is positive and minimal, that is, the exact common
+    denominator of the rational solution `A^{-1} B`; in particular it
+    divides `\det(A)`.
 
     Uses the Dixon lifting algorithm with early termination once the lifting
     stabilises.
@@ -1062,10 +1123,23 @@ allowed between arguments.
     Solves the equation `AX = B` for nonsingular `A`. More precisely, computes
     (``X``, ``den``) such that `AX = B \times \operatorname{den}`.
     Returns 1 if `A` is nonsingular and 0 if `A` is singular.
-    The computed denominator will not generally be minimal.
+    The denominator is positive and minimal, as for
+    ``fmpz_mat_solve_dixon_den``.
 
     Uses a Chinese remainder algorithm with early termination once the lifting
     stabilises.
+
+.. function:: int fmpz_mat_can_solve_dixon_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
+
+    Returns `1` if the system `AX = B` can be solved. If so it computes
+    (``X``, ``den``) such that `AX = B \times \operatorname{den}`. The
+    computed denominator will not generally be minimal.
+
+    Solves the square subsystems that arise with ``p``-adic lifting; see
+    ``fmpz_mat_can_solve_multi_mod_den`` for the algorithm.
+
+    Note that the matrices `A` and `B` may have any shape as long as they have
+    the same number of rows.
 
 .. function:: int fmpz_mat_can_solve_multi_mod_den(fmpz_mat_t X, fmpz_t den, const fmpz_mat_t A, const fmpz_mat_t B)
 
@@ -1073,7 +1147,15 @@ allowed between arguments.
     (``X``, ``den``) such that `AX = B \times \operatorname{den}`. The
     computed denominator will not generally be minimal.
 
-    Uses a Chinese remainder algorithm.
+    The rank and a pivot structure of `A` are computed modulo a prime, the
+    corresponding pivot subsystem is solved exactly, and the remaining
+    equations are checked. A failed check is turned into an unconditional
+    proof of inconsistency by exhibiting a vector `y` with `y^t A = 0` and
+    `y^t B \neq 0` (the Fredholm alternative; see [GieLobSau1998]_ for such
+    certificates of inconsistency and [MulSto2004]_ for certified dense
+    system solving), obtained from one additional transposed subsystem
+    solve; only in the negligibly rare case that the chosen prime
+    underestimates the rank are further primes tried, boundedly.
 
     Note that the matrices `A` and `B` may have any shape as long as they have
     the same number of rows.

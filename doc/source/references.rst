@@ -73,11 +73,15 @@ References
 
 .. [BW1993] \T. Becker and V. Weispfenning, *Gröbner Bases: A Computational Approach to Commutative Algebra*, Graduate Texts in Mathematics 141, Springer-Verlag (1993). https://doi.org/10.1007/978-1-4612-0913-3
 
+.. [Cab1971] \S. Cabay, "Exact solution of linear equations", Proceedings of the Second ACM Symposium on Symbolic and Algebraic Manipulation (1971) 392-398
+
 .. [CFG2017] \F. Cléry, C. Faber, and G. van der Geer. "Covariants of binary sextics and vector-valued Siegel modular forms of genus two", Math. Ann. 369 (2017), 1649--1669. https://doi.org/10.1007/s00208-016-1510-2
 
 .. [CFG2019] \F. Cléry, C. Faber, and G. van der Geer. "Covariants of binary sextics and modular forms of degree 2 with character", Math. Comp. 88 (2019), 2423--2441. https://doi.org/10.1090/mcom/3412
 
 .. [CGHJK1996] \R. M. Corless, G. H. Gonnet, D. E. Hare, D. J. Jeffrey and D. E. Knuth, "On the Lambert W function", Advances in Computational Mathematics, 5(1) (1996), 329-359
+
+.. [CheSto2005] \Z. Chen and A. Storjohann, "A BLAS based C library for exact linear algebra on integer matrices", Proceedings of the 2005 International Symposium on Symbolic and Algebraic Computation (ISSAC) (2005) 92-99
 
 .. [CP2005] \R. Crandall and C. Pomerance, *Prime Numbers: A Computational Perspective*, second edition, Springer (2005).
 
@@ -98,6 +102,8 @@ References
 .. [CraPom2005] \Richard Crandall and Carl Pomerance: Prime numbers: a computational perspective. 2005.
 
 .. [DHBHS2004] \B. Deconinck, M. Heil, A. Bobenko, M.  van Hoeij, and M. Schmies, "Computing Riemann theta functions", Math. Comp. 73:247 (2004), 1417--1442. https://arxiv.org/abs/nlin/0206009
+
+.. [Dix1982] \J. D. Dixon, "Exact solution of linear equations using p-adic expansions", Numerische Mathematik 40 (1982) 137-141
 
 .. [DYF1999] \A. Dzieciol, S. Yngve and P. O. Fröman, "Coulomb wave functions with complex values of the variable and the parameters", J. Math. Phys. 40, 6145 (1999), https://doi.org/10.1063/1.533083
 
@@ -128,6 +134,8 @@ References
 .. [GCL1992] \K. O. Geddes, S. R. Czapor and G. Labahn. *Algorithms for computer algebra*. Springer, 1992. https://doi.org/10.1007/b102438
 
 .. [GG2003] \J. von zur Gathen and J. Gerhard, *Modern Computer Algebra*, second edition, Cambridge University Press (2003)
+
+.. [GieLobSau1998] \M. Giesbrecht, A. Lobo and B. D. Saunders, "Certifying inconsistency of sparse linear systems", Proceedings of the 1998 International Symposium on Symbolic and Algebraic Computation (ISSAC) (1998) 113-119
 
 .. [GS2003] \X. Gourdon and P. Sebah, "Numerical evaluation of the Riemann Zeta-function" (2003), http://numbers.computation.free.fr/Constants/Miscellaneous/zetaevaluations.pdf
 
@@ -259,6 +267,8 @@ References
 
 .. [Mul2000] \Thom Mulders : On Short Multiplications and Divisions, AAECC vol. 11 (2000) 69--88
 
+.. [MulSto2004] \T. Mulders and A. Storjohann, "Certified dense linear system solving", Journal of Symbolic Computation 37:4 (2004) 485-510
+
 .. [Mum1983] \D. Mumford, *Tata Lectures on Theta I*, Birkhäuser, 1983. https://doi.org/10.1007/978-1-4899-2843-6
 
 .. [Mum1984] \D. Mumford, *Tata Lectures on Theta II*, Birkhäuser, 1984. https://doi.org/10.1007/978-0-8176-4578-6
@@ -318,6 +328,8 @@ References
 .. [Ste2002] \A. Steel. "A new scheme for computing with algebraically closed fields". In: Fieker C., Kohel D.R. (eds) Algorithmic Number Theory. ANTS 2002. Lecture Notes in Computer Science, vol 2369. Springer, Berlin, Heidelberg. https://doi.org/10.1007/3-540-45455-1_38
 
 .. [Ste2010] \A. Steel. "Computing with algebraically closed fields". Journal of Symbolic Computation 45 (2010) 342-372. https://doi.org/10.1016/j.jsc.2009.09.005
+
+.. [Stef2010] \D. E. Steffy, "Exact solutions to linear systems of equations using output sensitive lifting", ACM Communications in Computer Algebra 44:3/4 (2010) 160-182
 
 .. [Stehle2010] \Stehlé, Damien : Floating-Point LLL: Theoretical and Practical Aspects, in Nguyen, Phong Q. and Vallée, Brigitte : The LLL Algorithm: Survey and Applications (2010) 179--213
 
