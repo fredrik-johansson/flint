@@ -16,6 +16,8 @@
 #include "t-divrem_1_preinv.c"
 #include "t-divrem_preinv1.c"
 #include "t-divrem_preinvn.c"
+#include "t-dot.c"
+#include "t-poly_mulmid_classical.c"
 #include "t-fmmamod_precond_matrix.c"
 #include "t-fmmamod_preinvn.c"
 #include "t-fmms1.c"
@@ -53,6 +55,8 @@ test_struct tests[] =
     TEST_FUNCTION(flint_mpn_divrem_1_preinv),
     TEST_FUNCTION(flint_mpn_divrem_preinv1),
     TEST_FUNCTION(flint_mpn_divrem_preinvn),
+    TEST_FUNCTION(flint_mpn_dot),
+    TEST_FUNCTION(_flint_mpn_poly_mulmid_classical),
     TEST_FUNCTION(flint_mpn_fmmamod_precond_matrix),
     TEST_FUNCTION(flint_mpn_fmmamod_preinvn),
     TEST_FUNCTION(flint_mpn_fmms1),

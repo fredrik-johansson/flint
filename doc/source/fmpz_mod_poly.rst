@@ -491,7 +491,8 @@ Multiplication
 .. function:: void _fmpz_mod_poly_mul(fmpz * res, const fmpz * poly1, slong len1, const fmpz * poly2, slong len2, const fmpz_mod_ctx_t ctx)
 
     Sets ``(res, len1 + len2 - 1)`` to the product of ``(poly1, len1)``
-    and ``(poly2, len2)``.  Assumes ``len1 >= len2 > 0``.  Allows
+    and ``(poly2, len2)``.  Assumes ``len1, len2 > 0``; the operands may
+    be given in either order.  Allows
     zero-padding of the two input polynomials.
 
 .. function:: void fmpz_mod_poly_mul(fmpz_mod_poly_t res, const fmpz_mod_poly_t poly1, const fmpz_mod_poly_t poly2, const fmpz_mod_ctx_t ctx)
@@ -503,7 +504,8 @@ Multiplication
     Sets ``(res, n)`` to the lowest `n` coefficients of the product of
     ``(poly1, len1)`` and ``(poly2, len2)``.
 
-    Assumes ``len1 >= len2 > 0`` and ``0 < n <= len1 + len2 - 1``.
+    Assumes ``len1, len2 > 0`` (the operands may be given in either
+    order) and ``0 < n <= len1 + len2 - 1``.
     Allows for zero-padding in the inputs.  Does not support aliasing between
     the inputs and the output.
 

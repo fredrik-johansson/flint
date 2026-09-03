@@ -559,10 +559,7 @@ _gr_fmpz_mod_poly_mullow(fmpz * res,
     const fmpz * poly1, slong len1,
     const fmpz * poly2, slong len2, slong n, gr_ctx_t ctx)
 {
-    if (len1 >= len2)
-        _fmpz_mod_poly_mullow(res, poly1, len1, poly2, len2, n, FMPZ_MOD_CTX(ctx));
-    else
-        _fmpz_mod_poly_mullow(res, poly2, len2, poly1, len1, n, FMPZ_MOD_CTX(ctx));
+    _fmpz_mod_poly_mullow(res, poly1, len1, poly2, len2, n, FMPZ_MOD_CTX(ctx));
 
     return GR_SUCCESS;
 }
@@ -572,10 +569,7 @@ _gr_fmpz_mod_poly_mulmid(fmpz * res,
     const fmpz * poly1, slong len1,
     const fmpz * poly2, slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
 {
-    if (len1 >= len2)
-        _fmpz_mod_poly_mulmid(res, poly1, len1, poly2, len2, nlo, nhi, FMPZ_MOD_CTX(ctx));
-    else
-        _fmpz_mod_poly_mulmid(res, poly2, len2, poly1, len1, nlo, nhi, FMPZ_MOD_CTX(ctx));
+    _fmpz_mod_poly_mulmid(res, poly1, len1, poly2, len2, nlo, nhi, FMPZ_MOD_CTX(ctx));
 
     return GR_SUCCESS;
 }

@@ -1002,11 +1002,7 @@ _gr_fmpz_poly_mullow(fmpz * res,
     const fmpz * poly1, slong len1,
     const fmpz * poly2, slong len2, slong n, gr_ctx_t ctx)
 {
-    if (len1 >= len2)
-        _fmpz_poly_mullow(res, poly1, len1, poly2, len2, n);
-    else
-        _fmpz_poly_mullow(res, poly2, len2, poly1, len1, n);
-
+    _fmpz_poly_mullow(res, poly1, len1, poly2, len2, n);
     return GR_SUCCESS;
 }
 
