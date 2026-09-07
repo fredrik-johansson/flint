@@ -896,19 +896,23 @@ _acb_poly_get_fmpz_poly(fmpz_poly_t r, const acb_poly_t p)
 static int
 _weber_ok(slong D)
 {
-    slong m;
-    if (D % 4 != 0)
+    ulong m;
+    /* D = -4m with m = 1, 2, 3, 5, 6, 7 mod 8: tested on the bits of |D|
+       (no remainders of negative numbers) */
+    if (D >= 0 || (((ulong) (-D)) & 3) != 0)
         return 0;
-    m = -D / 4;
-    return (m % 8 == 1 || m % 8 == 2 || m % 8 == 3 || m % 8 == 5 || m % 8 == 6 || m % 8 == 7);
+    m = ((ulong) (-D)) >> 2;
+    m &= 7;
+    return (m == 1 || m == 2 || m == 3 || m == 5 || m == 6 || m == 7);
 }
 
 /* the height factor 72 / e */
 static double
 _weber_factor(slong D)
 {
-    slong m = -D / 4, e = (m % 8 == 5) ? 4 : (m % 8 == 3 || m % 8 == 7) ? 1 : 2;
-    if (D % 3 == 0)
+    ulong m = ((ulong) (-D)) >> 2, m8 = m & 7;
+    slong e = (m8 == 5) ? 4 : (m8 == 3 || m8 == 7) ? 1 : 2;
+    if (((ulong) (-D)) % 3 == 0)
         e *= 3;
     return 72.0 / e;
 }
@@ -1113,6 +1117,12 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
     double lgh;
     int success = 0, kummer_retries = 0;
     int weber = _weber_ok(D) && !(flags & ECPP_TOWER_J);
+    /* consistency check of the decision, independent of the code above */
+    if (weber && (D & 3) != 0)
+    {
+        flint_printf("ecpp: INTERNAL: Weber selected for D = %wd (not divisible by 4); weber = %d, _weber_ok = %d\n", D, weber, _weber_ok(D));
+        weber = 0;
+    }
     /* the Kummer data (and its retries) only pay when a powering of a
        degree-p polynomial is expensive, i.e. for large n; the cost model
        in disc.c prices the descents accordingly */

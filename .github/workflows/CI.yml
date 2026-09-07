@@ -109,6 +109,14 @@ jobs:
           gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
           cat /proc/cpuinfo | grep -m1 "model name" || true
           apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+          cat > /tmp/modtest.c << 'EOF'
+          #include <stdio.h>
+          __attribute__((noinline)) int f(long D) { return D % 4 != 0; }
+          __attribute__((noinline)) long g(long D) { return D % 4; }
+          int main(int argc, char ** argv) { long D = -4047 + argc - 1; printf("D = %ld: D %% 4 != 0 -> %d, D %% 4 = %ld, -D/4 = %ld, sizeof(long) = %d\n", D, f(D), g(D), -D / 4, (int) sizeof(long)); return 0; }
+          EOF
+          gcc -O2 -m32 -o /tmp/modtest /tmp/modtest.c && /tmp/modtest
+          gcc -O2 -o /tmp/modtest64 /tmp/modtest.c && /tmp/modtest64
       - name: "Check ecpp first (verbose)"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
@@ -177,6 +185,14 @@ jobs:
           gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
           cat /proc/cpuinfo | grep -m1 "model name" || true
           apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+          cat > /tmp/modtest.c << 'EOF'
+          #include <stdio.h>
+          __attribute__((noinline)) int f(long D) { return D % 4 != 0; }
+          __attribute__((noinline)) long g(long D) { return D % 4; }
+          int main(int argc, char ** argv) { long D = -4047 + argc - 1; printf("D = %ld: D %% 4 != 0 -> %d, D %% 4 = %ld, -D/4 = %ld, sizeof(long) = %d\n", D, f(D), g(D), -D / 4, (int) sizeof(long)); return 0; }
+          EOF
+          gcc -O2 -m32 -o /tmp/modtest /tmp/modtest.c && /tmp/modtest
+          gcc -O2 -o /tmp/modtest64 /tmp/modtest.c && /tmp/modtest64
       - name: "Check ecpp first (verbose)"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
@@ -240,6 +256,14 @@ jobs:
           gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
           cat /proc/cpuinfo | grep -m1 "model name" || true
           apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+          cat > /tmp/modtest.c << 'EOF'
+          #include <stdio.h>
+          __attribute__((noinline)) int f(long D) { return D % 4 != 0; }
+          __attribute__((noinline)) long g(long D) { return D % 4; }
+          int main(int argc, char ** argv) { long D = -4047 + argc - 1; printf("D = %ld: D %% 4 != 0 -> %d, D %% 4 = %ld, -D/4 = %ld, sizeof(long) = %d\n", D, f(D), g(D), -D / 4, (int) sizeof(long)); return 0; }
+          EOF
+          gcc -O2 -m32 -o /tmp/modtest /tmp/modtest.c && /tmp/modtest
+          gcc -O2 -o /tmp/modtest64 /tmp/modtest.c && /tmp/modtest64
       - name: "Check ecpp first (verbose)"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
@@ -287,6 +311,14 @@ jobs:
           gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
           cat /proc/cpuinfo | grep -m1 "model name" || true
           apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+          cat > /tmp/modtest.c << 'EOF'
+          #include <stdio.h>
+          __attribute__((noinline)) int f(long D) { return D % 4 != 0; }
+          __attribute__((noinline)) long g(long D) { return D % 4; }
+          int main(int argc, char ** argv) { long D = -4047 + argc - 1; printf("D = %ld: D %% 4 != 0 -> %d, D %% 4 = %ld, -D/4 = %ld, sizeof(long) = %d\n", D, f(D), g(D), -D / 4, (int) sizeof(long)); return 0; }
+          EOF
+          gcc -O2 -m32 -o /tmp/modtest /tmp/modtest.c && /tmp/modtest
+          gcc -O2 -o /tmp/modtest64 /tmp/modtest.c && /tmp/modtest64
       - name: "Check ecpp first (verbose)"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
@@ -372,6 +404,14 @@ jobs:
           gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
           cat /proc/cpuinfo | grep -m1 "model name" || true
           apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+          cat > /tmp/modtest.c << 'EOF'
+          #include <stdio.h>
+          __attribute__((noinline)) int f(long D) { return D % 4 != 0; }
+          __attribute__((noinline)) long g(long D) { return D % 4; }
+          int main(int argc, char ** argv) { long D = -4047 + argc - 1; printf("D = %ld: D %% 4 != 0 -> %d, D %% 4 = %ld, -D/4 = %ld, sizeof(long) = %d\n", D, f(D), g(D), -D / 4, (int) sizeof(long)); return 0; }
+          EOF
+          gcc -O2 -m32 -o /tmp/modtest /tmp/modtest.c && /tmp/modtest
+          gcc -O2 -o /tmp/modtest64 /tmp/modtest.c && /tmp/modtest64
       - name: "Check ecpp first (verbose)"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
