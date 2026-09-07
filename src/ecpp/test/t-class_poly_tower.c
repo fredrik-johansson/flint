@@ -10,7 +10,10 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include <stdlib.h>
+#include <gmp.h>
 #include "test_helpers.h"
+#include "qfb.h"
 #include "ulong_extras.h"
 #include "fmpz.h"
 #include "fmpz_poly.h"
@@ -65,8 +68,22 @@ _check_tower(slong D, slong Dt, int flags, const fmpz_t n, flint_rand_t state, c
 
     if (!_ecpp_class_poly_tower(j, Dt, flags, state, ctx))
     {
+        qfb * forms;
+        slong h, i;
         flint_printf("FAIL: no root found (%s), D = %wd, tower on %wd, flags %d\n", what, D, Dt, flags);
         flint_printf("n = "); fmpz_print(n); flint_printf("\n");
+        h = qfb_reduced_forms(&forms, Dt);
+        flint_printf("%wd reduced forms:", h);
+        for (i = 0; i < h; i++)
+        {
+            flint_printf(" ("); fmpz_print(forms[i].a); flint_printf(","); fmpz_print(forms[i].b);
+            flint_printf(","); fmpz_print(forms[i].c); flint_printf(")");
+        }
+        flint_printf("\n");
+        qfb_array_clear(&forms, h);
+        /* once more, verbosely */
+        ecpp_set_verbose(1);
+        _ecpp_class_poly_tower(j, Dt, flags, state, ctx);
         flint_abort();
     }
     acb_modular_hilbert_class_poly(HZ, Dt);
@@ -107,6 +124,12 @@ TEST_FUNCTION_START(ecpp_class_poly_tower, state)
 
     fmpz_init(n);
     fmpz_init(v);
+
+    flint_printf("(FLINT_BITS %d, sizeof(slong) %wd, sizeof(mp_limb_t) %wd, gmp %s) ",
+        FLINT_BITS, (slong) sizeof(slong), (slong) sizeof(mp_limb_t), gmp_version);
+    fflush(stdout);
+    if (getenv("ECPP_TEST_VERBOSE") != NULL)
+        ecpp_set_verbose(1);
 
     n_primes_init(it);
     n_primes_next(it);

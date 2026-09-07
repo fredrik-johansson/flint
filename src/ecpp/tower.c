@@ -197,6 +197,8 @@ _classgroup_series(slong * perm, slong * degs, const qfb * forms, slong h, slong
             }
             if (!ok || best_idx < 0)
             {
+                if (ecpp_verbose)
+                    flint_printf("ecpp: composition series failed (size %wd of %wd, ok %d, candidates %wd)\n", size, h, ok, ncand);
                 ok = 0;
                 break;
             }
@@ -223,6 +225,11 @@ _classgroup_series(slong * perm, slong * degs, const qfb * forms, slong h, slong
                 pos = _form_index(table, h, t);
                 if (pos < 0 || in[pos])
                 {
+                    if (ecpp_verbose)
+                    {
+                        flint_printf("ecpp: composition series: product not a new reduced form (pos %wd): ", pos);
+                        fmpz_print(t->a); flint_printf(" "); fmpz_print(t->b); flint_printf(" "); fmpz_print(t->c); flint_printf("\n");
+                    }
                     ok = 0;
                     break;
                 }
@@ -1138,6 +1145,13 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
 #else
     levels = _classgroup_series(perm, degs, forms, h, D);
 #endif
+    if (ecpp_verbose)
+    {
+        flint_printf("ecpp: D = %wd, h = %wd, levels = %wd:", D, h, levels);
+        for (i = 0; i < levels; i++)
+            flint_printf(" %wd", degs[i]);
+        flint_printf("\n");
+    }
     if (levels == 0)
         goto cleanup_forms;
 
@@ -1238,6 +1252,8 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
             if (found < 0)
             {
                 success = 0;
+                if (ecpp_verbose)
+                    flint_printf("ecpp: level %wd (degree %wd, %wd cosets): no generator among the coefficients at precision %wd\n", lev, m, nn, prec);
             }
             else
             {
@@ -1287,10 +1303,26 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
                 }
                 _hecke_tree(V, Ws, nv, ys, (const acb_struct * const *) cs, 0, nn, prec);
                 if (!_acb_poly_get_fmpz_poly(W[lev] + m, V))   /* temporarily V */
+                {
                     success = 0;
+                    if (ecpp_verbose)
+                    {
+                        flint_printf("ecpp: level %wd (degree %wd, %wd cosets): V not integral at precision %wd, coefficient 0 = ", lev, m, nn, prec);
+                        acb_printd(acb_poly_get_coeff_ptr(V, 0), 20);
+                        flint_printf("\n");
+                    }
+                }
                 for (jj = 0; jj < m && success; jj++)
                     if (!_acb_poly_get_fmpz_poly(W[lev] + jj, Ws + jj))
+                    {
                         success = 0;
+                        if (ecpp_verbose)
+                        {
+                            flint_printf("ecpp: level %wd (degree %wd, %wd cosets): numerator %wd not integral at precision %wd, coefficient 0 = ", lev, m, nn, jj, prec);
+                            acb_printd(acb_poly_get_coeff_ptr(Ws + jj, 0), 20);
+                            flint_printf("\n");
+                        }
+                    }
                 /* the Kummer data may fail to be integral (e.g. zeta in L_i):
                    then only the polynomial is kept */
                 kummer[lev] = (nk > 0);
@@ -1336,7 +1368,15 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
         {
             acb_poly_product_roots(V, roots, num, prec);
             if (!_acb_poly_get_fmpz_poly(W[0] + 0, V))
+            {
                 success = 0;
+                if (ecpp_verbose)
+                {
+                    flint_printf("ecpp: bottom polynomial (degree %wd) not integral at precision %wd, coefficient 0 = ", num, prec);
+                    acb_printd(acb_poly_get_coeff_ptr(V, 0), 20);
+                    flint_printf("\n");
+                }
+            }
         }
 
         acb_poly_clear(U); acb_poly_clear(V); acb_poly_clear(T); acb_poly_clear(lin);
@@ -1357,7 +1397,13 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
             continue;
         }
         if (prec > 40 * (3.141593 * sqrt((double) -D) * lgh * 1.442696 + 1000))
+        {
+            if (ecpp_verbose)
+                flint_printf("ecpp: giving up the tower for D = %wd at precision %wd\n", D, prec);
             break;
+        }
+        if (ecpp_verbose)
+            flint_printf("ecpp: retrying the tower for D = %wd at precision %wd\n", D, prec * 3 / 2 + 64);
         prec = prec * 3 / 2 + 64;
     }
 
@@ -1392,6 +1438,8 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
 
         fmpz_mod_poly_set_fmpz_poly(f, W[0] + 0, ctx);
         success = ecpp_poly_root(r, f, state, ctx);
+        if (ecpp_verbose && !success)
+            flint_printf("ecpp: descent: no root of the bottom polynomial (degree %wd)\n", fmpz_mod_poly_degree(f, ctx));
         for (lev = 1; lev < levels && success; lev++)
         {
             slong m = degs[lev], jj;
@@ -1401,7 +1449,11 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
             fmpz_mod_poly_set_fmpz_poly(Wm, W[lev] + m, ctx);
             fmpz_mod_poly_evaluate_fmpz(den, Wm, r, ctx);
             if (fmpz_is_zero(den))
+            {
                 success = 0;
+                if (ecpp_verbose)
+                    flint_printf("ecpp: descent: V'(r) = 0 at level %wd\n", lev);
+            }
             else
             {
                 fmpz_mod_inv(den, den, ctx);
@@ -1434,7 +1486,11 @@ _ecpp_class_poly_tower(fmpz_t j, slong D, int flags, flint_rand_t state,
                         flint_printf("ecpp: Kummer descent in degree %wd through F_(n^2)\n", m);
                 }
                 else
+                {
                     success = ecpp_poly_root(r, f, state, ctx);
+                    if (ecpp_verbose && !success)
+                        flint_printf("ecpp: descent: no root at level %wd (degree %wd)\n", lev, m);
+                }
             }
             fmpz_mod_poly_clear(Wm, ctx);
         }

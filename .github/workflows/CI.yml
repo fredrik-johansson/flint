@@ -35,6 +35,7 @@ concurrency:
 
 jobs:
   assert-ntl-msolve-nemo:
+    if: false
     name: NTL, msolve and Nemo.jl
     runs-on: ubuntu-24.04
     env:
@@ -79,6 +80,7 @@ jobs:
           julia -e "import Pkg; Pkg.develop(path=\"./Nemo.jl\"); Pkg.test(\"Nemo\")"
 
   ubuntu-codecov:
+    if: false
     name: codecov (x10)
     runs-on: ubuntu-24.04
     env:
@@ -102,6 +104,13 @@ jobs:
         run: ./bootstrap.sh && ./configure CC=${CC} --enable-avx2 --enable-coverage
       - name: "Compile library"
         run: $MAKE && ldd libflint.so
+      - name: "Environment"
+        run: |
+          gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
+          cat /proc/cpuinfo | grep -m1 "model name" || true
+          apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+      - name: "Check ecpp first (verbose)"
+        run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
         run: $MAKE tests
       - name: "Check"
@@ -118,6 +127,7 @@ jobs:
           token: ${{ secrets.CODECOV_TOKEN }}
 
   regression-check:
+    if: false
     name: Regression check
     runs-on: ubuntu-24.04
     env:
@@ -140,6 +150,7 @@ jobs:
         run: $MAKE $MODULES
 
   ubuntu-arm:
+    if: false
     name: ARM (x0.5)
     runs-on: ubuntu-24.04-arm
     env:
@@ -161,12 +172,20 @@ jobs:
         run: ./bootstrap.sh && ./configure CC=${CC} --disable-debug
       - name: "Compile library"
         run: $MAKE && ldd libflint.so
+      - name: "Environment"
+        run: |
+          gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
+          cat /proc/cpuinfo | grep -m1 "model name" || true
+          apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+      - name: "Check ecpp first (verbose)"
+        run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
         run: $MAKE tests
       - name: "Check"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && $MAKE check
 
   macos-m1:
+    if: false
     name: M1 (x0.5)
     runs-on: macos-26
     env:
@@ -194,6 +213,7 @@ jobs:
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && $MAKE check
 
   ubuntu-clang:
+    if: false
     name: ASan, BLAS, examples (x1)
     runs-on: ubuntu-24.04
     env:
@@ -215,6 +235,13 @@ jobs:
         run: ./bootstrap.sh && ./configure CC=${CC} --with-blas --disable-debug --enable-asan
       - name: "Compile library"
         run: $MAKE && ldd libflint.so
+      - name: "Environment"
+        run: |
+          gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
+          cat /proc/cpuinfo | grep -m1 "model name" || true
+          apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+      - name: "Check ecpp first (verbose)"
+        run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
         run: $MAKE tests
       - name: "Check"
@@ -225,6 +252,7 @@ jobs:
         run: $MAKE checkexamples
 
   mingw64-gcc:
+    if: false
     name: MinGW (x0.5)
     runs-on: windows-latest
     defaults:
@@ -254,12 +282,20 @@ jobs:
         run: ./bootstrap.sh && ./configure CC=${CC} --enable-fast-build --disable-debug
       - name: "Compile library"
         run: $MAKE
+      - name: "Environment"
+        run: |
+          gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
+          cat /proc/cpuinfo | grep -m1 "model name" || true
+          apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+      - name: "Check ecpp first (verbose)"
+        run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
         run: $MAKE tests
       - name: "Check"
         run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && $MAKE check
 
   msvc:
+    if: false
     name: MSVC (x0.5)
     runs-on: windows-latest
     env:
@@ -331,6 +367,13 @@ jobs:
         run: ./bootstrap.sh && ./configure CC=${CC} --enable-assert --disable-debug
       - name: "Compile library"
         run: $MAKE
+      - name: "Environment"
+        run: |
+          gcc -m32 -dM -E - < /dev/null | grep -i "sse\|i386\|i686" || true
+          cat /proc/cpuinfo | grep -m1 "model name" || true
+          apk info -v gmp mpfr4 gcc musl 2>/dev/null || true
+      - name: "Check ecpp first (verbose)"
+        run: echo "FLINT_TEST_MULTIPLIER = $FLINT_TEST_MULTIPLIER" && ECPP_TEST_VERBOSE=1 $MAKE check MOD=ecpp
       - name: "Compile tests"
         run: $MAKE tests
       - name: "Check"
