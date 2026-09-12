@@ -10,12 +10,43 @@ multiplication kernels built on top of them.
 Backends are selected automatically: AVX2 (and AVX512 for the ``vec8dz``
 family) on x86, NEON on ARM, and otherwise a generic backend, using GNU
 vector extensions where the compiler supports them and plain ISO C
-structs elsewhere. The AVX2 and NEON backends require a 64-bit word
-size, since their integer vectors have :type:`ulong` lanes; a 32-bit
-build uses the generic backends, which provide only the floating-point
-types. The generic backends implement only the subset of the
-interface required by ``flint_sgemm``/``flint_dgemm``; the full
-interface, as used by ``fft_small``, still requires AVX2 or NEON.
+structs elsewhere. The backends live in ``machine_vectors_avx2.h``,
+``machine_vectors_neon.h`` and ``machine_vectors_generic.h``, which are
+included by ``machine_vectors.h`` and must not be included directly.
+Exactly one of ``FLINT_MACHINE_VECTORS_AVX2``,
+``FLINT_MACHINE_VECTORS_NEON`` and ``FLINT_MACHINE_VECTORS_GENERIC``
+ends up defined and identifies the backend in use, which matters
+because each backend provides a slightly different superset of the
+common interface; the availability of each operation is listed with
+the operation below.
+
+The generic backend implements the union of the AVX2 and NEON
+interfaces (everything below except the AVX512-only ``z`` types), with
+the same semantics; in particular the modular arithmetic is bit for bit
+identical to the other backends, see below, so ``fft_small`` builds
+wherever the word size is 64 bits.
+
+It is not, however, enabled everywhere it builds. Without a hardware
+fused multiply-add the generic backend has to reach the exact remainder
+of a modular product through 64-bit integer arithmetic, which leaves the
+transforms several times slower, far enough that the ``fft_small`` based
+algorithms lose to the ones they would otherwise replace. ``configure``
+therefore enables the module only where the target has AVX2, NEON, or a
+fused multiply-add, which on x86-64 means that a build for the bare
+baseline architecture does without it. Tuning the crossover thresholds
+per backend, so that the module could be enabled everywhere and used
+only where it wins, would be the better answer.
+
+The AVX2 and NEON backends, and the
+integer and modular operations of the generic backend, require 64-bit
+words since the integer vectors have :type:`ulong` lanes; a 32-bit
+build gets only the floating point part of the generic backend, which
+is what ``flint_sgemm``/``flint_dgemm`` need.
+
+The entire header assumes IEEE 754 double precision arithmetic in
+round-to-nearest mode. It must not be compiled with ``-ffast-math`` or
+anything else that licenses value-changing floating point
+transformations; the modular arithmetic depends on exact rounding.
 
 For the vector operations to use the target's instructions, FLINT must
 be built with appropriate compiler flags. ``configure`` chooses these
@@ -35,6 +66,29 @@ compilers and compiler versions, unlike the other backends. It exists
 so that the header works on compilers without GNU vector extensions,
 and is not the fallback used on GCC or clang.
 
+Both tiers compute ``mulmod`` in one of two ways, chosen by whether the
+target defines ``__FP_FAST_FMA``. With a hardware fma the exact
+remainder is obtained the way the AVX2 and NEON backends obtain it, from
+the error of the product; without one, fma() is a software routine and
+the remainder goes through an exact 64 bit integer product instead. Both
+compute the same integer, so results do not depend on the choice, but
+the cost does: on x86-64 with AVX2 the fma path makes ``vec4d_mulmod``
+2.6x faster, and the strict tier then matches the AVX2 backend. This is
+what the generic backend is for, since a target with vectors and fma but
+no hand written backend here is the usual case.
+
+The two tiers are still worth measuring against each other on a new
+target, since which one a compiler handles better is not obvious.
+With GCC 13 on x86-64 the GNU vector tier is the faster of the two for
+``flint_dgemm`` and ``flint_sgemm``, by about 1.2x and 1.6x with AVX2
+enabled and by a little at the x86-64 baseline, which is why it is the
+default. On a target that takes the integer path, the strict tier is the
+faster one for ``mulmod``: the remainder is then a 64 bit integer
+product, one instruction in a scalar register but synthesised from 32
+bit multiplies in a vector one, since x86 has no vector 64 bit multiply
+below AVX512DQ.
+``src/machine_vectors/profile/p-backends.c`` measures both.
+
 The generic backends express a fused multiply-add as ``a * b + c``,
 which a compiler fuses into an FMA instruction only when floating-point
 contraction is enabled. GCC in a strict ISO mode, which is how FLINT is
@@ -45,6 +99,13 @@ performance-critical loop should request contraction, as
 intrinsics and are unaffected.
 
 Some functions may require that vectors are aligned in memory.
+
+For testing, ``src/machine_vectors/test`` checks each operation of the
+active backend against scalar references (``t-ops.c``), checks the
+modular arithmetic contracts stated below (``t-mod.c``), and
+additionally instantiates both generic tiers under renamed identifiers
+so that they are exercised, and compared bit for bit against the native
+backend, even in an AVX2 or NEON build (``t-force_generic.c``).
 
 Types
 -------------------------------------------------------------------------------
@@ -270,9 +331,57 @@ Arithmetic and basic operations
 Modular arithmetic
 -------------------------------------------------------------------------------
 
-These functions are used internally by the small-prime FFT.
-Some ``double`` variants assume an odd modulus `n < 2^{50}`.
-Other assumptions are not yet documented.
+These functions are used internally by the small-prime FFT. The
+``double`` variants represent residues as integer valued doubles and
+assume an odd modulus `n < 2^{50}` together with the precomputed
+``ninv``, which must be exactly the correctly rounded double ``1.0/n``.
+The moduli ``mpn_ctx`` picks are just below `2^{50}`, but the modulus
+is not always one of those: :func:`nmod_poly_mul` transforms over the
+caller's own modulus whenever that is prime, below `2^{50}` and
+2-adically deep enough, from 20 bits upwards, and nothing in these
+operations depends on where the modulus came from. The following
+contracts, verified by ``t-mod.c`` over the whole range of sizes, are
+derived in ``src/fft_small/mulmod_satisfies_bounds.c``:
+
+- ``mulmod(a, b, n, ninv)`` computes the exact integer `a b - q n` with
+  `q = \operatorname{round}(\operatorname{fl}(\operatorname{fl}(a b)
+  \cdot ninv))`, for any integer valued operands with
+  `|a b| < 4 n^2` (and `|a|, |b| < 2^{62}` so that the products of the
+  generic backend do not overflow, which is no restriction in
+  practice). The result is congruent to `a b` modulo `n` and lies in
+  `(-9/8\, n, 9/8\, n)` when `|a b| < 2 n^2` and in
+  `(-7/4\, n, 7/4\, n)` when `|a b| < 4 n^2`. If
+  :func:`fft_small_mulmod_satisfies_bounds` holds for `n`, which is the
+  case for the moduli ``fft_small`` selects, these ranges tighten to
+  `(-n, n)` and `(-3/2\, n, 3/2\, n)` respectively.
+
+- ``nmulmod`` is exactly ``-mulmod`` (both give `+0.0` when the result
+  is zero).
+
+- The reductions ``reduce_to_pm1n``, ``reduce_to_pm1no`` and
+  ``reduce_to_0n`` compute `a - \operatorname{round}(a \cdot ninv)
+  \cdot n` (the last one followed by ``reduce_pm1no_to_0n``) exactly,
+  for every integer valued `a` with `|a| \le 2^{53} - n`, which is
+  every value a ``double`` represents exactly with the quotient times
+  the modulus still representable. The result is congruent to `a` and lies in
+  `(-n, n)` (respectively `[0, n)`); `-0.0` is never produced. Note
+  that the quotient is not restricted to `|q| \le 8`, which is as far
+  as a naive floating point `a - q n` stays exact; ``fft_small`` does
+  call these with larger quotients.
+
+Since none of the operations above involve a fused multiply-add in the
+computation of `q`, and the remainder is exact on every backend, their
+results are identical bit for bit across the AVX2, NEON and generic
+backends; ``fft_small`` computes the same transforms everywhere. This
+is checked by ``t-force_generic.c``.
+
+The remaining reductions are pure range maps whose exact per lane
+semantics (relevant only on the boundary of their domains and for
+signed zeros) are: ``reduce_pm1no_to_0n`` adds `n` exactly when the
+sign bit of the lane is set, so `-0.0` maps to `+n`;
+``reduce_2n_to_n`` subtracts `n` exactly when `a - n \ge +0.0`;
+``reduce_0n_to_pmhn`` subtracts `n` exactly when `a > n/2`; and
+``reduce_pm1n_to_pmhn`` adds `\mp n` exactly when `|a| > n/2`.
 
 .. function:: int vec1d_same_mod(vec1d a, vec1d b, vec1d n, vec1d ninv)
               int vec4d_same_mod(vec4d a, vec4d b, vec4d n, vec4d ninv)
@@ -289,13 +398,17 @@ Other assumptions are not yet documented.
               vec4d vec4d_reduce_to_pm1n(vec4d a, vec4d n, vec4d ninv)
               vec8d vec8d_reduce_to_pm1n(vec8d a, vec8d n, vec8d ninv)
 
-    Return `a \bmod n` reduced to `[-n,n]`.
+    Return `a \bmod n` reduced to `(-n,n)` for integer valued
+    `|a| \le 2^{53} - n`; see the contract above. Also available as
+    ``vec2d_reduce_to_pm1n`` on the NEON and generic backends.
 
 .. function:: vec1d vec1d_reduce_to_pm1no(vec1d a, vec1d n, vec1d ninv)
               vec4d vec4d_reduce_to_pm1no(vec4d a, vec4d n, vec4d ninv)
               vec8d vec8d_reduce_to_pm1no(vec8d a, vec8d n, vec8d ninv)
 
-    Return `a \bmod n` reduced to `(-n,n)`.
+    The same operation under its historical name (the trailing ``o``
+    is for the open interval `(-n, n)`). Also available as
+    ``vec2d_reduce_to_pm1no`` on the NEON and generic backends.
 
 .. function:: vec1d vec1d_reduce_0n_to_pmhn(vec1d a, vec1d n)
               vec4d vec4d_reduce_0n_to_pmhn(vec4d a, vec4d n)
@@ -324,23 +437,32 @@ Other assumptions are not yet documented.
               vec4d vec4d_mulmod(vec4d a, vec4d b, vec4d n, vec4d ninv)
               vec8d vec8d_mulmod(vec8d a, vec8d b, vec8d n, vec8d ninv)
 
-    Return `ab \bmod n` in `[-n,n]` with assumptions.
+    Return an integer congruent to `ab` modulo `n`, in the ranges
+    stated in the contract above. Also available as ``vec2d_mulmod`` on
+    the NEON and generic backends.
 
 .. function:: vec1d vec1d_nmulmod(vec1d a, vec1d b, vec1d n, vec1d ninv)
               vec4d vec4d_nmulmod(vec4d a, vec4d b, vec4d n, vec4d ninv)
               vec8d vec8d_nmulmod(vec8d a, vec8d b, vec8d n, vec8d ninv)
 
-    Return `ab \bmod n` in `[-n,n]` with assumptions.
+    Exactly the negation of ``mulmod``, so an integer congruent to
+    `-ab` modulo `n` in the mirrored ranges. Also available as
+    ``vec2d_nmulmod`` on the NEON and generic backends.
 
 .. function:: vec4n vec4n_addmod(vec4n a, vec4n b, vec4n n)
               vec8n vec8n_addmod(vec8n a, vec8n b, vec8n n)
 
-    Return `a + b \bmod n` in `[0,n)`
+    Return `a + b \bmod n` in `[0,n)` given `a, b \in [0, n)`; any
+    `n \ne 0`, including `n > 2^{63}`, is allowed. Also available as
+    ``vec1n_addmod`` and ``vec2n_addmod`` on the NEON and generic
+    backends.
 
 .. function:: vec4n vec4n_addmod_limited(vec4n a, vec4n b, vec4n n)
               vec8n vec8n_addmod_limited(vec8n a, vec8n b, vec8n n)
 
-    Return `a + b \bmod n` in `[0,n)`, assuming that `n < 2^{63}`.
+    The same with the assumption `n < 2^{63}`, which saves work. Also
+    available as ``vec2n_addmod_limited`` on the NEON and generic
+    backends.
 
 Matrix multiplication
 -------------------------------------------------------------------------------

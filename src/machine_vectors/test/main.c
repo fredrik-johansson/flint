@@ -11,13 +11,21 @@
 
 /* Include functions *********************************************************/
 
+#include "t-ops.c"
+#include "t-mod.c"
 #include "t-gemm.c"
+/* must come last: it clobbers the native VEC4D_TRANSPOSE and
+   vecKn_bit_shift_right_32 macros, see the comments there */
+#include "t-force_generic.c"
 
 /* Array of test functions ***************************************************/
 
 test_struct tests[] =
 {
-    TEST_FUNCTION(machine_vectors_gemm)
+    TEST_FUNCTION(machine_vectors_ops),
+    TEST_FUNCTION(machine_vectors_mod),
+    TEST_FUNCTION(machine_vectors_gemm),
+    TEST_FUNCTION(machine_vectors_force_generic)
 };
 
 /* main function *************************************************************/

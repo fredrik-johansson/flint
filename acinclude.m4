@@ -511,6 +511,30 @@ AC_DEFUN([FLINT_HAVE_FFT_SMALL_X86_I],
 esac])
 
 
+dnl  FLINT_HAVE_FAST_FMA
+dnl  -----------------------
+dnl  Checks if the target has a hardware fused multiply-add, which is
+dnl  announced by FP_FAST_FMA from math.h, or by __FP_FAST_FMA, the macro
+dnl  GCC and clang predefine. Where it is absent, fma()
+dnl  is a software routine, and the generic machine_vectors backend has to
+dnl  reach the exact remainder of a modular product through 64-bit integers
+dnl  instead, which costs fft_small most of its advantage.
+
+AC_DEFUN([FLINT_HAVE_FAST_FMA],
+[AC_CACHE_CHECK([if system has a hardware fused multiply-add],
+                flint_cv_have_fast_fma,
+    [FLINT_PREPROC_IFELSE([AC_LANG_SOURCE([
+            #include <math.h>
+            #if !defined(FP_FAST_FMA) && !defined(__FP_FAST_FMA)
+            #error Dead man
+            error
+            #endif
+        ])],
+        flint_cv_have_fast_fma="yes",
+        flint_cv_have_fast_fma="no")])
+])
+
+
 dnl  FLINT_CHECK_FFT_SMALL([action-success][,action-fail])
 dnl  -----------------------
 dnl  Checks if fft_small module is available.
@@ -522,20 +546,50 @@ AC_REQUIRE([FLINT_HAVE_FFT_SMALL_ARM_H])
 AC_REQUIRE([FLINT_HAVE_FFT_SMALL_ARM_I])
 AC_REQUIRE([FLINT_HAVE_FFT_SMALL_X86_H])
 AC_REQUIRE([FLINT_HAVE_FFT_SMALL_X86_I])
+AC_REQUIRE([FLINT_HAVE_FAST_FMA])
 
+dnl  machine_vectors.h has generic backends, so fft_small no longer needs
+dnl  AVX2 or NEON to build. It does need a 64-bit word size, and it needs
+dnl  the target to have a fused multiply-add: without one the generic
+dnl  backend computes the exact remainder of a modular product through
+dnl  64-bit integer arithmetic, and the transforms come out several times
+dnl  slower, to the point where fft_small based algorithms lose to the
+dnl  ones they would replace. Tuning the thresholds per backend would be
+dnl  the better answer, but until that is done the module stays off where
+dnl  it would not pay, which on x86_64 means a build without AVX2.
 AC_CACHE_CHECK([if system can use FLINT's fft_small module],
                 flint_cv_check_fft_small,
 [flint_cv_check_fft_small="no"
 if test "$flint_cv_abi" = "64";
 then
-    if test "$flint_cv_have_fft_small_arm_h" = "yes" && test "$flint_cv_have_fft_small_arm_i" = "yes";
-    then
-        flint_cv_check_fft_small="yes"
-    fi
-    if test "$flint_cv_have_fft_small_x86_h" = "yes" && test "$flint_cv_have_fft_small_x86_i" = "yes";
-    then
-        flint_cv_check_fft_small="yes"
-    fi
+    case $host in
+        X86_64_PATTERN)
+            if test "$flint_cv_have_fft_small_x86_h" = "yes" \
+                && test "$flint_cv_have_fft_small_x86_i" = "yes";
+            then
+                flint_cv_check_fft_small="yes"
+            elif test "$flint_cv_have_fast_fma" = "yes";
+            then
+                flint_cv_check_fft_small="yes"
+            fi
+            ;;
+        ARM64_PATTERN)
+            if test "$flint_cv_have_fft_small_arm_h" = "yes" \
+                && test "$flint_cv_have_fft_small_arm_i" = "yes";
+            then
+                flint_cv_check_fft_small="yes"
+            elif test "$flint_cv_have_fast_fma" = "yes";
+            then
+                flint_cv_check_fft_small="yes"
+            fi
+            ;;
+        *)
+            if test "$flint_cv_have_fast_fma" = "yes";
+            then
+                flint_cv_check_fft_small="yes"
+            fi
+            ;;
+    esac
 fi
 ])
 

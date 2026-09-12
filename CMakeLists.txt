@@ -144,9 +144,23 @@ else()
     set(FLINT_USES_PTHREAD ON CACHE BOOL "Use POSIX Threads.")
 endif()
 
-# Check if fft_small module is available
+# Check if fft_small module is available. The generic backends in
+# machine_vectors.h mean AVX2 or NEON is no longer needed to build it, but a
+# 64-bit limb is, and so is a hardware fused multiply-add: without one the
+# generic backend reaches the exact remainder of a modular product through
+# 64-bit integer arithmetic and the transforms are several times slower, far
+# enough that fft_small based algorithms lose to the ones they would replace.
+# Per-backend tuning thresholds would be the better answer; until then the
+# module stays off where it would not pay, on x86_64 meaning without AVX2.
 message(STATUS "Checking whether fft_small module is available")
 set(CMAKE_REQUIRED_LIBRARIES gmp::gmp)
+check_c_source_compiles([[
+    #include <gmp.h>
+    #if GMP_LIMB_BITS != 64
+    # error
+    error
+    #endif
+    void main(){};]] FLINT_FFT_SMALL_LIMB64)
 if(HAS_FLAG_ARCH)
     set(CMAKE_REQUIRED_FLAGS "-march=${ENABLE_ARCH}")
 endif()
@@ -154,45 +168,22 @@ if(ENABLE_AVX2)
     set(CMAKE_REQUIRED_FLAGS "${avx2_flag}")
 endif()
 check_c_source_compiles([[
-    #include <gmp.h>
-    #if GMP_LIMB_BITS != 64
+    #include <math.h>
+    #if !defined(FP_FAST_FMA) && !defined(__FP_FAST_FMA)
     # error
     error
     #endif
-
-    #include <arm_neon.h>
-    #if !(defined(__GNUC__) && defined(__ARM_NEON))
-    # if !(defined(_MSC_VER) && defined(_M_ARM64))
+    void main(){};]] FLINT_FFT_SMALL_FMA)
+check_c_source_compiles([[
+    #if !defined(__AVX2__)
+    # if !(defined(__ARM_NEON) || (defined(_MSC_VER) && defined(_M_ARM64)))
     #  error
     error
     # endif
     #endif
-    void main(){};]] FLINT_FFT_SMALL_ARM)
-check_c_source_compiles([[
-    #include <gmp.h>
-    #if GMP_LIMB_BITS != 64
-    # error
-    error
-    #endif
+    void main(){};]] FLINT_FFT_SMALL_NATIVE_BACKEND)
 
-    #if defined(__GNUC__)
-    # include <x86intrin.h>
-    #elif defined(_MSC_VER)
-    # include <intrin.h>
-    #else
-    # error
-    error
-    #endif
-
-    #if !defined(__AVX2__)
-    # error
-    error
-    #endif
-    void main(){};]] FLINT_FFT_SMALL_X86)
-unset(CMAKE_REQUIRED_INCLUDES)
-unset(CMAKE_REQUIRED_FLAGS)
-
-if(FLINT_FFT_SMALL_ARM OR FLINT_FFT_SMALL_X86)
+if(FLINT_FFT_SMALL_LIMB64 AND (FLINT_FFT_SMALL_NATIVE_BACKEND OR FLINT_FFT_SMALL_FMA))
     message(STATUS "Checking whether fft_small module is available - yes")
     set(FFT_SMALL fft_small)
     set(FLINT_HAVE_FFT_SMALL ON)
