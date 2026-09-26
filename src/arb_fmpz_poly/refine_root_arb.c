@@ -90,6 +90,14 @@ arb_fmpz_poly_refine_root_arb(arb_t res, const fmpz_poly_t poly, const arb_t ini
 
     for (step = 0; ; step++)
     {
+        /* The enclosure may already be accurate enough, e.g. after
+           bisections (which are not followed by an accuracy check). */
+        if (step != 0 && arb_rel_accuracy_bits(z) >= 1.1 * prec)
+        {
+            arb_set(res, z);
+            break;
+        }
+
         guard += 1;
 
         wp_new = 2 * arb_rel_accuracy_bits(z);

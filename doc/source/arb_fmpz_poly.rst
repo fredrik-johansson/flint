@@ -119,6 +119,16 @@ do a full squarefree factorization to obtain the multiplicities of the roots::
 
     * *ARB_FMPZ_POLY_ROOTS_VERBOSE*
 
+    * *ARB_FMPZ_POLY_ROOTS_RATIONAL* (only for the *real* version):
+      first compute the rational roots exactly using
+      :func:`fmpz_poly_roots_fmpq`, divide them out, and compute the
+      remaining roots using the general algorithm. The rational roots are
+      output as exact balls if they are dyadic numbers (and otherwise as
+      balls with *prec* accurate bits). This is much faster
+      when the polynomial has many rational roots (e.g. 150 times faster
+      for `\prod_{i=1}^{512} (b_i x - a_i)` with small `a_i, b_i`),
+      but adds some overhead otherwise.
+
 Special polynomials
 -------------------------------------------------------------------------------
 
