@@ -195,6 +195,20 @@ Context objects
 Infinities and NaNs are disabled by default to improve performance,
 as this allows certain functions to skip checks for such values.
 
+.. function:: int nfloat_ctx_set_func_prec(gr_ctx_t ctx, slong prec)
+              slong nfloat_ctx_get_func_prec(gr_ctx_t ctx)
+
+    Sets (gets) the *function precision* of *ctx*: the precision in bits
+    to which the elementary functions (exponentials, logarithms,
+    trigonometric and hyperbolic functions and their inverses, powers)
+    are computed. It defaults to the full precision ``FLINT_BITS *
+    nlimbs`` of the context; a smaller value is clamped to at least 1 bit
+    and makes these functions cheaper. For example, with ``nfloat64``
+    and a function precision of 50 bits, most functions evaluate their
+    kernels with one limb instead of two. The precision of the
+    arithmetic operations is unaffected. Setting a function precision
+    less than 1 returns ``GR_UNABLE``.
+
 Basic operations and arithmetic
 -------------------------------------------------------------------------------
 
@@ -280,8 +294,52 @@ These methods are interchangeable with their ``gr`` counterparts.
               int nfloat_div_ui(nfloat_ptr res, nfloat_srcptr x, ulong y, gr_ctx_t ctx)
               int nfloat_div_si(nfloat_ptr res, nfloat_srcptr x, slong y, gr_ctx_t ctx)
 
+    Division. Without directed rounding, the result is the quotient
+    truncated towards zero or (for divisors of three or more nonzero
+    limbs) possibly one ulp larger in magnitude, so that the error is
+    less than 1 ulp. With directed rounding, the result is the correctly
+    rounded floor or ceiling of the exact quotient.
+    Division by zero gives NaN (``GR_UNABLE`` unless NaNs are allowed).
+
+    For one and two limbs, the mantissas are divided by a fully inlined
+    2/1 respectively two 3/2 divisions, with the dividend shifted right
+    by one bit beforehand when it is larger than the divisor so that
+    the quotient comes out normalized; the remainder gives the exact
+    rounding information. These use hardware division where it is fast
+    (``FLINT_PREINVERT_LIMB_USE_NATIVE``) and a precomputed inverse
+    otherwise. Divisors with a single nonzero limb (for instance,
+    integers) use a chain of 2/1 divisions, `O(n)`.
+    Otherwise, a schoolbook approximate division
+    (:func:`_flint_mpn_divapprox_basecase_preinv1`) computes the
+    quotient or the quotient plus one at the target precision; with
+    directed rounding, one guard limb is computed and the truncation is
+    certified unless the guard limb is 0 or 1 (in which case, for
+    instance for exact quotients, the exact quotient and remainder are
+    computed).
+
 .. function:: int nfloat_sqrt(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_rsqrt(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+    Square root and reciprocal square root. With directed rounding, the
+    result is the correctly rounded floor or ceiling of the exact value.
+
+    The square root is computed exactly (truncated, with an exactness
+    flag) by :func:`flint_mpn_sqrtrem` applied to the mantissa padded
+    to `2n` limbs, so without directed rounding the result is the square
+    root truncated towards zero.
+
+    Without directed rounding, the reciprocal square root has an error
+    less than `1 + 2^{-37}` ulp. For one limb, a double-precision
+    approximation is refined by one Newton step at 128-bit precision, with
+    the residual evaluated exactly. For `n \ge 2` limbs, a fixed-point
+    Newton iteration (from a two-limb starting value computed in the same
+    way, with an added third-order term) yields the result with one guard
+    limb and an error bound of about one unit in the guard limb. With
+    directed rounding, the truncation is certified using the error bounds,
+    and in the rare uncertain cases the exact result
+    `\lfloor \sqrt{\lfloor z \rfloor} \rfloor`, `z = 2^{3nw}/(4a)` or
+    `2^{3nw}/(2a)` in terms of the `n`-limb mantissa `a` and the word size
+    `w`, is computed.
 
 .. function:: int nfloat_sgn(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_im(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
@@ -291,22 +349,149 @@ These methods are interchangeable with their ``gr`` counterparts.
               int nfloat_trunc(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_nint(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
 
-.. function:: int nfloat_pow(nfloat_ptr res, nfloat_srcptr x, nfloat_srcptr y, gr_ctx_t ctx)
-
 .. function:: int nfloat_pi(nfloat_ptr res, gr_ctx_t ctx)
-              int nfloat_exp(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+Elementary functions
+-------------------------------------------------------------------------------
+
+The elementary functions are computed natively, using the fixed-point
+kernels of the :type:`mp_real_t` module on `[0, 1)` (the bitwise and
+reduced-argument kernels; ``nfloat`` precisions never call for bit-burst
+evaluation). The argument reductions and the handling of tiny and huge
+arguments work directly on the ``nfloat`` mantissas, in registers for
+small sizes.
+
+*Accuracy.* The functions are not correctly rounded. Without directed
+rounding, the error is at most about one ulp at the function precision
+of the context (see :func:`nfloat_ctx_set_func_prec`); with
+``NFLOAT_RND_FLOOR`` or ``NFLOAT_RND_CEIL``, the result is a valid lower
+or upper bound of the exact value (within a few ulp at the function
+precision). Exact results are returned in exact special cases (for
+example ``exp(0)``, ``log(1)``, ``sin_pi`` of multiples of 1/2, ``log2``
+of powers of two). Results that over- or underflow the exponent range
+follow the flags of the context. Arguments for which the functions are
+undefined in the reals (for example ``log`` of a negative number, ``asin``
+of `|x| > 1`) give NaN (``GR_UNABLE`` or ``GR_DOMAIN`` unless NaNs are
+allowed).
+
+On 64-bit machines, :func:`nfloat_exp`, :func:`nfloat_log`,
+:func:`nfloat_sin_cos`, :func:`nfloat_sin`, :func:`nfloat_cos` and
+:func:`nfloat_atan` at one and two limbs have in-register fast paths for
+common arguments (for example `|x| < 2^{10}` for the exponential,
+`2^{-33} \le |x| < 2^{32}` for the sine and cosine at one limb): the
+argument reduction on the mantissa, the table-driven kernels of
+:type:`mp_real_t` at two resp. three limbs (shared with its 128- and
+192-bit functions) and the final normalization, without temporary
+arrays. Arguments where the reduced argument would lose too much
+relative accuracy (close to 1 for the logarithm, close to a multiple
+of `\pi/2` for the sine and cosine) take the general path.
+
+Outside the fast paths, the functions wrap the ball functions of
+:type:`mp_real_t` (for example :func:`mp_real_sin_cos_bits`,
+:func:`mp_real_asinh_bits`), evaluated on the exact argument at
+increasing precision until the ball determines the result: this
+handles trigonometric functions of huge arguments (exponent above
+65536, up to `2^{22}`, beyond which ``GR_UNABLE`` is returned), the
+less common functions for arguments whose intermediate results over- or
+underflow, and the maximum precision ``NFLOAT_MAX_LIMBS`` (which leaves
+no room for a guard limb).
+
+.. function:: int nfloat_exp(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_expm1(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_exp2(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_log(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_log1p(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
-              int nfloat_sin(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_log2(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+    Exponentials and logarithms. The exponentials reduce `|x|` modulo
+    `\log 2` in fixed point (with one integral limb); ``expm1`` and
+    ``log1p`` have relative accuracy near zero, and ``exp2`` and ``log2``
+    are exact for integer arguments respectively powers of two.
+
+.. function:: int nfloat_sin(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_cos(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sin_cos(nfloat_ptr res1, nfloat_ptr res2, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_tan(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
-              int nfloat_sinh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sin_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_cos_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sin_cos_pi(nfloat_ptr res1, nfloat_ptr res2, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_tan_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+    Trigonometric functions. The argument is reduced modulo `\pi/2` in
+    fixed point (repeated with more bits when the reduced argument is
+    close to a zero of the output, so that the results have relative
+    accuracy); the functions of `\pi x` reduce `x` modulo 2 exactly.
+
+.. function:: int nfloat_atan(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_atan2(nfloat_ptr res, nfloat_srcptr y, nfloat_srcptr x, gr_ctx_t ctx)
+
+    Arctangents. For `|x| > 1`, ``atan`` uses `\pi/2 - \operatorname{atan}(1/|x|)`;
+    ``atan2`` computes the ratio of the smaller and larger magnitude
+    and adds the octant. ``atan2(0, 0)`` is defined as 0.
+
+.. function:: int nfloat_sinh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_cosh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sinh_cosh(nfloat_ptr res1, nfloat_ptr res2, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_tanh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
-              int nfloat_atan(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
-              int nfloat_gamma(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+    Hyperbolic functions, from `E = \exp(|x|)` and `1/E` (with the
+    difference `E - 1/E` in fixed point for `|x| < 1`).
+
+.. function:: int nfloat_pow(nfloat_ptr res, nfloat_srcptr x, nfloat_srcptr y, gr_ctx_t ctx)
+
+    Power `x^y = \exp(y \log |x|)`, with the sign `(-1)^y` for `x < 0`
+    and integer `y` (NaN for `x < 0` and noninteger `y`).
+    Simple cases (`y = \pm 1, 2, \pm 1/2`, `|x| = 1`, integer powers of
+    powers of two) are handled directly.
+
+.. function:: int nfloat_exp10(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_log10(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_cot(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sec(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_csc(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sinc(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_cot_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sec_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_csc_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sinc_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_coth(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_sech(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_csch(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asin(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acos(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asin_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acos_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_atan_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acot(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asec(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acsc(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acot_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asec_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acsc_pi(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asinh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acosh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_atanh(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acoth(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_asech(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_acsch(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+              int nfloat_hypot(nfloat_ptr res, nfloat_srcptr x, nfloat_srcptr y, gr_ctx_t ctx)
+
+    The less common functions, with compact code: after the exact
+    special values (zeros, poles, `|x| = 1` for the inverse functions,
+    multiples of 1/2 for the functions of `\pi x`), they are evaluated as
+    short compositions of the functions above and arithmetic operations
+    in an internal context with a guard limb (none when the function
+    precision is sufficiently below the precision), using formulas
+    without cancellation (for example `\operatorname{asin}(x) =
+    \operatorname{atan2}(x, \sqrt{(1-x)(1+x)})` and
+    `\operatorname{asinh}(x) = \operatorname{log1p}(|x| + x^2 / (1 + \sqrt{1 + x^2}))`)
+    and a rigorous bound for the composed error, which is added to obtain
+    valid bounds with directed rounding.
+
+.. function:: int nfloat_gamma(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
               int nfloat_zeta(nfloat_ptr res, nfloat_srcptr x, gr_ctx_t ctx)
+
+    These are computed via arb (with an arf result).
 
 Vector functions
 -------------------------------------------------------------------------------
@@ -325,6 +510,22 @@ code for reduced overhead.
               int _nfloat_vec_mul_scalar(nfloat_ptr res, nfloat_srcptr x, slong len, nfloat_srcptr y, gr_ctx_t ctx)
               int _nfloat_vec_addmul_scalar(nfloat_ptr res, nfloat_srcptr x, slong len, nfloat_srcptr y, gr_ctx_t ctx)
               int _nfloat_vec_submul_scalar(nfloat_ptr res, nfloat_srcptr x, slong len, nfloat_srcptr y, gr_ctx_t ctx)
+
+.. function:: int _nfloat_vec_div(nfloat_ptr res, nfloat_srcptr x, nfloat_srcptr y, slong len, gr_ctx_t ctx)
+              int _nfloat_vec_div_scalar(nfloat_ptr res, nfloat_srcptr x, slong len, nfloat_srcptr c, gr_ctx_t ctx)
+              int _nfloat_vec_div_scalar_ui(nfloat_ptr res, nfloat_srcptr x, slong len, ulong c, gr_ctx_t ctx)
+              int _nfloat_vec_div_scalar_si(nfloat_ptr res, nfloat_srcptr x, slong len, slong c, gr_ctx_t ctx)
+
+    Vector division, with the same results as the corresponding scalar
+    functions except that :func:`_nfloat_vec_div_scalar` for three or more
+    limbs (and a divisor with two or more nonzero limbs) may give a
+    different result within 1 ulp without directed rounding. The
+    elementwise division inlines the one- and two-limb kernels. Division by
+    a scalar precomputes the one-limb inverse, the 3/2 inverse, or for
+    three or more limbs an approximate reciprocal with one guard limb,
+    so that each quotient costs one high product of `n + 1` limbs; with
+    directed rounding the truncation is certified using the guard limb and
+    otherwise recomputed by exact division.
 
 .. function:: int _nfloat_vec_dot(nfloat_ptr res, nfloat_srcptr initial, int subtract, nfloat_srcptr x, nfloat_srcptr y, slong len, gr_ctx_t ctx)
               int _nfloat_vec_dot_rev(nfloat_ptr res, nfloat_srcptr initial, int subtract, nfloat_srcptr x, nfloat_srcptr y, slong len, gr_ctx_t ctx)
@@ -439,6 +640,80 @@ real pairs.
               int nfloat_complex_mat_nonsingular_solve_triu(gr_mat_t X, const gr_mat_t L, const gr_mat_t B, int unit, gr_ctx_t ctx)
               int nfloat_complex_mat_lu(slong * rank, slong * P, gr_mat_t LU, const gr_mat_t A, int rank_check, gr_ctx_t ctx)
 
+.. function:: int nfloat_complex_exp(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_expm1(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_exp_pi_i(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_exp2(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_exp10(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_log(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_log1p(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_log_pi_i(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_log2(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_log10(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sin(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_cos(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sin_cos(nfloat_complex_ptr res1, nfloat_complex_ptr res2, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_tan(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_cot(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sec(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_csc(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sin_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_cos_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sin_cos_pi(nfloat_complex_ptr res1, nfloat_complex_ptr res2, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_tan_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_cot_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sec_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_csc_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sinc(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sinc_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sinh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_cosh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sinh_cosh(nfloat_complex_ptr res1, nfloat_complex_ptr res2, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_tanh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_coth(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_sech(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_csch(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asin(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acos(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_atan(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acot(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asec(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acsc(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asinh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acosh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_atanh(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acoth(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asech(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acsch(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asin_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acos_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_atan_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acot_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_asec_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_acsc_pi(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
+              int nfloat_complex_pow(nfloat_complex_ptr res, nfloat_complex_srcptr x, nfloat_complex_srcptr y, gr_ctx_t ctx)
+
+    Complex elementary functions, as compositions of the real functions.
+    Real arguments in the real domain of a function use the real
+    function. Otherwise the formulas avoid cancellation except where the
+    function itself is ill-conditioned, for example
+    `\tan(a+bi) = (\sin a \cos a \operatorname{sech}^2 b + i \tanh b) /
+    (\cos^2 a \operatorname{sech}^2 b + \tanh^2 b)`,
+    `\log |z| = \operatorname{log1p}((p-1)(p+1) + q^2)/2` for
+    `\max(|a|,|b|) = p \in [1/2, 2)`,
+    `\operatorname{atan}(z)` by Kahan-type formulas with ``atan2`` and
+    ``log1p``, and ``asin``, ``acos`` and ``acosh`` by Kahan's formulas
+    using square roots of `1 \pm z`. The branch cuts are those of
+    :type:`acb_t`. The hyperbolic functions and their inverses
+    are evaluated as trigonometric functions of `iz`, and the
+    reciprocal functions as reciprocals (respectively as functions of
+    `1/z`). There are no internal guard bits: each component typically
+    has an error of a few ulp relative to the magnitude of the result
+    (a small component of a large result can have a large relative
+    error), and directed rounding is not supported. Integer powers
+    `|y| < 2^{16}` are computed by binary exponentiation, other powers as
+    `\exp(y \log x)`.
+
 Packed fixed-point arithmetic
 -------------------------------------------------------------------------------
 
@@ -552,12 +827,15 @@ correctly in combination with the ``NFLOAT_ALLOW_UNDERFLOW`` flag.
   * ``vec_dot_rev``
   * ``mat_mul``
 
+* Real elementary functions (``exp``, ``log``, ``sin``, ``atan``, ``pow``, etc.;
+  see above), which return valid bounds (not correctly rounded results).
+
 The following operations currently **do not** respect the rounding mode:
 
 * Fused operations and generic algorithms other than those above
 * ``set_str``
 * ``set_other`` except for the types listed above
 * Mixed arithmetic operations with an ``other``, ``fmpz`` or ``fmpq`` operand
-* Transcendental functions
+* Other transcendental functions (``gamma``, ``zeta``)
 * ``nfloat_complex`` operations
 

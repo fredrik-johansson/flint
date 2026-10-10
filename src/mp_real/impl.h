@@ -523,6 +523,7 @@ void _mp_real_const_zeta5_compute(mp_real_t res, slong n);
 void _mp_real_const_gamma_1_3_compute(mp_real_t res, slong n);
 void _mp_real_const_gamma_1_4_compute(mp_real_t res, slong n);
 void _mp_real_const_2_div_pi_compute(mp_real_t res, slong n);
+void _mp_real_const_inv_log2_frac_compute(mp_real_t res, slong n);
 
 /* ball-valued workers of the logarithm and arctangent (newton.c,
    log_agm.c) for a fixed-point input */
@@ -676,7 +677,7 @@ _mp_real_series_sin_cos(nn_ptr ysin, nn_ptr yg, nn_srcptr x, slong n, flint_bitc
         _mp_real_series_rs_sin_cos(ysin, yg, x, n, r, 0);
 }
 
-/* floor(c B^n) for c = pi/4, log 2, 2/pi, n limbs (without copying):
+/* floor(c B^n) for c = pi/4, log 2, 2/pi, 1/log 2 - 1, n limbs (without copying):
    the static tables up to MP_REAL_CONST_STATIC_N limbs, the per-thread
    cache beyond (valid until the next growth of that entry) */
 nn_srcptr _mp_real_const_cached_ptr(int which, slong n);
@@ -684,6 +685,7 @@ slong _mp_real_const_cached_limbs(int which);
 #define MP_REAL_CONST_ID_PI4 0
 #define MP_REAL_CONST_ID_LOG2 1
 #define MP_REAL_CONST_ID_2_DIV_PI 10
+#define MP_REAL_CONST_ID_INV_LOG2_FRAC 11
 
 FLINT_FORCE_INLINE nn_srcptr
 _mp_real_const_ptr(int which, slong n)
@@ -692,7 +694,8 @@ _mp_real_const_ptr(int which, slong n)
     {
         const ulong * t = (which == MP_REAL_CONST_ID_PI4) ? _mp_real_const_pi4_static
             : (which == MP_REAL_CONST_ID_LOG2) ? _mp_real_const_log2_static
-            : _mp_real_const_2_div_pi_static;
+            : (which == MP_REAL_CONST_ID_2_DIV_PI) ? _mp_real_const_2_div_pi_static
+            : _mp_real_const_inv_log2_frac_static;
         return t + MP_REAL_CONST_STATIC_N - n;
     }
     return _mp_real_const_cached_ptr(which, n);
@@ -934,6 +937,15 @@ void _mp_real_sin_cos_eval(mp_real_t rs, mp_real_t rc, nn_srcptr v, slong n,
    3 ulps; returns a + 4 [s < 0] (sin_cos.c) */
 int _mp_real_trig_reduce(nn_ptr W, const mp_real_t x, slong n);
 
+/* the exact reduction of an exact x mod 2 for the functions of pi x:
+   |x| = a/2 + s t, t in [0, 1/4], returning a + 4 [s < 0], with
+   t = (T, *tl) B^(*te - *tl), T's top limb nonzero (*tl = 0 for t = 0),
+   *te <= 0; T has room for x->size limbs.  And (V, N) = (pi/4) 4t B^N
+   (= pi t) at N fraction limbs, below the exact value by less than 3
+   ulps (trig_pi.c) */
+int _mp_real_trig_pi_reduce(nn_ptr T, slong * tl, slong * te, const mp_real_t x);
+void _mp_real_trig_pi_v_fixed(nn_ptr V, nn_srcptr T, slong tl, slong te, slong N);
+
 /* (y, n + 1) = tan v for v in [0, 1) at n fraction limbs (the tangent
    series or sin and 1 - cos of the reduced argument and a division for
    small v, else the per-size, bitwise or diophantine kernels, or sin,
@@ -1073,21 +1085,130 @@ MP_REAL_DEFAULT_R_INLINE(log1p, LOG1P)
 MP_REAL_DEFAULT_R_INLINE(atan, ATAN)
 MP_REAL_DEFAULT_R_INLINE(trig, TRIG)
 
+/* Short divisions for the two-limb kernels, computing the same quotients
+   as flint_mpn_tdiv_qr with 3/2 divisions in registers (hardware 2/1
+   divisions or a 3/2 inverse, according to FLINT_PREINVERT_LIMB_USE_NATIVE) */
+
+#if FLINT_PREINVERT_LIMB_USE_NATIVE
+#define _MP_REAL_UDIV_QR_3BY2(q, r1, r0, n2, n1, n0, d1, d0, dinv) \
+    FLINT_MPN_UDIV_QR_3BY2_HW(q, r1, r0, n2, n1, n0, d1, d0)
+#define _MP_REAL_PREINV1(d1, d0) UWORD(0)
+#else
+#define _MP_REAL_UDIV_QR_3BY2(q, r1, r0, n2, n1, n0, d1, d0, dinv) \
+    FLINT_MPN_UDIV_QR_3BY2(q, r1, r0, n2, n1, n0, d1, d0, dinv)
+#define _MP_REAL_PREINV1(d1, d0) flint_mpn_preinv1(d1, d0)
+#endif
+
+/* (q[1], q[0]) = floor((n3, n2, n1, n0) / (d1, d0)) for a normalized
+   divisor (d1 >= B/2) with (n3, n2) < (d1, d0) */
+FLINT_FORCE_INLINE void
+_mp_real_divq_4_2(nn_ptr q, ulong n3, ulong n2, ulong n1, ulong n0, ulong d1, ulong d0)
+{
+    ulong q1, q0, r1, r0, s1, s0, dinv;
+
+    dinv = _MP_REAL_PREINV1(d1, d0);
+    (void) dinv;
+    _MP_REAL_UDIV_QR_3BY2(q1, r1, r0, n3, n2, n1, d1, d0, dinv);
+    _MP_REAL_UDIV_QR_3BY2(q0, s1, s0, r1, r0, n0, d1, d0, dinv);
+    (void) s1;
+    (void) s0;
+    q[1] = q1;
+    q[0] = q0;
+}
+
+/* (q[1], q[0]) = floor((y1, y0, 0, 0) / (s2, s1, s0)) for s2 != 0, given
+   that the quotient is below B^2 (schoolbook with 3/2 divisions by the
+   top two limbs of the normalized divisor, each quotient limb at most one
+   too large, as in GMP's mpn_sbpi1_div_qr) */
+FLINT_FORCE_INLINE void
+_mp_real_divq_4_3z(nn_ptr q, ulong y1, ulong y0, ulong s2, ulong s1, ulong s0)
+{
+    ulong d2, d1, d0, u2, u1, u0, qq, r1, r0, p1, p0, dinv;
+    unsigned int sh;
+    int j;
+
+    FLINT_ASSERT(s2 != 0);
+
+    sh = flint_clz(s2);
+    if (sh != 0)
+    {
+        d2 = (s2 << sh) | (s1 >> (FLINT_BITS - sh));
+        d1 = (s1 << sh) | (s0 >> (FLINT_BITS - sh));
+        d0 = s0 << sh;
+        u2 = y1 >> (FLINT_BITS - sh);
+        u1 = (y1 << sh) | (y0 >> (FLINT_BITS - sh));
+        u0 = y0 << sh;
+    }
+    else
+    {
+        d2 = s2; d1 = s1; d0 = s0;
+        u2 = 0; u1 = y1; u0 = y0;
+    }
+
+    /* the partial remainder (u2, u1, u0) < (d2, d1, d0), followed by zero
+       limbs */
+    dinv = _MP_REAL_PREINV1(d2, d1);
+    (void) dinv;
+
+    for (j = 1; j >= 0; j--)
+    {
+        if (FLINT_UNLIKELY(u2 == d2 && u1 == d1))
+        {
+            /* the quotient limb is B - 1 (u0 < d0): the remainder is
+               (u2, u1, u0, 0) - (B - 1) D = D - (0, d0 - u0, 0) */
+            qq = ~UWORD(0);
+            sub_dddmmmsss(u2, u1, u0, d2, d1, d0, UWORD(0), d0 - u0, UWORD(0));
+        }
+        else
+        {
+            int neg;
+
+            _MP_REAL_UDIV_QR_3BY2(qq, r1, r0, u2, u1, u0, d2, d1, dinv);
+            /* (r1, r0, 0) - qq d0, negative at most once */
+            umul_ppmm(p1, p0, qq, d0);
+            neg = (r1 == 0) & ((r0 < p1) | ((r0 == p1) & (p0 != 0)));
+            sub_dddmmmsss(u2, u1, u0, r1, r0, UWORD(0), UWORD(0), p1, p0);
+            if (FLINT_UNLIKELY(neg))
+            {
+                qq--;
+                add_sssaaaaaa(u2, u1, u0, u2, u1, u0, d2, d1, d0);
+            }
+        }
+
+        q[j] = qq;
+    }
+}
+
+#include "small.h"
+
 /* the per-size kernels called directly, as the bitwise functions'
    r = 0 dispatch does after its layers of checks: return 0 (nothing
    done) beyond the per-size range, else 1 with *err the bound those
    functions return (exp 9 r + 100, log1p 3 r + 64, atan 4 r + 64,
-   sin/cos 6 r + 128) */
+   sin/cos 6 r + 128), or at two and three limbs the table-driven
+   kernels of small.h with their smaller bounds */
 #if FLINT_BITS == 64
 #define MP_REAL_OPT_CASE_1(name, k, res, x) \
     case k: _mp_real_##name##_opt_##k(res, x); break;
 FLINT_FORCE_INLINE int
 _mp_real_exp_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 {
+    /* the table-driven kernels at two and three limbs (small.h) */
+    if (n == 2)
+    {
+        _mp_real_small_exp_2_mpn(res, err, x);
+        return 1;
+    }
+    if (n == 3)
+    {
+        _mp_real_small_exp_3_mpn(res, err, x);
+        return 1;
+    }
+
     switch (n)
     {
-        MP_REAL_OPT_CASE_1(exp, 1, res, x) MP_REAL_OPT_CASE_1(exp, 2, res, x)
-        MP_REAL_OPT_CASE_1(exp, 3, res, x) MP_REAL_OPT_CASE_1(exp, 4, res, x)
+        MP_REAL_OPT_CASE_1(exp, 1, res, x)
+        MP_REAL_OPT_CASE_1(exp, 4, res, x)
         MP_REAL_OPT_CASE_1(exp, 5, res, x) MP_REAL_OPT_CASE_1(exp, 6, res, x)
         MP_REAL_OPT_CASE_1(exp, 7, res, x)
         default: return 0;
@@ -1099,10 +1220,21 @@ _mp_real_exp_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 FLINT_FORCE_INLINE int
 _mp_real_log1p_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 {
+    if (n == 2)
+    {
+        _mp_real_small_log1p_2_mpn(res, err, x);
+        return 1;
+    }
+    if (n == 3)
+    {
+        _mp_real_small_log1p_3_mpn(res, err, x);
+        return 1;
+    }
+
     switch (n)
     {
-        MP_REAL_OPT_CASE_1(log1p, 1, res, x) MP_REAL_OPT_CASE_1(log1p, 2, res, x)
-        MP_REAL_OPT_CASE_1(log1p, 3, res, x) MP_REAL_OPT_CASE_1(log1p, 4, res, x)
+        MP_REAL_OPT_CASE_1(log1p, 1, res, x)
+        MP_REAL_OPT_CASE_1(log1p, 4, res, x)
         MP_REAL_OPT_CASE_1(log1p, 5, res, x) MP_REAL_OPT_CASE_1(log1p, 6, res, x)
         MP_REAL_OPT_CASE_1(log1p, 7, res, x)
         default: return 0;
@@ -1114,10 +1246,21 @@ _mp_real_log1p_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 FLINT_FORCE_INLINE int
 _mp_real_atan_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 {
+    if (n == 2)
+    {
+        _mp_real_small_atan_2_mpn(res, err, x);
+        return 1;
+    }
+    if (n == 3)
+    {
+        _mp_real_small_atan_3_mpn(res, err, x);
+        return 1;
+    }
+
     switch (n)
     {
-        MP_REAL_OPT_CASE_1(atan, 1, res, x) MP_REAL_OPT_CASE_1(atan, 2, res, x)
-        MP_REAL_OPT_CASE_1(atan, 3, res, x) MP_REAL_OPT_CASE_1(atan, 4, res, x)
+        MP_REAL_OPT_CASE_1(atan, 1, res, x)
+        MP_REAL_OPT_CASE_1(atan, 4, res, x)
         MP_REAL_OPT_CASE_1(atan, 5, res, x) MP_REAL_OPT_CASE_1(atan, 6, res, x)
         MP_REAL_OPT_CASE_1(atan, 7, res, x)
         default: return 0;
@@ -1131,9 +1274,20 @@ _mp_real_atan_opt(nn_ptr res, ulong * err, nn_srcptr x, slong n)
 FLINT_FORCE_INLINE int
 _mp_real_sin_cos_opt(nn_ptr ysin, nn_ptr ycos, ulong * err, nn_srcptr x, slong n)
 {
+    if (n == 2)
+    {
+        _mp_real_small_sin_cos_2_mpn(ysin, ycos, err, x);
+        return 1;
+    }
+    if (n == 3)
+    {
+        _mp_real_small_sin_cos_3_mpn(ysin, ycos, err, x);
+        return 1;
+    }
+
     switch (n)
     {
-        MP_REAL_OPT_CASE_SC(1) MP_REAL_OPT_CASE_SC(2) MP_REAL_OPT_CASE_SC(3)
+        MP_REAL_OPT_CASE_SC(1)
         MP_REAL_OPT_CASE_SC(4) MP_REAL_OPT_CASE_SC(5) MP_REAL_OPT_CASE_SC(6)
         MP_REAL_OPT_CASE_SC(7) MP_REAL_OPT_CASE_SC(8) MP_REAL_OPT_CASE_SC(9)
         MP_REAL_OPT_CASE_SC(10) MP_REAL_OPT_CASE_SC(11) MP_REAL_OPT_CASE_SC(12)
@@ -1213,6 +1367,96 @@ _mp_real_submul_1_small(nn_ptr X, nn_srcptr L, slong N, ulong q)
             default: (res) = mpn_submul_1(X, L, N, q); break; \
         } \
     } while (0)
+
+/* The exponential's reduction modulo log 2 (exp.c, and the nfloat
+   exponentials): with X holding |x| < 2^(FLINT_BITS - 2) in a frame of
+   N fraction limbs and one integral limb, q = _mp_real_exp_quotient of
+   its top two limbs x1 + x0/B is |x| / log 2 or one less: with
+   1/log 2 = 1 + R/B^2, R = (R1, R0) the top fraction limbs of 1/log 2,
+   the product is x1 + h1 + (x0 + l1 + hi(x1 R0))/B plus positive terms
+   below 2/B (h1 B + l1 = x1 R1), which are dropped before flooring. */
+FLINT_FORCE_INLINE ulong
+_mp_real_exp_quotient(ulong x1, ulong x0)
+{
+    nn_srcptr R = _mp_real_const_inv_log2_frac_static + MP_REAL_CONST_STATIC_N - 2;
+    ulong h, l, c, u, s1, s0;
+
+    umul_ppmm(h, l, x1, R[1]);
+    umul_ppmm(c, u, x1, R[0]);
+    (void) u;
+    add_ssaaaa(s1, s0, UWORD(0), x0, UWORD(0), l);
+    add_ssaaaa(s1, s0, s1, s0, UWORD(0), c);
+    (void) s0;
+    return x1 + h + s1;
+}
+
+/* The reduction step: X holds |x| (neg = 0) or its two's complement
+   B^(N+1) - |x| (neg = 1) in the frame above, L = floor(log 2 B^N) and q
+   from _mp_real_exp_quotient. One pass X - q L resp. X + (q + 1) L, and
+   one more L if q was one low, leaves t = |x| - q L resp. (q + 1) L - |x|
+   in [0, L] in X (X[N] = 0), and returns k with x = k log 2 + t: k = q
+   resp. -(q + 1) (up to that correction). */
+FLINT_FORCE_INLINE slong
+_mp_real_exp_reduce_step(nn_ptr X, nn_srcptr L, slong N, ulong q, int neg)
+{
+    ulong cy;
+
+    if (!neg)
+    {
+        MP_REAL_SUBMUL_1(cy, X, L, N, q);
+        X[N] -= cy;
+        if (X[N] != 0 || mpn_cmp(X, L, N) >= 0)
+        {
+            /* q was one low */
+            X[N] -= mpn_sub_n(X, X, L, N);
+            q++;
+        }
+        FLINT_ASSERT(X[N] == 0);
+        return (slong) q;
+    }
+    else
+    {
+        q++;
+        MP_REAL_ADDMUL_1(cy, X, L, N, q);
+        X[N] += cy;
+        if (X[N] != 0)
+        {
+            /* negative (q was one low): one more L */
+            X[N] += mpn_add_n(X, X, L, N);
+            q++;
+        }
+        FLINT_ASSERT(X[N] == 0);
+        return -(slong) q;
+    }
+}
+
+/* (y, n + 1) = exp(v) for v in [0, 1) at n fraction limbs: the kernel
+   mp_real_exp_bits uses (the reduced series for small v, per-size,
+   bitwise, diophantine or notab by n); err <= 9r + 100 with r <= 768
+   the bitwise parameter, less for the others (exp.c) */
+void _mp_real_exp_kernel(nn_ptr y, ulong * err, nn_srcptr v, slong n);
+
+/* (y, n + 1) = exp(-v) for v in [0, 1) at n fraction limbs by the
+   alternating series (or cosh - sinh) when v has enough leading zero
+   bits for the series to beat the reduction and the kernel, returning
+   1 (err <= 10); else returns 0 and leaves y alone (exp.c) */
+int _mp_real_exp_neg_series(nn_ptr y, ulong * err, nn_srcptr v, slong n);
+
+/* (y, n) = atan(v) for v in [0, 1) at n fraction limbs: the kernel
+   mp_real_atan_bits uses (series for small v, per-size or bitwise, or
+   Newton beyond 600 limbs); err <= 4r + 64 (atan.c) */
+void _mp_real_atan_kernel(nn_ptr y, ulong * err, nn_srcptr v, slong n);
+
+/* (y, n) = log1p(v) for v in [0, 1) at n <= 600 fraction limbs: the
+   per-size or bitwise kernel of mp_real_log_bits; err <= 3r + 64
+   (log.c) */
+void _mp_real_log1p_kernel(nn_ptr y, ulong * err, nn_srcptr v, slong n);
+
+/* the number of leading zero bits of s = |u - 1| from which
+   log(1 +- s) = +-2 atanh(s / (2 +- s)) by the atanh series beats the
+   log1p kernel, at n kernel limbs, for u above 1 (above = 1) resp.
+   below (log.c) */
+slong _mp_real_log_series_min_z(slong n, int above);
 
 /* |x| < 1 as the fraction (v, n): read in place when x's top limb is
    the frame's top limb and x has at least n limbs (the common case),
@@ -1338,6 +1582,17 @@ _mp_real_elem_set_trunc(mp_real_t res, const mp_real_t m, slong k)
     res->exp = e;
     res->negative = neg;
     res->err = dropped;
+}
+
+/* The exponent e2 of a remainder bound 2^e2 for a result of magnitude
+   below 2^emid at prec bits, raised to emid - prec - 2 FLINT_BITS when
+   smaller: still a valid bound, of negligible relative size, which pads
+   the mantissa by at most a few limbs beyond prec bits rather than down
+   to 2^e2 (B^(2^55) limbs for the tiniest arguments). */
+FLINT_FORCE_INLINE slong
+_mp_real_err_exp_clamp(slong e2, slong emid, slong prec)
+{
+    return FLINT_MAX(e2, emid - prec - 2 * FLINT_BITS);
 }
 
 /* the ball [0 +- 2^e] resp. [1 +- 2^e] */

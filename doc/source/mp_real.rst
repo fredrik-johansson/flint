@@ -543,6 +543,7 @@ Constants
               void mp_real_const_gamma_1_3(mp_real_t res, slong n, int cache)
               void mp_real_const_gamma_1_4(mp_real_t res, slong n, int cache)
               void mp_real_const_2_div_pi(mp_real_t res, slong n, int cache)
+              void mp_real_const_inv_log2_frac(mp_real_t res, slong n, int cache)
               void _mp_real_const_pi4(nn_ptr res, ulong * err, slong n, int cache)
               void _mp_real_const_log2(nn_ptr res, ulong * err, slong n, int cache)
               void _mp_real_const_euler(nn_ptr res, ulong * err, slong n, int cache)
@@ -554,16 +555,19 @@ Constants
               void _mp_real_const_gamma_1_3(nn_ptr res, ulong * err, slong n, int cache)
               void _mp_real_const_gamma_1_4(nn_ptr res, ulong * err, slong n, int cache)
               void _mp_real_const_2_div_pi(nn_ptr res, ulong * err, slong n, int cache)
+              void _mp_real_const_inv_log2_frac(nn_ptr res, ulong * err, slong n, int cache)
 
     The constants `c = \pi/4`, `\log 2`, Euler's constant `\gamma`,
     `e`, `\log 10`, Catalan's constant `G`, `\zeta(3)`, `\zeta(5)`,
-    `\Gamma(1/3)`, `\Gamma(1/4)` and `2/\pi` (for argument reduction
-    by `\pi/2`).
+    `\Gamma(1/3)`, `\Gamma(1/4)`, `2/\pi` (for argument reduction
+    by `\pi/2`) and `1/\log 2 - 1` (for the quotient of the reduction
+    by `\log 2`, whose top limbs :func:`mp_real_exp_bits` and the
+    ``nfloat`` exponential read from the static table).
 
     The ball versions set *res* to a ball for `c` accurate to about `n`
     limbs.  The limb versions set *res* to EXACTLY
     `\lfloor c B^n \rfloor` -- `n` limbs for the constants below 1
-    (`\pi/4`, `\log 2`, `\gamma`, `G`, `2/\pi`), `n + 1` limbs with a
+    (`\pi/4`, `\log 2`, `\gamma`, `G`, `2/\pi`, `1/\log 2 - 1`), `n + 1` limbs with a
     units limb for the others -- and set *err* (if not ``NULL``) to 1, a
     bound on `c - \lfloor c B^n \rfloor B^{-n}` in ulps.  A floor is
     computed from a ball at a few guard limbs, retried with more guard
@@ -959,7 +963,8 @@ Elementary functions
     absolute accuracy suffices.
 
     At few limbs the four functions call the per-size kernels
-    (``*_opt_<n>.c``) directly, take their guard bits from the per-size
+    (the table-driven kernels of `Table-driven kernels at two and three
+    limbs`_ at `n = 2, 3`, ``*_opt_<n>.c`` otherwise) directly, take their guard bits from the per-size
     reduction parameters (``MP_REAL_*_OPT_R`` in ``impl.h``) and read
     the argument's limbs in place.
 
@@ -967,6 +972,65 @@ Elementary functions
     normal range: scalings by powers of `B` go through
     ``d_mul_2exp_inrange`` with clamped exponents, so no call raises
     ``FE_UNDERFLOW``.
+
+.. function:: int mp_real_log1p_bits(mp_real_t res, const mp_real_t x, slong prec)
+              void mp_real_expm1_bits(mp_real_t res, const mp_real_t x, slong prec)
+              void mp_real_sinh_cosh_bits(mp_real_t res1, mp_real_t res2, const mp_real_t x, slong prec)
+              void mp_real_tanh_bits(mp_real_t res, const mp_real_t x, slong prec)
+              int mp_real_asin_bits(mp_real_t res, const mp_real_t x, slong prec)
+              int mp_real_acos_bits(mp_real_t res, const mp_real_t x, slong prec)
+              void mp_real_asinh_bits(mp_real_t res, const mp_real_t x, slong prec)
+              int mp_real_acosh_bits(mp_real_t res, const mp_real_t x, slong prec)
+              int mp_real_atanh_bits(mp_real_t res, const mp_real_t x, slong prec)
+
+    Set *res* (*res1* to `\sinh`, *res2* to `\cosh`, either may be
+    ``NULL``) to a ball containing `\operatorname{log1p}(y) = \log(1+y)`,
+    `\operatorname{expm1}(y) = e^y - 1`, `\sinh(y)`, `\cosh(y)`,
+    `\tanh(y)`, `\operatorname{asin}(y)`, `\operatorname{acos}(y)`,
+    `\operatorname{asinh}(y)`, `\operatorname{acosh}(y)` resp.
+    `\operatorname{atanh}(y)` for every `y` in the ball *x*, to a
+    relative accuracy of about `2^{-\mathrm{prec}}`, or less as the
+    radius allows; the outputs may alias *x*.
+
+    The functions are compositions of :func:`mp_real_exp_bits`,
+    :func:`mp_real_log_bits` and :func:`mp_real_atan_bits` by formulas
+    without cancellation, so that the results keep their relative
+    accuracy at the zeros of the functions:
+    `\operatorname{log1p}(y) = \log(1 + y)` with `1 + y` formed exactly
+    (or to `\mathrm{prec} + z` bits for `|y| < 2^{-z}`);
+    `\operatorname{expm1}` from `\exp` at `\mathrm{prec} + z` bits;
+    `\sinh` and `\cosh` from `\operatorname{expm1}(\pm m)`;
+    `\tanh(m) = \operatorname{expm1}(2m) / (\operatorname{expm1}(2m) + 2)`;
+    `\operatorname{asin}(m) = \operatorname{atan}(m / \sqrt{(1-m)(1+m)})`
+    and `\operatorname{acos}(m) = 2 \operatorname{atan}(\sqrt{(1-m)/(1+m)})`
+    with the differences `1 \pm m` exact;
+    `\operatorname{asinh}(m) = \operatorname{log1p}(|m| + m^2 / (1 + \sqrt{1 + m^2}))`;
+    `\operatorname{acosh}(m) = \operatorname{log1p}(d + \sqrt{d (m + 1)})`
+    with `d = m - 1` exact; and
+    `\operatorname{atanh}(m) = \operatorname{log1p}(2|m| / (1 - |m|))/2`.
+    Tiny and huge arguments are handled by the leading terms with a
+    bounded remainder (`m`, `\log(2|m|)`, `\pm 1`), without forming
+    `m^2` (whose exponent could leave the safe range); the values
+    `\operatorname{asin}(\pm 1)`, `\operatorname{acos}(\pm 1)` and
+    `\operatorname{acosh}(1)` are exact.
+
+    The midpoint `m` is evaluated as given, and the radius `\rho` enters
+    through a bound for the variation over the ball: for example
+    `\rho \cosh(|m| + \rho)` for `\sinh`, `4 \rho e^{-2(|m| - \rho)}`
+    for `\tanh`, `\rho / (|m| - \rho)` for large asinh arguments,
+    `\rho / \sqrt{1 - |m| - \rho}` for asin and acos (or
+    `2 \sqrt{1 - |m| + \rho}` for a ball reaching close to `\pm 1`), and
+    `\rho / (1 - |m| - \rho)` for atanh.
+
+    The functions returning ``int`` return 1, or 0 with *res* set to
+    zero when the ball is not certified to lie in the domain: `1 + y > 0`
+    for log1p, `|y| < 1` for atanh, and for asin, acos and acosh
+    `|y| \le 1` resp. `y \ge 1` for an exact argument and strictly
+    inside for an inexact one.  :func:`mp_real_expm1_bits` and
+    :func:`mp_real_sinh_cosh_bits` throw like :func:`mp_real_exp_bits`
+    for `y \ge 2^{\mathrm{FLINT\_BITS} - 5}` resp.
+    `|y| \ge 2^{\mathrm{FLINT\_BITS} - 5}` (expm1 of large negative
+    arguments gives `-1` with a tiny radius).
 
 .. function:: void mp_real_exp_notab_log2(mp_real_t res, const mp_real_t x, slong n)
               void mp_real_exp_notab_squaring(mp_real_t res, const mp_real_t x, slong n)
@@ -1408,6 +1472,56 @@ The logarithm and the arctangent use the bitwise reduction up to 600
 limbs, and above that one Newton-Taylor step over the diophantine
 exponential resp. sine and cosine (or the AGM, for the logarithm; see
 `Newton-Taylor inverses and the AGM logarithm`_).
+
+Table-driven kernels at two and three limbs
+~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
+
+On 64-bit machines, the kernels at two and three fraction limbs (the
+dispatchers ``_mp_real_exp_opt``, ``_mp_real_log1p_opt``,
+``_mp_real_sin_cos_opt``, ``_mp_real_atan_opt`` in ``impl.h``, and through
+them the elementary functions at 128 and 192 bits and the native
+``nfloat`` functions at one and two limbs) are short table-driven
+evaluations in registers, defined as inline functions in
+``src/mp_real/small.h``, with static tables (``small_tables.c``,
+generated by ``dev/gen_mp_real_small_tables.py``, every entry at three
+limbs so that both sizes share them):
+
+* exp: `v = j_1/2^7 + j_2/2^{14} (+ j_3/2^{21}) + r` with tables of
+  `\exp(j/2^7)` and `\exp(j/2^{14}) - 1`, `\exp(j/2^{21}) - 1`
+  (128 entries each), and a Taylor polynomial in `r`;
+* log1p: a multiplicative reduction over three resp. four levels of 7
+  bits with short one-limb factors `1 - D_k[j]` (exact products) and
+  tables of `-\log(1 - D_k[j])`, then the Taylor polynomial of
+  `\log(1 + u)`, `u < 2^{-21}` resp. `2^{-28}`;
+* sin and cos: the pairs `(\sin c, 1 - \cos c)` for `c = j/2^7` and
+  `j/2^{14}` combined with the Taylor polynomials of the remainder by
+  angle addition;
+* atan: `\operatorname{atan}(v) = \operatorname{atan}(c) +
+  \operatorname{atan}(w)`, `c = j/2^9`, `w = (v - c)/(1 + vc) <
+  2^{-9}` by a division in registers, and the odd series in `w`.
+
+The polynomials taper their precision (one limb for the innermost terms
+on a scaled argument, then two, then three) and the products keep the
+top limbs only. The scalar cores (``_mp_real_small_exp_2`` and so on,
+on and to limbs passed in registers) are shared with the ``nfloat``
+fast paths.
+
+.. function:: void _mp_real_small_exp_2_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+              void _mp_real_small_exp_3_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+              void _mp_real_small_log1p_2_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+              void _mp_real_small_log1p_3_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+              void _mp_real_small_sin_cos_2_mpn(nn_ptr ys, nn_ptr yc, ulong * err, nn_srcptr v)
+              void _mp_real_small_sin_cos_3_mpn(nn_ptr ys, nn_ptr yc, ulong * err, nn_srcptr v)
+              void _mp_real_small_atan_2_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+              void _mp_real_small_atan_3_mpn(nn_ptr y, ulong * err, nn_srcptr v)
+
+    For `v \in [0, 1)` at `n = 2` resp. `3` fraction limbs, set *y* to
+    `\exp(v)` (`n + 1` limbs, with an integral limb), `\log(1 + v)`
+    (`n` limbs), `\sin(v)` and `\cos(v)` (*ys*, *yc*, `n + 1` limbs each)
+    resp. `\operatorname{atan}(v)` (`n` limbs), and *err* to a bound for
+    the error in ulps of `B^{-n}` (in either direction; between 16 and
+    64). The contract is that of the other fixed-point kernels. Only
+    available with 64-bit limbs.
 
 Series evaluation
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

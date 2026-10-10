@@ -447,7 +447,7 @@ _tan_small(mp_real_t res, const mp_real_t x, slong prec)
 
     if (res != x)
         mp_real_set(res, x);
-    mp_real_add_error_2exp_si(res, 3 * e - 1);
+    mp_real_add_error_2exp_si(res, _mp_real_err_exp_clamp(3 * e - 1, e, prec));
     return 1;
 }
 

@@ -1355,18 +1355,52 @@ nfloat_complex_inv(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx
         return status;
     }
 
-    ulong a2[NFLOAT_MAX_ALLOC];
-    ulong b2[NFLOAT_MAX_ALLOC];
-    ulong t[NFLOAT_MAX_ALLOC];
+    {
+        ulong a2[NFLOAT_MAX_ALLOC];
+        ulong b2[NFLOAT_MAX_ALLOC];
+        ulong t[NFLOAT_MAX_ALLOC];
+        slong ea = NFLOAT_EXP(a), eb = NFLOAT_EXP(b), e, lim;
 
-    /* todo: improve */
-    status = nfloat_sqr(a2, a, ctx);
-    status |= nfloat_sqr(b2, b, ctx);
-    status |= nfloat_add(t, a2, b2, ctx);
-    status |= nfloat_div(r, a, t, ctx);
-    status |= nfloat_div(s, b, t, ctx);
-    status |= nfloat_neg(s, s, ctx);
-    return status;
+        /* (a - bi) / (a^2 + b^2), avoiding spurious over- and underflow */
+        lim = FLINT_BITS / 2 * NFLOAT_CTX_NLIMBS(ctx) + 2;
+
+        if (ea - eb > lim)
+        {
+            /* 1/a - (b/a)/a i, the relative error below one ulp */
+            status = nfloat_div(t, b, a, ctx);
+            status |= nfloat_div(s, t, a, ctx);
+            status |= nfloat_inv(r, a, ctx);
+            status |= nfloat_neg(s, s, ctx);
+            return status;
+        }
+
+        if (eb - ea > lim)
+        {
+            /* (a/b)/b - 1/b i */
+            status = nfloat_div(t, a, b, ctx);
+            status |= nfloat_div(r, t, b, ctx);
+            status |= nfloat_inv(s, b, ctx);
+            status |= nfloat_neg(s, s, ctx);
+            return status;
+        }
+
+        /* scale by 2^-e (exact) */
+        e = FLINT_MAX(ea, eb);
+        nfloat_set(a2, a, ctx);
+        nfloat_set(b2, b, ctx);
+        NFLOAT_EXP(a2) -= e;
+        NFLOAT_EXP(b2) -= e;
+
+        status = nfloat_sqr(t, a2, ctx);
+        status |= nfloat_sqr(s, b2, ctx);
+        status |= nfloat_add(t, t, s, ctx);
+        status |= nfloat_div(r, a2, t, ctx);
+        status |= nfloat_div(s, b2, t, ctx);
+        status |= nfloat_neg(s, s, ctx);
+        status |= nfloat_mul_2exp_si(r, r, -e, ctx);
+        status |= nfloat_mul_2exp_si(s, s, -e, ctx);
+        return status;
+    }
 }
 
 int
@@ -1446,7 +1480,7 @@ nfloat_complex_div(nfloat_complex_ptr res, nfloat_complex_srcptr x, nfloat_compl
     return status;
 }
 
-static int
+int
 nfloat_complex_sqrt(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
 {
     nfloat_srcptr a, b;
@@ -1533,7 +1567,7 @@ nfloat_complex_sqrt(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ct
     return status;
 }
 
-static int
+int
 nfloat_complex_rsqrt(nfloat_complex_ptr res, nfloat_complex_srcptr x, gr_ctx_t ctx)
 {
     nfloat_srcptr a, b;
@@ -1957,9 +1991,7 @@ gr_method_tab_input _nfloat_complex_methods_input[] =
     {GR_METHOD_GET_FMPZ_2EXP_FMPZ, (gr_funcptr) nfloat_complex_get_fmpz_2exp_fmpz},
 */
 
-/*
     {GR_METHOD_POW,             (gr_funcptr) nfloat_complex_pow},
-*/
 /*
     {GR_METHOD_POW_UI,          (gr_funcptr) nfloat_complex_pow_ui},
     {GR_METHOD_POW_SI,          (gr_funcptr) nfloat_complex_pow_si},
@@ -1994,18 +2026,58 @@ gr_method_tab_input _nfloat_complex_methods_input[] =
 
     {GR_METHOD_I,               (gr_funcptr) nfloat_complex_i},
     {GR_METHOD_PI,              (gr_funcptr) nfloat_complex_pi},
-/*
     {GR_METHOD_EXP,             (gr_funcptr) nfloat_complex_exp},
     {GR_METHOD_EXPM1,           (gr_funcptr) nfloat_complex_expm1},
+    {GR_METHOD_EXP_PI_I,        (gr_funcptr) nfloat_complex_exp_pi_i},
+    {GR_METHOD_EXP2,            (gr_funcptr) nfloat_complex_exp2},
+    {GR_METHOD_EXP10,           (gr_funcptr) nfloat_complex_exp10},
     {GR_METHOD_LOG,             (gr_funcptr) nfloat_complex_log},
     {GR_METHOD_LOG1P,           (gr_funcptr) nfloat_complex_log1p},
+    {GR_METHOD_LOG_PI_I,        (gr_funcptr) nfloat_complex_log_pi_i},
+    {GR_METHOD_LOG2,            (gr_funcptr) nfloat_complex_log2},
+    {GR_METHOD_LOG10,           (gr_funcptr) nfloat_complex_log10},
     {GR_METHOD_SIN,             (gr_funcptr) nfloat_complex_sin},
     {GR_METHOD_COS,             (gr_funcptr) nfloat_complex_cos},
     {GR_METHOD_TAN,             (gr_funcptr) nfloat_complex_tan},
+    {GR_METHOD_COT,             (gr_funcptr) nfloat_complex_cot},
+    {GR_METHOD_SEC,             (gr_funcptr) nfloat_complex_sec},
+    {GR_METHOD_CSC,             (gr_funcptr) nfloat_complex_csc},
+    {GR_METHOD_SIN_PI,          (gr_funcptr) nfloat_complex_sin_pi},
+    {GR_METHOD_COS_PI,          (gr_funcptr) nfloat_complex_cos_pi},
+    {GR_METHOD_TAN_PI,          (gr_funcptr) nfloat_complex_tan_pi},
+    {GR_METHOD_COT_PI,          (gr_funcptr) nfloat_complex_cot_pi},
+    {GR_METHOD_SEC_PI,          (gr_funcptr) nfloat_complex_sec_pi},
+    {GR_METHOD_CSC_PI,          (gr_funcptr) nfloat_complex_csc_pi},
+    {GR_METHOD_SINC,            (gr_funcptr) nfloat_complex_sinc},
+    {GR_METHOD_SINC_PI,         (gr_funcptr) nfloat_complex_sinc_pi},
     {GR_METHOD_SINH,            (gr_funcptr) nfloat_complex_sinh},
     {GR_METHOD_COSH,            (gr_funcptr) nfloat_complex_cosh},
     {GR_METHOD_TANH,            (gr_funcptr) nfloat_complex_tanh},
+    {GR_METHOD_COTH,            (gr_funcptr) nfloat_complex_coth},
+    {GR_METHOD_SECH,            (gr_funcptr) nfloat_complex_sech},
+    {GR_METHOD_CSCH,            (gr_funcptr) nfloat_complex_csch},
+    {GR_METHOD_ASIN,            (gr_funcptr) nfloat_complex_asin},
+    {GR_METHOD_ACOS,            (gr_funcptr) nfloat_complex_acos},
     {GR_METHOD_ATAN,            (gr_funcptr) nfloat_complex_atan},
+    {GR_METHOD_ACOT,            (gr_funcptr) nfloat_complex_acot},
+    {GR_METHOD_ASEC,            (gr_funcptr) nfloat_complex_asec},
+    {GR_METHOD_ACSC,            (gr_funcptr) nfloat_complex_acsc},
+    {GR_METHOD_ASINH,           (gr_funcptr) nfloat_complex_asinh},
+    {GR_METHOD_ACOSH,           (gr_funcptr) nfloat_complex_acosh},
+    {GR_METHOD_ATANH,           (gr_funcptr) nfloat_complex_atanh},
+    {GR_METHOD_ACOTH,           (gr_funcptr) nfloat_complex_acoth},
+    {GR_METHOD_ASECH,           (gr_funcptr) nfloat_complex_asech},
+    {GR_METHOD_ACSCH,           (gr_funcptr) nfloat_complex_acsch},
+    {GR_METHOD_ASIN_PI,         (gr_funcptr) nfloat_complex_asin_pi},
+    {GR_METHOD_ACOS_PI,         (gr_funcptr) nfloat_complex_acos_pi},
+    {GR_METHOD_ATAN_PI,         (gr_funcptr) nfloat_complex_atan_pi},
+    {GR_METHOD_ACOT_PI,         (gr_funcptr) nfloat_complex_acot_pi},
+    {GR_METHOD_ASEC_PI,         (gr_funcptr) nfloat_complex_asec_pi},
+    {GR_METHOD_ACSC_PI,         (gr_funcptr) nfloat_complex_acsc_pi},
+    {GR_METHOD_SIN_COS,         (gr_funcptr) nfloat_complex_sin_cos},
+    {GR_METHOD_SIN_COS_PI,      (gr_funcptr) nfloat_complex_sin_cos_pi},
+    {GR_METHOD_SINH_COSH,       (gr_funcptr) nfloat_complex_sinh_cosh},
+/*
     {GR_METHOD_GAMMA,            (gr_funcptr) nfloat_complex_gamma},
     {GR_METHOD_ZETA,             (gr_funcptr) nfloat_complex_zeta},
 */
@@ -2055,6 +2127,7 @@ nfloat_complex_ctx_init(gr_ctx_t ctx, slong prec, int flags)
     NFLOAT_CTX_NLIMBS(ctx) = nlimbs;
     NFLOAT_CTX_FLAGS(ctx) = flags;
     NFLOAT_CTX_RND(ctx) = 0;
+    NFLOAT_CTX_FUNC_PREC(ctx) = nlimbs * FLINT_BITS;
 
     ctx->methods = _nfloat_complex_methods;
 

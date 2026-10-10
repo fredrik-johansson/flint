@@ -87,22 +87,17 @@ FLINT_FORCE_INLINE void
 _mp_real_mulhi_3x2(ulong * r2, ulong * r1, ulong * r0,
     ulong a2, ulong a1, ulong a0, ulong b1, ulong b0)
 {
-    ulong t2, t1, t0, ph, pl;
+    ulong t2, t1, x2, x1, x0, h1, h0, ph, pl, qh, ql;
 
-    umul_ppmm(t2, t1, a2, b1);          /* weight 4 */
-    t0 = 0;
-    umul_ppmm(ph, pl, a1, b1);          /* weight 3 */
-    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), ph, pl);
-    umul_ppmm(ph, pl, a2, b0);          /* weight 3 */
-    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), ph, pl);
-    ph = n_mulhi(a0, b1);               /* weight 2: high word only */
-    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), UWORD(0), ph);
-    ph = n_mulhi(a1, b0);               /* weight 2: high word only */
-    add_sssaaaaaa(t2, t1, t0, t2, t1, t0, UWORD(0), UWORD(0), ph);
-
-    *r0 = t0;
-    *r1 = t1;
-    *r2 = t2;
+    h0 = n_mulhi(a0, b1);
+    add_ssaaaa(h1, h0, UWORD(0), h0, UWORD(0), n_mulhi(a1, b0));
+    umul_ppmm(ph, pl, a1, b1);
+    umul_ppmm(qh, ql, a2, b0);
+    add_sssaaaaaa(x2, x1, x0, UWORD(0), ph, pl, UWORD(0), qh, ql);
+    add_sssaaaaaa(x2, x1, x0, x2, x1, x0, UWORD(0), h1, h0);
+    umul_ppmm(t2, t1, a2, b1);
+    add_ssaaaa(*r2, *r1, t2, t1, x2, x1);
+    *r0 = x0;
 }
 
 #endif /* MP_REAL_HAND_MULHI_INC */

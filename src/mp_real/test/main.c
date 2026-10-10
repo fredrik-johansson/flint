@@ -30,6 +30,7 @@
 #include "t-sin_cos_pi.c"
 #include "t-tan_bits.c"
 #include "t-trig_pi.c"
+#include "t-tiny_arg.c"
 #include "t-exp_log_atan_bits.c"
 #include "t-rel_tab.c"
 #include "t-sin_cos_diophantine.c"
@@ -37,6 +38,7 @@
 #include "t-sin_cos_sum_bs.c"
 #include "t-dfloat_conv.c"
 #include "t-div_newton.c"
+#include "t-elem_composed.c"
 #include "t-sqrt_newton.c"
 #include "t-set_fmpz_trunc.c"
 #include "t-unique_integer.c"
@@ -85,6 +87,7 @@ test_struct tests[] =
     TEST_FUNCTION(mp_real_sin_cos_pi),
     TEST_FUNCTION(mp_real_tan_bits),
     TEST_FUNCTION(mp_real_trig_pi),
+    TEST_FUNCTION(mp_real_tiny_arg),
     TEST_FUNCTION(mp_real_exp_log_atan_bits),
     TEST_FUNCTION(mp_real_rel_tab),
     TEST_FUNCTION(mp_real_sin_cos_diophantine),
@@ -92,6 +95,7 @@ test_struct tests[] =
     TEST_FUNCTION(mp_real_sin_cos_sum_bs),
     TEST_FUNCTION(mp_real_dfloat_conv),
     TEST_FUNCTION(mp_real_div_newton),
+    TEST_FUNCTION(mp_real_elem_composed),
     TEST_FUNCTION(mp_real_sqrt_newton),
     TEST_FUNCTION(mp_real_tab_bsplit),
     TEST_FUNCTION(mp_real_arith),

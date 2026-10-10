@@ -158,7 +158,7 @@ _at_mid(mp_real_t res, const mp_real_t m, slong prec)
         {
             /* |atan m - m| <= |m|^3/3 */
             _mp_real_elem_set_trunc(res, m, wp);
-            mp_real_add_error_2exp_si(res, 3 * emid - 1);
+            mp_real_add_error_2exp_si(res, _mp_real_err_exp_clamp(3 * emid - 1, emid, prec));
             return;
         }
 
@@ -353,4 +353,12 @@ mp_real_atan_bits(mp_real_t res, const mp_real_t x, slong prec)
         else
             _mp_real_elem_add_rad(res, xerr, xanc);
     }
+}
+
+/* the wrapper for the other files (see impl.h) */
+
+void
+_mp_real_atan_kernel(nn_ptr y, ulong * err, nn_srcptr v, slong n)
+{
+    _at_kernel(y, err, v, n);
 }

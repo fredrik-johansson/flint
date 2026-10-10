@@ -46,7 +46,8 @@ enum
 {
     C_PI4 = MP_REAL_CONST_ID_PI4, C_LOG2 = MP_REAL_CONST_ID_LOG2, C_EULER,
     C_E, C_LOG10, C_CATALAN, C_ZETA3, C_ZETA5, C_GAMMA_1_3, C_GAMMA_1_4,
-    C_2_DIV_PI = MP_REAL_CONST_ID_2_DIV_PI, C_NUM
+    C_2_DIV_PI = MP_REAL_CONST_ID_2_DIV_PI,
+    C_INV_LOG2_FRAC = MP_REAL_CONST_ID_INV_LOG2_FRAC, C_NUM
 };
 
 static const _const_info_t _const_info[C_NUM] = {
@@ -61,6 +62,7 @@ static const _const_info_t _const_info[C_NUM] = {
     { _mp_real_const_gamma_1_3_compute, 1 },
     { _mp_real_const_gamma_1_4_compute, 1 },
     { _mp_real_const_2_div_pi_compute, 0 },
+    { _mp_real_const_inv_log2_frac_compute, 0 },
 };
 
 /* entry i holds floor(c B^_const_n[i]) in _const_n[i] + units limbs */
@@ -165,8 +167,8 @@ _mp_real_const_cached_ptr(int id, slong n)
 }
 
 /* the number of limbs the per-thread cache holds for id (0 if none;
-   the static tables cover MP_REAL_CONST_STATIC_N limbs of pi/4, log 2
-   and 2/pi regardless): lets a caller choose an algorithm that avoids
+   the static tables cover MP_REAL_CONST_STATIC_N limbs of pi/4, log 2,
+   2/pi and 1/log 2 - 1 regardless): lets a caller choose an algorithm that avoids
    a constant not yet computed */
 slong
 _mp_real_const_cached_limbs(int id)
@@ -220,3 +222,4 @@ DEF_CONST(zeta5, C_ZETA5)
 DEF_CONST(gamma_1_3, C_GAMMA_1_3)
 DEF_CONST(gamma_1_4, C_GAMMA_1_4)
 DEF_CONST(2_div_pi, C_2_DIV_PI)
+DEF_CONST(inv_log2_frac, C_INV_LOG2_FRAC)

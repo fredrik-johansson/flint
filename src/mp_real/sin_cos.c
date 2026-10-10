@@ -214,18 +214,18 @@ _sc_eval(mp_real_t rs, mp_real_t rc, nn_srcptr v, slong n, ulong eps,
 /* sin, cos of a small exact x, |x| < 2^e: sin x = x, cos x = 1 up to
    x^3/6 < 2^(3e-2) and x^2/2 = 2^(2e-1) */
 static void
-_sc_small1(mp_real_t rs, mp_real_t rc, const mp_real_t x, slong e)
+_sc_small1(mp_real_t rs, mp_real_t rc, const mp_real_t x, slong e, slong prec)
 {
     if (rs != NULL)
     {
         mp_real_set(rs, x);
         rs->err = 0;
-        mp_real_add_error_2exp_si(rs, 3 * e - 2);
+        mp_real_add_error_2exp_si(rs, _mp_real_err_exp_clamp(3 * e - 2, e, prec));
     }
     if (rc != NULL)
     {
         mp_real_set_ui(rc, 1);
-        mp_real_add_error_2exp_si(rc, 2 * e - 1);
+        mp_real_add_error_2exp_si(rc, _mp_real_err_exp_clamp(2 * e - 1, 1, prec));
     }
 }
 
@@ -554,7 +554,7 @@ mp_real_sin_cos_bits(mp_real_t rs, mp_real_t rc, const mp_real_t x, slong prec)
         if (rc != NULL)
         {
             mp_real_set_ui(rc, 1);
-            mp_real_add_error_2exp_si(rc, FLINT_MIN(2 * e - 1, 1));
+            mp_real_add_error_2exp_si(rc, FLINT_MIN(_mp_real_err_exp_clamp(2 * e - 1, 1, prec), 1));
         }
         return;
     }
@@ -619,7 +619,7 @@ mp_real_sin_cos_bits(mp_real_t rs, mp_real_t rc, const mp_real_t x, slong prec)
         slong z = -emid;
 
         if (2 * z >= prec + 3)
-            _sc_small1(rs, rc, &mid, emid);
+            _sc_small1(rs, rc, &mid, emid, prec);
         else if (4 * z >= prec + 3)
             _sc_small2(rs, rc, &mid, emid,
                 (prec + z + 6 + FLINT_BITS - 1) / FLINT_BITS,
