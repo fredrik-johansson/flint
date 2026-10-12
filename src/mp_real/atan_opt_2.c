@@ -197,7 +197,7 @@ _mp_real_atan_opt_2(nn_ptr res, nn_srcptr x)
         nd[1] = 0;
         nd[2] = y0;
         nd[3] = y1;
-        flint_mpn_tdiv_qr(t, nd, nd, 4, S, 3);
+        _mp_real_divq_4_3z(t, nd[3], nd[2], S[2], S[1], S[0]);
     }
     else
     {

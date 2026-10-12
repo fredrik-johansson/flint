@@ -501,3 +501,20 @@ mp_real_log_bits(mp_real_t res, const mp_real_t x, slong prec)
         return 1;
     }
 }
+
+/* the wrappers for the other files (see impl.h) */
+
+void
+_mp_real_log1p_kernel(nn_ptr y, ulong * err, nn_srcptr v, slong n)
+{
+    FLINT_ASSERT(n <= LG_BITWISE_MAX);
+
+    if (!_mp_real_log1p_opt(y, err, v, n))
+        _mp_real_log1p_bitwise_rs(y, err, v, n, 0);
+}
+
+slong
+_mp_real_log_series_min_z(slong n, int above)
+{
+    return _lg_series_min_z(n, above ? 1 : 0);
+}

@@ -90,7 +90,7 @@ _mp_real_trig_opt_2(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
     int c;
     ulong t[2], u[2], wx[3], wy[3];
     ulong T[2], D[3], h[2], A[2], B[2], C[2];
-    ulong S[2], N[4], R[3], rem[2], v[2];
+    ulong S[2], N[4], R[3], v[2];
     slong * used;
     TMP_INIT;
 
@@ -163,7 +163,7 @@ _mp_real_trig_opt_2(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
         else
             c = 2;
 
-        flint_mpn_tdiv_qr(R, rem, N, 4, S, 2);
+        _mp_real_divq_4_2(R, N[3], N[2], N[1], N[0], S[1], S[0]);
 
         if (ysin != NULL)
         {
@@ -208,7 +208,7 @@ _mp_real_trig_opt_2(nn_ptr ysin, nn_ptr ycos, nn_ptr ytan,
         }
         c += 2;
 
-        flint_mpn_tdiv_qr(R, rem, N, 4, S, 2);
+        _mp_real_divq_4_2(R, N[3], N[2], N[1], N[0], S[1], S[0]);
 
         _mp_real_mulhi_2x2_sloppy(v + 1, v, A[1], A[0], R[1], R[0]);
         ytan[2] = v[1] >> (FLINT_BITS - c);

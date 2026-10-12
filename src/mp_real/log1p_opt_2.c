@@ -62,7 +62,7 @@ _mp_real_log1p_opt_2(nn_ptr res, nn_srcptr x)
 {
     const int r = 16;
     ulong p1 = 0, p0 = 0, d1 = x[1], d0 = x[0], a1 = 0, a0 = 0;
-    ulong t2[2], w[2], S[3], nd[4], rem[4];
+    ulong t2[2], w[2], S[3], nd[4];
     slong i, nc;
 
 
@@ -107,7 +107,7 @@ _mp_real_log1p_opt_2(nn_ptr res, nn_srcptr x)
     nd[3] = d1;
     t2[0] = t2[1] = 0;
     if (d1 != 0 || d0 != 0)
-        flint_mpn_tdiv_qr(t2, rem, nd, 4, S, 3);
+        _mp_real_divq_4_3z(t2, nd[3], nd[2], S[2], S[1], S[0]);
 
     /* generated atanh series for t < 2^-16 (single denominator
        division by truncated-inverse multiplication) */
