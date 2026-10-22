@@ -138,7 +138,9 @@ These programs use [](ca) and [](qqbar) and are described in
 [](tutorials/exact/identities), `binet` (with `swinnerton_dyer_poly`) in
 [](tutorials/exact/number-fields), `huge_expr` in
 [](tutorials/exact/expressions), and `dft` (with `hilbert_matrix_ca`) in
-[](tutorials/exact/linear-algebra).
+[](tutorials/exact/linear-algebra). With the flag `-castle`, `machin`,
+`huge_expr`, `dft` and `hilbert_matrix_ca` run the same computation in
+castle arithmetic ([](gr_ca)).
 
 | Program | What it does | Example |
 |---|---|---|
@@ -147,3 +149,4 @@ These programs use [](ca) and [](qqbar) and are described in
 | `machin` | Verifies variations of Machin's formula for $\pi$ | `machin` |
 | `huge_expr` | Proves the equality of two algebraic numbers given by large expressions with nested square roots | `huge_expr` |
 | `dft` | Verifies the identity $\mathrm{DFT}^{-1}(\mathrm{DFT}(x)) = x$ exactly for vectors of exact real numbers such as $x_k = \sqrt{k + 2}$ or $\log(k + 2)$ | `dft 8` |
+| `number_field_bench` | Times arithmetic and linear algebra over $\mathbb{Q}(\zeta_N)$ and $\mathbb{Q}(\sqrt{D})$ with `ca`, castle fields and `nf` | `number_field_bench 64 -163` |

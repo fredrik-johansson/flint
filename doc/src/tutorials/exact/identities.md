@@ -181,3 +181,12 @@ sets, taking about a second in total. A row that is not proved is reported as un
 the relation search does not find or cannot prove the integer relation,
 with large coefficients, between the many logarithms involved, and the
 zero test has no other way to prove the identity (see [](algorithms/exact/zero-testing)).
+
+With the flag `-castle` (and an optional maximal number of terms, 48 by
+default), `machin` checks the same formulas in a castle field
+([](gr_ca)), and proves every row of every tabulated set, the
+arctangent and hyperbolic sets with up to 48 terms, in about three
+seconds in total. The relation search of castle arithmetic looks for the
+integer relation between exactly the logarithms that a row involves and
+proves it by an exact test of the corresponding multiplicative relation
+([](algorithms/exact/zero-testing#richardson)).

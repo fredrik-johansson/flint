@@ -572,6 +572,41 @@ versions take two-limb integers (unsigned, respectively signed in two's
 complement) stored as pairs of `ulong`, low limb first.
 :::
 
+::: function
+slong acb_lindep(fmpz_mat_t rel, acb_srcptr vec, slong len, slong prec)
+
+Searches for integer linear relations between the entries of the real or
+complex vector `vec` of length `len`, using LLL. `rel` must have `len`
+rows and `len` columns; the relations found are stored in its first
+rows (the others are set to zero) and their number is returned. The
+result is a heuristic candidate set, to be verified by exact means.
+
+::: details
+The working precision is the minimum of `prec` and the relative accuracy
+of `vec` (the difference between the largest magnitude and the largest
+error magnitude among the entries). The lattice spanned by the identity
+matrix extended with the scaled real parts (and imaginary parts, for a
+nonreal vector) rounded to integers is LLL-reduced with 95% of the bits
+of the working precision, the remaining bits validating the relations:
+the rows of the reduced basis whose linear combination of `vec` contains
+zero are returned in order. The combinations are evaluated with
+`acb_dot_fmpz`, exactly (only the radii of `vec` contribute to the
+radius) when the midpoints of `vec` span at most about $16 \cdot
+\mathit{prec}$ bits of binary exponents, so that rounding errors cannot
+make a row with a nonzero residual pass the validation, and otherwise at
+a precision exceeding the working precision by the size of the
+coefficients and of `len`.
+
+The validation does not prove the existence or nonexistence of a
+relation, and relations whose coefficients are large relative to the
+precision may be missed. The first row is the relation that
+`_qqbar_acb_lindep` would find; the further rows are the other
+independent relations of the reduced basis, useful when the relation
+lattice has dimension larger than one. An infinite or NaN entry gives no
+relations; if all midpoints are zero, the unit vectors are returned.
+:::
+:::
+
 ## Powers and roots {#powers}
 
 ::: function

@@ -634,6 +634,16 @@ entries in $R$. See [](gr_mat/solve).
 :::
 
 ::: function
+int gr_mat_nonsingular_solve_generic(gr_mat_t X, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+
+The default algorithm selection of `gr_mat_nonsingular_solve` (the
+method of rings without a specialised one): `gr_mat_nonsingular_solve_lu`
+over inexact rings and rings that pretend to be fields, and otherwise
+`gr_mat_nonsingular_solve_fflu`. Available to the implementation of a
+ring which handles some cases itself and falls back on the default.
+:::
+
+::: function
 int gr_mat_nonsingular_solve_lu_precomp(gr_mat_t X, const slong * perm, const gr_mat_t LU, const gr_mat_t B, gr_ctx_t ctx)
 int gr_mat_nonsingular_solve_fflu_precomp(gr_mat_t X, const slong * perm, const gr_mat_t LU, const gr_mat_t B, gr_ctx_t ctx)
 

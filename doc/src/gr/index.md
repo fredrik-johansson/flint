@@ -618,8 +618,9 @@ Sets `res` to the value of the expression `x`, parsed by
 `gr_generic_set_str` unless the ring overrides it. Expressions may use
 integer and decimal literals (`2.5e-3`, converted with
 `gr_set_fmpz_10exp_fmpz`), `+ - * / ^`, parentheses, the generators of
-the ring and its base rings by name, the constants `pi`, `i`, `inf` and
-`nan`, functions such as `sqrt`, `exp`, `log` and `gamma`, ball
+the ring and its base rings by name, the constants `pi`, `i`, `inf`,
+`nan`, `euler` and `catalan`, functions such as `sqrt`, `exp`, `log`,
+`gamma`, `erf` and `modular_j`, ball
 notation `m +/- r`, and `O(x^n)` in series rings; see
 `gr_generic_set_str_expr`. Returns `GR_UNABLE` if the string cannot be
 parsed and propagates the status of the arithmetic (for example

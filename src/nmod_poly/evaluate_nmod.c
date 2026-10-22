@@ -186,9 +186,9 @@ _nmod_poly_evaluate_nmod_precomp_lazy(nn_srcptr poly, slong len, ulong c, ulong 
 
 /* if 3*mod.n - 1 <= 2**FLINT_BITS, can use the lazy variant */
 #if FLINT_BITS == 64
-#define LAZY_MAX UWORD(6148914691236517205)
+#define CA_MAX UWORD(6148914691236517205)
 #else
-#define LAZY_MAX UWORD(1431655765)
+#define CA_MAX UWORD(1431655765)
 #endif
 
 ulong
@@ -216,7 +216,7 @@ _nmod_poly_evaluate_nmod(nn_srcptr poly, slong len, ulong c, nmod_t mod)
 
     const ulong modn = mod.n;
 
-    if (modn <= LAZY_MAX)
+    if (modn <= CA_MAX)
     {
         const ulong c_precomp = n_mulmod_precomp_shoup(c, modn);
         ulong val = _nmod_poly_evaluate_nmod_precomp_lazy(poly, len, c, c_precomp, modn);

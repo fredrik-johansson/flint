@@ -6,6 +6,12 @@ category: Exact real and complex numbers
 order: 6
 ---
 
+::: note The legacy design
+This module belongs to the legacy design of exact real and complex
+numbers ([](ca)); in castle arithmetic, its role is played by the
+towers of [](gr_tower).
+:::
+
 An *extension number* is a fixed real or complex number $a$ that serves
 as a generator of the fields $\mathbb{Q}(a_1, \ldots, a_n)$ in which
 `ca_t` numbers are represented (see [](ca) and [](ca_field)). A

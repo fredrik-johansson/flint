@@ -178,9 +178,31 @@ it equals the trace. With `-qqbar` it computes the eigenvalues with
 $\binom{n}{\lfloor n/2 \rfloor}$, so this is much slower for large $n$.
 
 `dft N` computes the transform for several input sequences selected by
-`-input i`: integers, square roots, logarithms, roots of unity and
-reciprocals such as $1/(1 + \pi \sqrt{n + 2})$. For logarithms and $\pi$, the fields
+`-input i`: integers, square roots, logarithms, roots of unity,
+reciprocals such as $1/(1 + \pi \sqrt{n + 2})$ and large integers
+$(k + 2)^{1000}$ and $(k + 2)^{10000}$ (inputs 6 and 7). For logarithms and $\pi$, the fields
 contain transcendental generators and the zero test does the final
 verification. The option `-timing` selects whether fields are cached
 between repeated runs, which shows the cost of constructing fields and
 finding relations compared with the arithmetic itself.
+
+With the flag `-castle`, both programs run in a castle field
+([](gr_ca)). `hilbert_matrix_ca -castle n` computes the eigenvalues as
+roots of the characteristic polynomial in a splitting tower: each root
+after the first is adjoined over the previous ones as a root of the
+quotient of the polynomial by the linear factors found so far, without
+an irreducibility proof ([](algorithms/exact/castle-roots#splitting)), so
+that the sum and the product of the eigenvalues reduce to the
+coefficients of the characteristic polynomial by the relations of the
+tower. The verification takes 0.4 seconds for $n = 16$, 10 seconds for
+$n = 20$ and 45 seconds for $n = 22$, while the `ca` version needs
+minutes from $n = 10$. `dft -castle N` proves the identity for
+roots of unity (input 3) up to length 128 in about eight seconds, where
+the `ca` version fails to prove it at length 64; for $1/(1 + \pi
+\sqrt{k + 2})$ (input 5) length 32 takes six seconds, where the `ca`
+version takes more than five minutes; for $1/(1 + (k + 2)\pi)$ (input 4)
+the two versions take about the same time (17 seconds at length 64);
+and the large integers of inputs 6 and 7 are three to four times faster.
+The option `-cyclo D` sets the option
+`GR_TOWER_OPT_CYCLOTOMIC_DEGREE_LIMIT` of the castle field, and `-gens F`
+its generator flags (`gr_ca_ctx_set_gen_flags`).

@@ -183,13 +183,24 @@ Parse the expression `s` and evaluate it in the ring. `gr_generic_set_str` is `g
 The grammar has integer literals, decimal literals with an optional exponent (`1.25e-3`, evaluated with `gr_set_fmpz_10exp_fmpz`), the binary operators `+`, `-`, `*`, `/` and `^`, unary minus, parentheses, and:
 
 * the generators of the ring and of its base rings, by the names given by `gr_gens_recursive` and `gr_ctx_gen_name`;
-* the constants `pi`, `i`, `inf` and `nan` (also `Pi`, `I`, `Inf`, `NaN`), when the ring has them;
-* the functions `abs`, `sgn`, `arg`, `inv`, `sqrt`, `rsqrt`, `floor`, `ceil`, `nint`, `re`, `im`, `conj`, `fac`, `log`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinpi`, `cospi`, `tanpi`, `gamma` and `zeta` of one argument;
+* the constants `pi`, `i`, `inf` and `nan` (also `Pi`, `I`, `Inf`, `NaN`), `euler` (Euler's constant $\gamma$) and `catalan` (Catalan's constant $G$), when the ring has them;
+* the functions `abs`, `sgn`, `arg`, `inv`, `sqrt`, `rsqrt`, `floor`, `ceil`, `nint`, `re`, `im`, `conj`, `fac`, `log`, `exp`, `sin`, `cos`, `tan`, `asin`, `acos`, `atan`, `sinh`, `cosh`, `tanh`, `asinh`, `acosh`, `atanh`, `sinpi`, `cospi`, `tanpi`, `gamma`, `rgamma`, `digamma`, `zeta`, `erf`, `erfc`, `erfi`, `lambertw` (the principal branch), `dilog`, `elliptic_k`, `elliptic_e`, `modular_j`, `modular_lambda`, `modular_delta` and `dedekind_eta` of one argument;
 * the ball notation `m +/- r`, evaluated with `gr_set_interval_mid_rad`, and `m +/- inf` with `gr_set_interval_mid_inf`, which does not require `inf` to be an element;
 * `O(x^n)`, evaluated with `gr_big_o_base_fmpz` without forming $x^n$.
 
 Exponents are nonnegative integer literals unless `GR_PARSE_RING_EXPONENTS` is set. The status of every operation is propagated, so `"1/2"` in $\Z$ returns `GR_DOMAIN`; a syntax error returns `GR_UNABLE`.
 :::
+:::
+
+::: function
+int gr_generic_set_str_expr_terminals(gr_ptr res, const char * s, int flags, const char ** names, gr_srcptr values, slong num, int use_gens, gr_ctx_t ctx)
+
+Like `gr_generic_set_str_expr`, with the `num` named terminals `names`
+bound to the elements `values` of the ring, in addition to (if
+`use_gens` is set) or instead of the generators of the ring; a generator
+whose printed form is one of the names is shadowed by that terminal.
+Used by rings whose generators are only known after parsing a defining
+expression, and to bind names to values.
 :::
 
 ::: function

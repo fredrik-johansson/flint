@@ -1300,6 +1300,15 @@ Set $c$ to, respectively swap $c$ with, the coefficient of term $i$.
 :::
 
 ::: function
+void fmpz_mpoly_univar_pseudo_rem(fmpz_mpoly_univar_t rx, const fmpz_mpoly_univar_t ax, const fmpz_mpoly_univar_t bx, const fmpz_mpoly_ctx_t ctx)
+
+Sets $R$ = `rx` to the pseudo-remainder of $A$ = `ax` by $B$ = `bx`:
+the polynomial $R$ with $\deg R < \deg B$ such that
+$\operatorname{lc}(B)^{\deg A - \deg B + 1} A = Q B + R$ for some $Q$,
+when $\deg A \ge \deg B$, and $A$ otherwise. Throws if $B$ is zero.
+:::
+
+::: function
 void fmpz_mpoly_univar_print_pretty(const fmpz_mpoly_univar_t A, const char ** x, const fmpz_mpoly_ctx_t ctx)
 void fmpz_mpoly_univar_assert_canonical(fmpz_mpoly_univar_t A, const fmpz_mpoly_ctx_t ctx)
 

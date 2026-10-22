@@ -1299,6 +1299,15 @@ and ensure room for `len` terms.
 :::
 
 ::: function
+void mpoly_univar_prem(mpoly_univar_t A, const mpoly_univar_t B, mpoly_univar_t C, mpoly_void_ring_t R)
+
+Sets $A$ to the pseudo-remainder of $A$ by $-B$, with the multiplier
+$(-\operatorname{lc}(B))^{\deg A - \deg B + 1}$; requires
+$\deg A \ge \deg B$ and nonzero inputs. $C$ is used as working space,
+and the three arguments must be distinct.
+:::
+
+::: function
 int mpoly_univar_pseudo_gcd_ducos(mpoly_univar_t G, mpoly_univar_t B, mpoly_univar_t A, mpoly_void_ring_t R)
 
 Sets $G$ to the last nonzero subresultant of $B$ and $A$, computed with

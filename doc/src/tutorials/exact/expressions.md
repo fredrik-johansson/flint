@@ -100,6 +100,15 @@ algebraic number, takes most of the time. The total times of the two
 approaches are similar, which is typical: the hard part of the problem
 is moved, not removed.
 
+With the flag `-castle`, it uses a castle field ([](gr_ca)). The
+evaluation is field arithmetic as with `-ca`, in a tower of nested
+square roots (degree 128), but the numbers stay small, because each new
+square root is first expressed in the tower of its argument by quadratic
+steps ([](algorithms/exact/field-towers#express)), and the final
+equality is decided by dynamic evaluation in the tower rather than by a
+conversion to [](qqbar): the whole program takes about 0.06 seconds,
+against 3 seconds with `-ca` and 4 seconds with `qqbar`.
+
 The printed numerical value of $N$ in the `-ca` run is an indeterminate
 enclosure, shown as `[+/- inf]` (as `nan` before FLINT 3.7): `ca_print`
 evaluates the representation once at a fixed low precision, and the

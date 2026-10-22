@@ -6,6 +6,17 @@ category: Exact real and complex numbers
 order: 2
 ---
 
+::: note The legacy design
+`ca` is the *legacy* design of exact real and complex numbers in FLINT,
+formerly the library Calcium. New code should use castle arithmetic
+([](gr_ca), [](guide/types/castle-arithmetic)), which decides every
+predicate of algebraic numbers without degree limits, decides more
+identities between transcendental numbers, is faster on most workloads
+and is thread-safe; [](guide/types/castle-arithmetic#legacy) compares
+the two. This module remains supported for existing code and for its
+special values (infinities, *Undefined*, *Unknown*).
+:::
+
 A `ca_t` represents a real or complex number exactly, in a form that
 supports field arithmetic and, as far as possible, proved comparisons. A
 number is stored as an element of a field $K = \mathbb{Q}(a_1, \ldots,

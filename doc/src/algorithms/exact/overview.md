@@ -1,13 +1,13 @@
 ---
 title: Choosing a representation for exact numbers
 kind: topic
-summary: FLINT represents exact real and complex numbers as rationals, elements of a fixed number field, individual algebraic numbers (qqbar) or elements of formal fields with transcendental generators (ca). This page compares what each representation can decide, what it costs, and which algorithms the main operations use.
+summary: FLINT represents exact real and complex numbers as rationals, elements of a fixed number field, individual algebraic numbers (qqbar), elements of towers of fields built on demand (castle arithmetic, gr_ca) or, in the legacy design, elements of formal fields (ca). This page compares what each representation can decide, what it costs, and which algorithms the main operations use.
 order: 0
 ---
 
 An exact number is one that is represented symbolically, so that the
 value is determined without error and can be approximated to any
-precision. FLINT has four exact representations of increasing
+precision. FLINT has five exact representations of increasing
 generality, and they differ less in what they can express than in what
 they can decide: whether two numbers are equal, whether a number is
 real, positive or rational. The more general the representation, the
@@ -20,7 +20,8 @@ more expensive arithmetic becomes and the weaker the guarantees.
 | [](fmpq) | $\mathbb{Q}$ | reduced fraction | canonical | quasi-linear in the bit size |
 | [](nf_elem) | a fixed number field $\mathbb{Q}(a)$ | polynomial in $a$ of degree less than $[\mathbb{Q}(a) : \mathbb{Q}]$ | canonical | polynomial arithmetic modulo the defining polynomial |
 | [](qqbar) | $\overline{\mathbb{Q}}$ | minimal polynomial and isolating ball | decidable | resultants and factorisation; degrees multiply |
-| [](ca) | real and complex numbers built from $\mathbb{Q}$ by arithmetic, roots, $\exp$, $\log$, $\pi$, trigonometric and some special functions | element of a formal field $\mathbb{Q}(a_1, \ldots, a_n)$ reduced modulo proved relations | semi-decidable: answers may be unknown | multivariate rational functions, relation searches, numerical evaluation |
+| [](gr_ca) (castle arithmetic) | real and complex numbers built from $\mathbb{Q}$ by arithmetic, roots, $\exp$, $\log$, $\pi$, trigonometric, special, hypergeometric and modular functions | element of a tower $\mathbb{Q}(t_1, \ldots, t_r)(a_1, \ldots, a_k)$ built on demand, reduced modulo a triangular set of proved relations | decidable for algebraic numbers; for exp-log numbers decided when the relations are found (always, under Schanuel's conjecture); otherwise semi-decidable | multivariate rational functions, dynamic evaluation, relation searches, numerical evaluation |
+| [](ca) (legacy) | as above, with fewer special functions; also infinities and *Undefined* | element of a formal field $\mathbb{Q}(a_1, \ldots, a_n)$ reduced modulo an ideal of proved relations | semi-decidable: answers may be unknown, also for algebraic numbers beyond a degree limit | multivariate rational functions, Gröbner bases, relation searches, numerical evaluation |
 
 The two exact algebraic representations behave very differently. A
 [](nf_elem) is cheap, but all numbers must belong to one field fixed in
@@ -31,26 +32,40 @@ an operation may need a resultant and its factorisation, and the degree
 of the result can be as large as the degree of the compositum, so long
 computations become expensive (see [](algorithms/exact/qqbar-arithmetic)).
 
-A [](ca) number represents its value as an element of a formal field
-whose generators are algebraic numbers or transcendental extension
-numbers such as $\pi$, $e^{\sqrt 2}$ or $\log 3$. Field arithmetic is
-formal and cheap compared with resultants, several algebraic generators
-can coexist without computing a primitive element, and transcendental
-numbers can be represented at all. The price is that equality is not
-canonical: a zero test combines numerical evaluation with exact
-reductions and can fail (see [](algorithms/exact/zero-testing)). When
-all generators are algebraic, `ca` can fall back on [](qqbar) and
-decide equality, within the degree limit `CA_OPT_QQBAR_DEG_LIMIT`.
+A castle field keeps its numbers in towers of fields whose generators
+are algebraic numbers or transcendental numbers such as $\pi$,
+$e^{\sqrt 2}$, $\log 3$ or $\Gamma(1/3)$. Field arithmetic is formal and
+cheap compared with resultants, several algebraic generators coexist
+without a primitive element, and the towers are shared by all the
+elements built in them, so that the relations found once (a
+factorization, a logarithmic relation) serve every later operation.
+Number fields with a single generator, and products of cyclotomic and
+radical fields, have dense representations as fast as [](nf_elem)
+([](algorithms/exact/castle-representations)). Equality of algebraic
+numbers is decided by dynamic evaluation, without degree limits; for
+transcendental numbers, a zero test proves inequality numerically and
+equality by relations found and proved exactly, and answers `T_UNKNOWN`
+when the effort limits are exhausted, which the unlimited mode removes
+([](algorithms/exact/zero-testing), [](algorithms/exact/effort-limits)).
+
+The legacy [](ca) numbers are also elements of fields generated by
+algebraic and transcendental numbers, but each field is built with its
+full ideal of relations when it is created, and the zero test of
+algebraic numbers falls back on [](qqbar) within a degree limit
+(`CA_OPT_QQBAR_DEG_LIMIT`). Castle arithmetic decides strictly more and
+is faster on most workloads ([](guide/types/castle-arithmetic#legacy));
+`ca` remains for compatibility, and for the special values (infinities,
+*Undefined*) which castle fields do not have.
 
 The [](gr) interface provides contexts for all of them (see
 [](gr_domains#algebraic) and [](gr_domains#real-complex)): `qqbar`
-through `gr_ctx_init_real_qqbar` and `gr_ctx_init_complex_qqbar`, and
-`ca` through `gr_ctx_init_real_ca`, `gr_ctx_init_complex_ca`, their
-algebraic variants and `gr_ctx_init_complex_extended_ca`. Generic
-polynomial and matrix algorithms then work over exact numbers and return
-`GR_UNABLE` when a zero test fails. Symbolic expressions ([](fexpr)) are
-not numbers but trees; they are used to construct, print and convert
-exact numbers.
+through `gr_ctx_init_real_qqbar` and `gr_ctx_init_complex_qqbar`; castle
+fields through `gr_ctx_init_ca` ([](gr_ca#contexts)); and `ca` through
+`gr_ctx_init_real_ca`, `gr_ctx_init_complex_ca`, their algebraic
+variants and `gr_ctx_init_complex_extended_ca`. Generic polynomial and
+matrix algorithms then work over exact numbers and return `GR_UNABLE`
+when a zero test fails. Symbolic expressions ([](fexpr)) are not numbers
+but trees; they are used to construct, print and convert exact numbers.
 
 ## Which algorithm is used {#methods}
 
@@ -60,27 +75,34 @@ exact numbers.
 | Refine an enclosure | certified Newton iteration, recomputation of all roots as fallback | `qqbar_get_acb`, `qqbar_cache_enclosure`; [](algorithms/exact/qqbar-representation#refining) |
 | Compare algebraic numbers | minimal polynomials, then enclosures | `qqbar_equal`, `qqbar_cmp_re`; [](algorithms/exact/qqbar-representation#predicates) |
 | Add or multiply algebraic numbers | closed forms for quadratics, subfield and cyclotomic detection, guessing with proof, composed polynomials and factor selection | `qqbar_add`, `qqbar_mul`, `qqbar_binary_op`; [](algorithms/exact/qqbar-arithmetic) |
-| Create a field with given generators | ideal of relations: minimal polynomials, logarithmic and multiplicative relations, Gröbner basis | `ca_field_build_ideal`; [](algorithms/exact/field-towers) |
-| Arithmetic in `ca` | formal arithmetic in the common field of the operands, reduction modulo the ideal | `ca_add`, `ca_mul`, `ca_merge_fields`; [](algorithms/exact/field-towers) |
-| Decide $x = 0$ | numerical evaluation, algebraic evaluation, normal form rewriting, factoring | `ca_check_is_zero` ([](ca/check-is-zero)); [](algorithms/exact/zero-testing) |
-| Simplify, recognise closed forms | canonical number field forms, rewriting rules, LLL with exact verification | `ca_condense_field`, `qqbar_guess`, `qqbar_get_fexpr_formula`; [](algorithms/exact/simplification) |
-| Roots of polynomials | squarefree factorisation, rational factors via [](qqbar), formulas up to degree 3 | `ca_poly_roots` ([](ca_poly/roots)) |
-| Linear algebra | simplest-first pivoting, fraction-free and division-free methods, rational and number field specialisations | `ca_mat_det`, `ca_mat_rank`, `ca_mat_eigenvalues`; [](algorithms/exact/linear-algebra) |
+| Adjoin a generator to a castle field | structured generators (roots of integers and of unity), expression in the existing tower, dynamic steps, merges of towers | `gr_sqrt`, `gr_exp`, `gr_tower_adjoin_*`; [](algorithms/exact/field-towers) |
+| Arithmetic in a castle field | formal arithmetic in a common tower, reduction modulo the triangular set, dense and packed forms | `gr_add`, `gr_mul`; [](algorithms/exact/castle-representations) |
+| Inversion with reducible moduli | dynamic evaluation: refine a modulus when an inverse exposes a factor | `gr_tower_refine_step`; [](algorithms/exact/dynamic-evaluation) |
+| Decide $x = 0$ in a castle field | numerical separation, dynamic evaluation, relation searches (Richardson) with exact proof and elimination, special-function relations | `gr_is_zero`, `gr_tower_flat_num_is_zero`; [](algorithms/exact/zero-testing#castle) |
+| Roots of polynomials in a castle field | formulas, recognition with proof, Trager factorization over the tower of the coefficients, splitting towers | `gr_poly_roots`; [](algorithms/exact/castle-roots) |
+| Special function values | canonical arguments, normal forms at rationals, hypergeometric contiguity, modular reduction | [](algorithms/exact/castle-special-functions), [](algorithms/exact/castle-hypergeometric), [](algorithms/exact/castle-modular) |
+| Create a legacy `ca` field | ideal of relations: minimal polynomials, logarithmic and multiplicative relations, Gröbner basis | `ca_field_build_ideal`; [](algorithms/exact/field-towers#legacy) |
+| Arithmetic in `ca` | formal arithmetic in the common field of the operands, reduction modulo the ideal | `ca_add`, `ca_mul`, `ca_merge_fields`; [](algorithms/exact/field-towers#reduction) |
+| Decide $x = 0$ in `ca` | numerical evaluation, algebraic evaluation, normal form rewriting, factoring | `ca_check_is_zero` ([](ca/check-is-zero)); [](algorithms/exact/zero-testing#legacy) |
+| Simplify, recognise closed forms | expressions in towers, canonical number field forms, rewriting rules, LLL with exact verification | `gr_tower_express`, `ca_condense_field`, `qqbar_guess`, `qqbar_get_fexpr_formula`; [](algorithms/exact/simplification) |
+| Roots of polynomials in `ca` | squarefree factorisation, rational factors via [](qqbar), formulas up to degree 3 | `ca_poly_roots` ([](ca_poly/roots)) |
+| Linear algebra | division-free methods, number field specialisations, simplest-first pivoting | `gr_mat_det`, `gr_mat_solve`, `ca_mat_det`, `ca_mat_rank`; [](algorithms/exact/linear-algebra) |
 
 ## Practical advice {#advice}
 
 - Use [](fmpq) or [](nf_elem) when the numbers are known to lie in
-  $\mathbb{Q}$ or in one known number field: arithmetic is much faster
-  than with `qqbar` or `ca`.
-- Use [](qqbar) for algebraic numbers when exact answers to all
-  predicates are required and degrees stay moderate. Computations whose
-  intermediate degrees explode, such as sums of many square roots, can be
-  cheaper in [](ca), which keeps them in a field with several quadratic
-  generators.
-- Use [](ca) whenever transcendental numbers occur, and check the
-  `truth_t` results of predicates: `T_UNKNOWN` is a legitimate answer.
-  The options of the context (see [](ca/options)) bound the work spent on
-  zero tests and relation searches.
+  $\mathbb{Q}$ or in one known number field: arithmetic is faster than
+  with any of the general representations.
+- Use a castle field ([](gr_ca)) for exact real and complex numbers in
+  general, algebraic or not, and check the `truth_t` results of
+  predicates and the statuses of operations: `T_UNKNOWN` and `GR_UNABLE`
+  are legitimate answers for transcendental numbers. With
+  `GR_CA_UNLIMITED`, operations never give up because an effort limit was
+  exhausted ([](algorithms/exact/effort-limits)).
+- Use [](qqbar) for individual algebraic numbers when a canonical form
+  (the minimal polynomial) is needed, and degrees stay moderate.
+- Use [](ca) for existing code written for it, and when the special
+  values (infinities, *Undefined*) are needed.
 - For numerical values only, [](arb) and [](acb) are much faster;
-  `ca_get_acb` and `qqbar_get_acb` convert exact numbers to balls of any
-  precision.
+  `gr_ca_get_acb`, `ca_get_acb` and `qqbar_get_acb`
+  convert exact numbers to balls of any precision.

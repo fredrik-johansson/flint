@@ -654,6 +654,23 @@ consecutive. See [](qqbar/roots).
 :::
 
 ::: function
+int qqbar_set_fmpz_poly_root(qqbar_t res, const fmpz_poly_t poly, const acb_t z, slong max_prec)
+
+Sets `res` to the root of `poly` isolated by the complex ball `z` and
+returns 1, or returns 0 (leaving `res` unchanged) if the isolation
+cannot be certified. `poly` must be the minimal polynomial of the root
+(irreducible and primitive, with positive leading coefficient), which is
+not checked.
+
+::: details
+The enclosure is certified to contain a unique root of `poly` with
+`_qqbar_validate_existence_uniqueness` at a working precision of at
+most `max_prec` bits; for a linear polynomial, the root is rational and
+`z` is only checked to contain it.
+:::
+:::
+
+::: function
 slong qqbar_real_roots_fmpz_poly(qqbar_ptr res, const fmpz_poly_t poly, int flags)
 slong qqbar_real_roots_fmpq_poly(qqbar_ptr res, const fmpq_poly_t poly, int flags)
 

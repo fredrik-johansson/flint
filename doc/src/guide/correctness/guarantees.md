@@ -215,13 +215,16 @@ the functions answering them have a way to say so:
   a real ball that contains zero. Predicates return a `truth_t`, one of
   `T_TRUE`, `T_FALSE` and `T_UNKNOWN`. See [](gr#status) and
   [](gr#truth).
-- The exact real and complex numbers of [](ca) represent numbers
-  symbolically, and equality of such numbers is not decidable in
-  general. Predicates such as `ca_check_is_zero` return `T_UNKNOWN`
-  when no proof is found; see [](ca/check-is-zero#unknown) and
-  [](algorithms/exact/zero-testing#in-practice). The
-  algebraic numbers of [](qqbar) are an exception: every question about
-  them is decided.
+- The exact real and complex numbers of castle arithmetic ([](gr_ca))
+  and of the legacy [](ca) represent numbers symbolically, and equality
+  of such numbers is not known to be decidable in general. Predicates
+  return `T_UNKNOWN` when no proof is found within the effort limits;
+  see [](algorithms/exact/zero-testing#decided),
+  [](algorithms/exact/zero-testing#in-practice) and
+  [](ca/check-is-zero#unknown). Algebraic numbers are an exception:
+  every question about them is decided by [](qqbar), and by the castle
+  fields unless an effort limit is exhausted, which the unlimited mode
+  ([](algorithms/exact/effort-limits)) rules out.
 - Other functions that may fail document which return value means
   failure, such as $-1$ for `n_ll_is_prime` above, or 0 for
   `fmpz_poly_gcd_heuristic` and for `fmpz_factor_smooth` when the

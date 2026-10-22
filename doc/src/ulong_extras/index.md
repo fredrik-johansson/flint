@@ -1134,6 +1134,17 @@ the flag `proved` has no effect.
 :::
 
 ::: function
+ulong n_randprime_mod(flint_rand_t state, ulong bits, ulong r, ulong m, int proved)
+
+A random prime (`proved` = 1) or probable prime (`proved` = 0) of
+`bits` bits congruent to $r$ modulo $m$, where $0 \le r < m$ and
+$\gcd(r, m) = 1$; an exception is thrown otherwise, or if there is no
+such prime (which can happen when $m$ is large relative to
+$2^{\mathit{bits}}$). For $r = 1$ these are the primes which split
+completely in the cyclotomic field of order $m$.
+:::
+
+::: function
 ulong n_randtest_prime(flint_rand_t state, int proved)
 
 Returns a random prime whose bit length is chosen at random between 2 and

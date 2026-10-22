@@ -6,6 +6,12 @@ category: Exact real and complex numbers
 order: 7
 ---
 
+::: note The legacy design
+This module belongs to the legacy design of exact real and complex
+numbers ([](ca)); in castle arithmetic, its role is played by the
+towers of [](gr_tower).
+:::
+
 A `ca_field_t` is the parent field $K = \mathbb{Q}(a_1, \ldots, a_n)$ of
 `ca_t` numbers (see [](ca)): a list of pointers to extension numbers
 $a_1, \ldots, a_n$ (see [](ca_ext)) together with an ideal $I \subset

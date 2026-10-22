@@ -40,7 +40,8 @@ with variables of the concrete type: an element of
 | number fields | `gr_ctx_init_nf` | yes | |
 | $\mathbb{Q}_p$ | `gr_ctx_init_padic_radix` | at infinite precision | see [`padic_radix`](padic_radix) |
 | $\overline{\mathbb{Q}} \cap \mathbb{R}$, $\overline{\mathbb{Q}}$ | `gr_ctx_init_real_qqbar`, `gr_ctx_init_complex_qqbar` | yes | |
-| $\mathbb{R}$, $\mathbb{C}$ | `gr_ctx_init_real_ca`, `gr_ctx_init_complex_ca` | yes | some predicates undecidable |
+| $\mathbb{R}$, $\mathbb{C}$ (castle arithmetic) | `gr_ctx_init_ca` | yes | see [`gr_ca`](gr_ca); algebraic predicates decided, others may be undecided |
+| $\mathbb{R}$, $\mathbb{C}$ (legacy) | `gr_ctx_init_real_ca`, `gr_ctx_init_complex_ca` | yes | some predicates undecidable |
 | $\mathbb{R}$, $\mathbb{C}$ (balls) | `gr_ctx_init_real_arb`, `gr_ctx_init_complex_acb` | no | rigorous enclosures |
 | floating point | `gr_ctx_init_real_float_arf`, `gr_ctx_init_complex_float_acf`, `nfloat_ctx_init`, `gr_ctx_init_dfloat`, `gr_ctx_init_mpf` | no | not rings |
 | $R[x]$, $R[x_1, \ldots, x_n]$ | `gr_ctx_init_gr_poly`, `gr_ctx_init_gr_mpoly`, ... | as $R$ | |
@@ -192,10 +193,12 @@ Not all methods respect the limits.
 ## Real and complex numbers {#real-complex}
 
 FLINT has three kinds of real and complex numbers: balls (`arb`, `acb`),
-which represent each number by a rigorous enclosure; exact numbers
-(`ca`), for which arithmetic is exact but some predicates are
-undecidable; and floating-point numbers, which are approximations
-without error bounds and are not rings in the sense of the interface.
+which represent each number by a rigorous enclosure; exact numbers, for
+which arithmetic is exact but some predicates are undecidable (the
+castle fields of [](gr_ca), created by `gr_ctx_init_ca` and documented
+there, and the legacy `ca` contexts below); and floating-point numbers,
+which are approximations without error bounds and are not rings in the
+sense of the interface.
 Generic algorithms over balls and exact numbers return rigorous results
 ([](algorithms/generic/inexact)).
 
@@ -218,8 +221,9 @@ void gr_ctx_init_complex_algebraic_ca(gr_ctx_t ctx)
 
 Initialise `ctx` to the field of real numbers, complex numbers, real
 algebraic numbers or complex algebraic numbers, represented exactly by
-elements of type `ca_struct` (see [`ca`](ca) and
-[the guide to ca](ca/using#gr)). Operations whose result
+elements of type `ca_struct` of the legacy design (see [`ca`](ca) and
+[the guide to ca](ca/using#gr); for castle arithmetic, see
+`gr_ctx_init_ca`). Operations whose result
 is not in the field (for example $\sqrt{-1}$ in the reals, $\pi$ in the
 algebraic numbers) return `GR_DOMAIN`, and predicates that cannot be
 decided return `T_UNKNOWN`. The context allocates a `ca_ctx_t`; it is
@@ -526,6 +530,26 @@ Convert between elements of the quotient ring and polynomials over the
 base ring; the result is reduced modulo the current modulus.
 :::
 
+::: function
+int gr_poly_quotient_norm(gr_ptr res, gr_srcptr x, gr_ctx_t ctx)
+int gr_poly_quotient_norm_poly(gr_poly_t res, const gr_poly_t M, gr_ctx_t ctx)
+
+Norms down to the base ring $R$ of a quotient ring $R[a]/(m)$: for an
+element $x$, the resultant of $m$ and the polynomial representing $x$
+(the product of the conjugates of $x$ when $m$ is monic and irreducible
+over a field); for a polynomial $M$ over the quotient ring, the
+resultant with respect to $a$ of $m$ and $M$ viewed as a polynomial in
+$a$ over $R[x]$, a polynomial over $R$ of degree $\deg(M) \deg(m)$ when
+$M$ is monic: the norm of Trager's factorization algorithm.
+
+::: details
+The resultants are computed with `gr_poly_resultant` over the base ring
+(respectively over $R[x]$), so the results are exact over exact base
+rings, and the functions return `GR_UNABLE` when the base ring does not
+support this. `GR_DOMAIN` is returned when the modulus is constant.
+:::
+:::
+
 ## Fraction fields {#fractions}
 
 ::: function
@@ -566,6 +590,13 @@ Initialises `ctx` to the field $\mathbb{Q}(x_1, \ldots, x_n)$ of multivariate
 rational functions with $n$ = `nvars`, with elements of type
 `fmpz_mpoly_q_struct` (see [`fmpz_mpoly_q`](fmpz_mpoly_q)). Declared
 only if `fmpz_mpoly_q.h` is included before `gr.h`.
+:::
+
+::: function
+fmpz_mpoly_ctx_struct * gr_ctx_fmpz_mpoly_q_mctx(gr_ctx_t ctx)
+
+The `fmpz_mpoly_ctx_t` of the ring of multivariate fractions `ctx`, for
+use with the [](fmpz_mpoly_q) functions on its elements.
 :::
 
 ::: function

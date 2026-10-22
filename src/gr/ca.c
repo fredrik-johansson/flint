@@ -22,10 +22,10 @@
 #include "gr_poly.h"
 #include "gr_special.h"
 
-#define GR_CA_CTX(ring_ctx) ((ca_ctx_struct *)(GR_CTX_DATA_AS_PTR(ring_ctx)))
+#define GR_CALCIUM_CTX(ring_ctx) ((ca_ctx_struct *)(GR_CTX_DATA_AS_PTR(ring_ctx)))
 
 static int
-_gr_ca_ctx_write(gr_stream_t out, gr_ctx_t ctx)
+_gr_calcium_ctx_write(gr_stream_t out, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_RR_CA)
         return gr_stream_write(out, "Real numbers (ca)");
@@ -43,29 +43,29 @@ _gr_ca_ctx_write(gr_stream_t out, gr_ctx_t ctx)
 void
 gr_ctx_ca_set_option(gr_ctx_t ctx, slong option, slong value)
 {
-    ca_ctx_set_option(GR_CA_CTX(ctx), option, value);
+    ca_ctx_set_option(GR_CALCIUM_CTX(ctx), option, value);
 }
 
 slong
 gr_ctx_ca_get_option(gr_ctx_t ctx, slong option)
 {
-    return ca_ctx_get_option(GR_CA_CTX(ctx), option);
+    return ca_ctx_get_option(GR_CALCIUM_CTX(ctx), option);
 }
 
 static void
-_gr_ca_init(ca_t x, gr_ctx_t ctx)
+_gr_calcium_init(ca_t x, gr_ctx_t ctx)
 {
-    ca_init(x, GR_CA_CTX(ctx));
+    ca_init(x, GR_CALCIUM_CTX(ctx));
 }
 
 static void
-_gr_ca_clear(ca_t x, gr_ctx_t ctx)
+_gr_calcium_clear(ca_t x, gr_ctx_t ctx)
 {
-    ca_clear(x, GR_CA_CTX(ctx));
+    ca_clear(x, GR_CALCIUM_CTX(ctx));
 }
 
 static void
-_gr_ca_swap(ca_t x, ca_t y, gr_ctx_t ctx)
+_gr_calcium_swap(ca_t x, ca_t y, gr_ctx_t ctx)
 {
     ca_t t;
     *t = *x;
@@ -74,7 +74,7 @@ _gr_ca_swap(ca_t x, ca_t y, gr_ctx_t ctx)
 }
 
 static void
-_gr_ca_set_shallow(ca_t res, const ca_t x, const gr_ctx_t ctx)
+_gr_calcium_set_shallow(ca_t res, const ca_t x, const gr_ctx_t ctx)
 {
     *res = *x;
 }
@@ -82,36 +82,36 @@ _gr_ca_set_shallow(ca_t res, const ca_t x, const gr_ctx_t ctx)
 /* todo: limits */
 /* todo: faster real/algebraic constructions */
 static int
-_gr_ca_randtest(ca_t res, flint_rand_t state, gr_ctx_t ctx)
+_gr_calcium_randtest(ca_t res, flint_rand_t state, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_COMPLEX_EXTENDED_CA)
     {
-        ca_randtest_special(res, state, 2, 10, GR_CA_CTX(ctx));
+        ca_randtest_special(res, state, 2, 10, GR_CALCIUM_CTX(ctx));
     }
     else
     {
-        ca_randtest(res, state, 2, 10, GR_CA_CTX(ctx));
+        ca_randtest(res, state, 2, 10, GR_CALCIUM_CTX(ctx));
 
         if (ctx->which_ring == GR_CTX_RR_CA)
         {
-            if (ca_check_is_real(res, GR_CA_CTX(ctx)) != T_TRUE)
+            if (ca_check_is_real(res, GR_CALCIUM_CTX(ctx)) != T_TRUE)
             {
-                ca_randtest_rational(res, state, 10, GR_CA_CTX(ctx));
+                ca_randtest_rational(res, state, 10, GR_CALCIUM_CTX(ctx));
             }
         }
         else if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
         {
-            if (ca_check_is_real(res, GR_CA_CTX(ctx)) != T_TRUE ||
-                ca_check_is_algebraic(res, GR_CA_CTX(ctx)) != T_TRUE)
+            if (ca_check_is_real(res, GR_CALCIUM_CTX(ctx)) != T_TRUE ||
+                ca_check_is_algebraic(res, GR_CALCIUM_CTX(ctx)) != T_TRUE)
             {
-                ca_randtest_rational(res, state, 10, GR_CA_CTX(ctx));
+                ca_randtest_rational(res, state, 10, GR_CALCIUM_CTX(ctx));
             }
         }
         else if (ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
         {
-            if (ca_check_is_algebraic(res, GR_CA_CTX(ctx)) != T_TRUE)
+            if (ca_check_is_algebraic(res, GR_CALCIUM_CTX(ctx)) != T_TRUE)
             {
-                ca_randtest_rational(res, state, 10, GR_CA_CTX(ctx));
+                ca_randtest_rational(res, state, 10, GR_CALCIUM_CTX(ctx));
             }
         }
     }
@@ -121,50 +121,50 @@ _gr_ca_randtest(ca_t res, flint_rand_t state, gr_ctx_t ctx)
 
 /* todo */
 static int
-_gr_ca_write(gr_stream_t out, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_write(gr_stream_t out, const ca_t x, gr_ctx_t ctx)
 {
-    return gr_stream_write_free(out, ca_get_str(x, GR_CA_CTX(ctx)));
+    return gr_stream_write_free(out, ca_get_str(x, GR_CALCIUM_CTX(ctx)));
 }
 
 static int
-_gr_ca_zero(ca_t x, gr_ctx_t ctx)
+_gr_calcium_zero(ca_t x, gr_ctx_t ctx)
 {
-    ca_zero(x, GR_CA_CTX(ctx));
+    ca_zero(x, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_one(ca_t x, gr_ctx_t ctx)
+_gr_calcium_one(ca_t x, gr_ctx_t ctx)
 {
-    ca_one(x, GR_CA_CTX(ctx));
+    ca_one(x, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_set_si(ca_t res, slong v, gr_ctx_t ctx)
+_gr_calcium_set_si(ca_t res, slong v, gr_ctx_t ctx)
 {
-    ca_set_si(res, v, GR_CA_CTX(ctx));
+    ca_set_si(res, v, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_set_ui(ca_t res, ulong v, gr_ctx_t ctx)
+_gr_calcium_set_ui(ca_t res, ulong v, gr_ctx_t ctx)
 {
-    ca_set_ui(res, v, GR_CA_CTX(ctx));
+    ca_set_ui(res, v, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_set_fmpz(ca_t res, const fmpz_t v, gr_ctx_t ctx)
+_gr_calcium_set_fmpz(ca_t res, const fmpz_t v, gr_ctx_t ctx)
 {
-    ca_set_fmpz(res, v, GR_CA_CTX(ctx));
+    ca_set_fmpz(res, v, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_set_fmpq(ca_t res, const fmpq_t v, gr_ctx_t ctx)
+_gr_calcium_set_fmpq(ca_t res, const fmpq_t v, gr_ctx_t ctx)
 {
-    ca_set_fmpq(res, v, GR_CA_CTX(ctx));
+    ca_set_fmpq(res, v, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
@@ -184,25 +184,25 @@ ca_set_fmpzi(ca_t res, const fmpzi_t x, ca_ctx_t ctx)
 }
 
 static int
-_gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
+_gr_calcium_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
 {
     slong target = ctx->which_ring;
 
     switch (x_ctx->which_ring)
     {
         case GR_CTX_FMPZ:
-            ca_set_fmpz(res, x, GR_CA_CTX(ctx));
+            ca_set_fmpz(res, x, GR_CALCIUM_CTX(ctx));
             return GR_SUCCESS;
 
         case GR_CTX_FMPQ:
-            ca_set_fmpq(res, x, GR_CA_CTX(ctx));
+            ca_set_fmpq(res, x, GR_CALCIUM_CTX(ctx));
             return GR_SUCCESS;
 
         case GR_CTX_FMPZI:
             if (target == GR_CTX_CC_CA || target == GR_CTX_COMPLEX_ALGEBRAIC_CA || target == GR_CTX_COMPLEX_EXTENDED_CA ||
                 fmpz_is_zero(fmpzi_imagref((const fmpzi_struct *) x)))
             {
-                ca_set_fmpzi(res, x, GR_CA_CTX(ctx));
+                ca_set_fmpzi(res, x, GR_CALCIUM_CTX(ctx));
                 return GR_SUCCESS;
             }
             else
@@ -211,7 +211,7 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
             }
 
         case GR_CTX_REAL_ALGEBRAIC_QQBAR:
-            ca_set_qqbar(res, x, GR_CA_CTX(ctx));
+            ca_set_qqbar(res, x, GR_CALCIUM_CTX(ctx));
             return GR_SUCCESS;
 
         case GR_CTX_COMPLEX_ALGEBRAIC_QQBAR:
@@ -220,7 +220,7 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                 target == GR_CTX_COMPLEX_EXTENDED_CA ||
                 qqbar_is_real(x))
             {
-                ca_set_qqbar(res, x, GR_CA_CTX(ctx));
+                ca_set_qqbar(res, x, GR_CALCIUM_CTX(ctx));
                 return GR_SUCCESS;
             }
             else
@@ -229,7 +229,7 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
             }
 
         case GR_CTX_REAL_ALGEBRAIC_CA:
-            ca_transfer(res, GR_CA_CTX(ctx), x, GR_CA_CTX(x_ctx));
+            ca_transfer(res, GR_CALCIUM_CTX(ctx), x, GR_CALCIUM_CTX(x_ctx));
             return GR_SUCCESS;
 
         case GR_CTX_COMPLEX_ALGEBRAIC_CA:
@@ -242,16 +242,16 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                 }
                 else if (target == GR_CTX_RR_CA)
                 {
-                    ok = ca_check_is_real(x, GR_CA_CTX(x_ctx));
+                    ok = ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx));
                 }
                 else if (target == GR_CTX_REAL_ALGEBRAIC_CA)
                 {
-                    ok = truth_and(ca_check_is_algebraic(x, GR_CA_CTX(x_ctx)), ca_check_is_real(x, GR_CA_CTX(x_ctx)));
+                    ok = truth_and(ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx)), ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx)));
                 }
 
                 if (ok == T_TRUE)
                 {
-                    ca_transfer(res, GR_CA_CTX(ctx), x, GR_CA_CTX(x_ctx));
+                    ca_transfer(res, GR_CALCIUM_CTX(ctx), x, GR_CALCIUM_CTX(x_ctx));
                     return GR_SUCCESS;
                 }
 
@@ -268,12 +268,12 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                 }
                 else if (target == GR_CTX_REAL_ALGEBRAIC_CA || target == GR_CTX_COMPLEX_ALGEBRAIC_CA)
                 {
-                    ok = ca_check_is_algebraic(x, GR_CA_CTX(x_ctx));
+                    ok = ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx));
                 }
 
                 if (ok == T_TRUE)
                 {
-                    ca_transfer(res, GR_CA_CTX(ctx), x, GR_CA_CTX(x_ctx));
+                    ca_transfer(res, GR_CALCIUM_CTX(ctx), x, GR_CALCIUM_CTX(x_ctx));
                     return GR_SUCCESS;
                 }
 
@@ -290,20 +290,20 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                 }
                 else if (target == GR_CTX_RR_CA)
                 {
-                    ok = ca_check_is_real(x, GR_CA_CTX(x_ctx));
+                    ok = ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx));
                 }
                 else if (target == GR_CTX_COMPLEX_ALGEBRAIC_CA)
                 {
-                    ok = ca_check_is_algebraic(x, GR_CA_CTX(x_ctx));
+                    ok = ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx));
                 }
                 else if (target == GR_CTX_REAL_ALGEBRAIC_CA)
                 {
-                    ok = truth_and(ca_check_is_algebraic(x, GR_CA_CTX(x_ctx)), ca_check_is_real(x, GR_CA_CTX(x_ctx)));
+                    ok = truth_and(ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx)), ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx)));
                 }
 
                 if (ok == T_TRUE)
                 {
-                    ca_transfer(res, GR_CA_CTX(ctx), x, GR_CA_CTX(x_ctx));
+                    ca_transfer(res, GR_CALCIUM_CTX(ctx), x, GR_CALCIUM_CTX(x_ctx));
                     return GR_SUCCESS;
                 }
 
@@ -320,12 +320,12 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                 }
                 else
                 {
-                    if (ca_check_is_undefined(x, GR_CA_CTX(x_ctx)) == T_TRUE ||
-                         ca_check_is_infinity(x, GR_CA_CTX(x_ctx)) == T_TRUE)
+                    if (ca_check_is_undefined(x, GR_CALCIUM_CTX(x_ctx)) == T_TRUE ||
+                         ca_check_is_infinity(x, GR_CALCIUM_CTX(x_ctx)) == T_TRUE)
                     {
                         ok = T_FALSE;
                     }
-                    else if (ca_is_unknown(x, GR_CA_CTX(x_ctx)))
+                    else if (ca_is_unknown(x, GR_CALCIUM_CTX(x_ctx)))
                     {
                         ok = T_UNKNOWN;
                     }
@@ -333,15 +333,15 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
                     {
                         if (target == GR_CTX_RR_CA)
                         {
-                            ok = ca_check_is_real(x, GR_CA_CTX(x_ctx));
+                            ok = ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx));
                         }
                         else if (target == GR_CTX_COMPLEX_ALGEBRAIC_CA)
                         {
-                            ok = ca_check_is_algebraic(x, GR_CA_CTX(x_ctx));
+                            ok = ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx));
                         }
                         else if (target == GR_CTX_REAL_ALGEBRAIC_CA)
                         {
-                            ok = truth_and(ca_check_is_algebraic(x, GR_CA_CTX(x_ctx)), ca_check_is_real(x, GR_CA_CTX(x_ctx)));
+                            ok = truth_and(ca_check_is_algebraic(x, GR_CALCIUM_CTX(x_ctx)), ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx)));
                         }
                         else
                         {
@@ -352,7 +352,7 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
 
                 if (ok == T_TRUE)
                 {
-                    ca_transfer(res, GR_CA_CTX(ctx), x, GR_CA_CTX(x_ctx));
+                    ca_transfer(res, GR_CALCIUM_CTX(ctx), x, GR_CALCIUM_CTX(x_ctx));
                     return GR_SUCCESS;
                 }
 
@@ -365,7 +365,7 @@ _gr_ca_set_other(ca_t res, gr_srcptr x, gr_ctx_t x_ctx, gr_ctx_t ctx)
 }
 
 int
-_gr_ca_get_arb_with_prec(arb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
+_gr_calcium_get_arb_with_prec(arb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
 {
     int status = GR_UNABLE;
     truth_t ok;
@@ -374,7 +374,7 @@ _gr_ca_get_arb_with_prec(arb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
     acb_init(t);
 
     /* todo: when to use accurate_parts? */
-    ca_get_acb(t, x, prec, GR_CA_CTX(x_ctx));
+    ca_get_acb(t, x, prec, GR_CALCIUM_CTX(x_ctx));
 
     if (x_ctx->which_ring == GR_CTX_RR_CA || x_ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         (arb_is_zero(acb_imagref(t)) && arb_is_finite(acb_realref(t))))
@@ -383,7 +383,7 @@ _gr_ca_get_arb_with_prec(arb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
     }
     else
     {
-        ok = ca_check_is_real(x, GR_CA_CTX(x_ctx));
+        ok = ca_check_is_real(x, GR_CALCIUM_CTX(x_ctx));
 
         if (ok == T_TRUE)
             status = GR_SUCCESS;
@@ -399,34 +399,34 @@ _gr_ca_get_arb_with_prec(arb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
 }
 
 int
-_gr_ca_get_acb_with_prec(acb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
+_gr_calcium_get_acb_with_prec(acb_t res, gr_srcptr x, gr_ctx_t x_ctx, slong prec)
 {
     if (x_ctx->which_ring == GR_CTX_COMPLEX_EXTENDED_CA)
     {
-        if (ca_check_is_undefined(x, GR_CA_CTX(x_ctx)) == T_TRUE ||
-             ca_check_is_infinity(x, GR_CA_CTX(x_ctx)) == T_TRUE)
+        if (ca_check_is_undefined(x, GR_CALCIUM_CTX(x_ctx)) == T_TRUE ||
+             ca_check_is_infinity(x, GR_CALCIUM_CTX(x_ctx)) == T_TRUE)
             return GR_DOMAIN;
 
-        if (ca_is_unknown(x, GR_CA_CTX(x_ctx)))
+        if (ca_is_unknown(x, GR_CALCIUM_CTX(x_ctx)))
             return GR_UNABLE;
     }
 
     /* todo: when to use accurate_parts? */
-    ca_get_acb(res, x, prec, GR_CA_CTX(x_ctx));
+    ca_get_acb(res, x, prec, GR_CALCIUM_CTX(x_ctx));
     acb_set_round(res, res, prec);
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_get_fmpz(fmpz_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_fmpz(fmpz_t res, const ca_t x, gr_ctx_t ctx)
 {
     truth_t integer;
 
     /* todo: avoid duplicate computation */
-    integer = ca_check_is_integer(x, GR_CA_CTX(ctx));
+    integer = ca_check_is_integer(x, GR_CALCIUM_CTX(ctx));
 
     if (integer == T_TRUE)
-        return ca_get_fmpz(res, x, GR_CA_CTX(ctx)) ? GR_SUCCESS : GR_UNABLE;
+        return ca_get_fmpz(res, x, GR_CALCIUM_CTX(ctx)) ? GR_SUCCESS : GR_UNABLE;
     else if (integer == T_FALSE)
         return GR_DOMAIN;
     else
@@ -434,13 +434,13 @@ _gr_ca_get_fmpz(fmpz_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_get_si(slong * res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_si(slong * res, const ca_t x, gr_ctx_t ctx)
 {
     fmpz_t n;
     int status;
 
     fmpz_init(n);
-    status = _gr_ca_get_fmpz(n, x, ctx);
+    status = _gr_calcium_get_fmpz(n, x, ctx);
 
     if (status == GR_SUCCESS)
     {
@@ -455,13 +455,13 @@ _gr_ca_get_si(slong * res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_get_ui(ulong * res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_ui(ulong * res, const ca_t x, gr_ctx_t ctx)
 {
     fmpz_t n;
     int status;
 
     fmpz_init(n);
-    status = _gr_ca_get_fmpz(n, x, ctx);
+    status = _gr_calcium_get_fmpz(n, x, ctx);
 
     if (status == GR_SUCCESS)
     {
@@ -476,13 +476,13 @@ _gr_ca_get_ui(ulong * res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_get_d(double * res, gr_srcptr x, gr_ctx_t ctx)
+_gr_calcium_get_d(double * res, gr_srcptr x, gr_ctx_t ctx)
 {
     arb_t t;
     int status = GR_UNABLE;
 
     arb_init(t);
-    status = _gr_ca_get_arb_with_prec(t, x, ctx, 64);
+    status = _gr_calcium_get_arb_with_prec(t, x, ctx, 64);
     if (status == GR_SUCCESS)
         *res = arf_get_d(arb_midref(t), ARF_RND_NEAR);
     arb_clear(t);
@@ -490,15 +490,15 @@ _gr_ca_get_d(double * res, gr_srcptr x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_get_fmpq(fmpq_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_fmpq(fmpq_t res, const ca_t x, gr_ctx_t ctx)
 {
     truth_t rational;
 
     /* todo: avoid duplicate computation */
-    rational = ca_check_is_rational(x, GR_CA_CTX(ctx));
+    rational = ca_check_is_rational(x, GR_CALCIUM_CTX(ctx));
 
     if (rational == T_TRUE)
-        return ca_get_fmpq(res, x, GR_CA_CTX(ctx)) ? GR_SUCCESS : GR_UNABLE;
+        return ca_get_fmpq(res, x, GR_CALCIUM_CTX(ctx)) ? GR_SUCCESS : GR_UNABLE;
     else if (rational == T_FALSE)
         return GR_DOMAIN;
     else
@@ -506,160 +506,160 @@ _gr_ca_get_fmpq(fmpq_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_get_fexpr(fexpr_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_fexpr(fexpr_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_get_fexpr(res, x, 0, GR_CA_CTX(ctx));
+    ca_get_fexpr(res, x, 0, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_get_fexpr_serialize(fexpr_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_get_fexpr_serialize(fexpr_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_get_fexpr(res, x, CA_FEXPR_SERIALIZATION, GR_CA_CTX(ctx));
+    ca_get_fexpr(res, x, CA_FEXPR_SERIALIZATION, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 
 static truth_t
-_gr_ca_is_zero(const ca_t x, gr_ctx_t ctx)
+_gr_calcium_is_zero(const ca_t x, gr_ctx_t ctx)
 {
-    return ca_check_is_zero(x, GR_CA_CTX(ctx));
+    return ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 }
 
 static truth_t
-_gr_ca_is_one(const ca_t x, gr_ctx_t ctx)
+_gr_calcium_is_one(const ca_t x, gr_ctx_t ctx)
 {
-    return ca_check_is_one(x, GR_CA_CTX(ctx));
+    return ca_check_is_one(x, GR_CALCIUM_CTX(ctx));
 }
 
 static truth_t
-_gr_ca_is_neg_one(const ca_t x, gr_ctx_t ctx)
+_gr_calcium_is_neg_one(const ca_t x, gr_ctx_t ctx)
 {
-    return ca_check_is_neg_one(x, GR_CA_CTX(ctx));
+    return ca_check_is_neg_one(x, GR_CALCIUM_CTX(ctx));
 }
 
 static truth_t
-_gr_ca_equal(const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_equal(const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    return ca_check_equal(x, y, GR_CA_CTX(ctx));
+    return ca_check_equal(x, y, GR_CALCIUM_CTX(ctx));
 }
 
 static int
-_gr_ca_set(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_set(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_set(res, x, GR_CA_CTX(ctx));
+    ca_set(res, x, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_neg(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_neg(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_neg(res, x, GR_CA_CTX(ctx));
+    ca_neg(res, x, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_add(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_add(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    ca_add(res, x, y, GR_CA_CTX(ctx));
+    ca_add(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_add_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
+_gr_calcium_add_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
 {
-    ca_add_si(res, x, y, GR_CA_CTX(ctx));
+    ca_add_si(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_add_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
+_gr_calcium_add_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
 {
-    ca_add_ui(res, x, y, GR_CA_CTX(ctx));
+    ca_add_ui(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_add_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
+_gr_calcium_add_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
 {
-    ca_add_fmpz(res, x, y, GR_CA_CTX(ctx));
+    ca_add_fmpz(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_add_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
+_gr_calcium_add_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
 {
-    ca_add_fmpq(res, x, y, GR_CA_CTX(ctx));
+    ca_add_fmpq(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sub(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_sub(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    ca_sub(res, x, y, GR_CA_CTX(ctx));
+    ca_sub(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sub_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
+_gr_calcium_sub_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
 {
-    ca_sub_si(res, x, y, GR_CA_CTX(ctx));
+    ca_sub_si(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sub_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
+_gr_calcium_sub_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
 {
-    ca_sub_ui(res, x, y, GR_CA_CTX(ctx));
+    ca_sub_ui(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sub_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
+_gr_calcium_sub_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
 {
-    ca_sub_fmpz(res, x, y, GR_CA_CTX(ctx));
+    ca_sub_fmpz(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sub_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
+_gr_calcium_sub_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
 {
-    ca_sub_fmpq(res, x, y, GR_CA_CTX(ctx));
+    ca_sub_fmpq(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mul(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_mul(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    ca_mul(res, x, y, GR_CA_CTX(ctx));
+    ca_mul(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mul_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
+_gr_calcium_mul_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
 {
-    ca_mul_si(res, x, y, GR_CA_CTX(ctx));
+    ca_mul_si(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mul_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
+_gr_calcium_mul_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
 {
-    ca_mul_ui(res, x, y, GR_CA_CTX(ctx));
+    ca_mul_ui(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mul_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
+_gr_calcium_mul_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
 {
-    ca_mul_fmpz(res, x, y, GR_CA_CTX(ctx));
+    ca_mul_fmpz(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mul_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
+_gr_calcium_mul_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
 {
-    ca_mul_fmpq(res, x, y, GR_CA_CTX(ctx));
+    ca_mul_fmpq(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
@@ -669,12 +669,12 @@ handle_possible_special_value(ca_t res, gr_ctx_t ctx)
     if (ctx->which_ring == GR_CTX_COMPLEX_EXTENDED_CA)
         return GR_SUCCESS;
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
-    if (ca_is_special(res, GR_CA_CTX(ctx)))
+    if (ca_is_special(res, GR_CALCIUM_CTX(ctx)))
     {
-        ca_unknown(res, GR_CA_CTX(ctx));   /* don't output an invalid element */
+        ca_unknown(res, GR_CALCIUM_CTX(ctx));   /* don't output an invalid element */
         return GR_DOMAIN;
     }
 
@@ -683,11 +683,11 @@ handle_possible_special_value(ca_t res, gr_ctx_t ctx)
 
 #define DEF_SPECIAL(name) \
 static int \
-_gr_ca_ ## name(ca_t res, gr_ctx_t ctx) \
+_gr_calcium_ ## name(ca_t res, gr_ctx_t ctx) \
 { \
     if (ctx->which_ring != GR_CTX_COMPLEX_EXTENDED_CA) \
         return GR_DOMAIN; \
-    ca_ ## name(res, GR_CA_CTX(ctx)); \
+    ca_ ## name(res, GR_CALCIUM_CTX(ctx)); \
     return GR_SUCCESS; \
 }
 
@@ -698,84 +698,84 @@ DEF_SPECIAL(undefined)
 DEF_SPECIAL(unknown)
 
 static int
-_gr_ca_inv(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_inv(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_inv(res, x, GR_CA_CTX(ctx));
+    ca_inv(res, x, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_div(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_div(ca_t res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    ca_div(res, x, y, GR_CA_CTX(ctx));
+    ca_div(res, x, y, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_div_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
+_gr_calcium_div_si(ca_t res, const ca_t x, slong y, gr_ctx_t ctx)
 {
-    ca_div_si(res, x, y, GR_CA_CTX(ctx));
+    ca_div_si(res, x, y, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_div_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
+_gr_calcium_div_ui(ca_t res, const ca_t x, ulong y, gr_ctx_t ctx)
 {
-    ca_div_ui(res, x, y, GR_CA_CTX(ctx));
+    ca_div_ui(res, x, y, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_div_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
+_gr_calcium_div_fmpz(ca_t res, const ca_t x, const fmpz_t y, gr_ctx_t ctx)
 {
-    ca_div_fmpz(res, x, y, GR_CA_CTX(ctx));
+    ca_div_fmpz(res, x, y, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_div_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
+_gr_calcium_div_fmpq(ca_t res, const ca_t x, const fmpq_t y, gr_ctx_t ctx)
 {
-    ca_div_fmpq(res, x, y, GR_CA_CTX(ctx));
+    ca_div_fmpq(res, x, y, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static truth_t
-_gr_ca_is_invertible(const ca_t x, gr_ctx_t ctx)
+_gr_calcium_is_invertible(const ca_t x, gr_ctx_t ctx)
 {
-    return truth_not(ca_check_is_zero(x, GR_CA_CTX(ctx)));
+    return truth_not(ca_check_is_zero(x, GR_CALCIUM_CTX(ctx)));
 }
 
 static int
-_gr_ca_pow_ui(ca_t res, const ca_t x, ulong exp, gr_ctx_t ctx)
+_gr_calcium_pow_ui(ca_t res, const ca_t x, ulong exp, gr_ctx_t ctx)
 {
-    ca_pow_ui(res, x, exp, GR_CA_CTX(ctx));
+    ca_pow_ui(res, x, exp, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_pow_si(ca_t res, const ca_t x, slong exp, gr_ctx_t ctx)
+_gr_calcium_pow_si(ca_t res, const ca_t x, slong exp, gr_ctx_t ctx)
 {
-    ca_pow_si(res, x, exp, GR_CA_CTX(ctx));
+    ca_pow_si(res, x, exp, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_pow_fmpz(ca_t res, const ca_t x, const fmpz_t exp, gr_ctx_t ctx)
+_gr_calcium_pow_fmpz(ca_t res, const ca_t x, const fmpz_t exp, gr_ctx_t ctx)
 {
-    ca_pow_fmpz(res, x, exp, GR_CA_CTX(ctx));
+    ca_pow_fmpz(res, x, exp, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_pow_fmpq(ca_t res, const ca_t x, const fmpq_t exp, gr_ctx_t ctx)
+_gr_calcium_pow_fmpq(ca_t res, const ca_t x, const fmpq_t exp, gr_ctx_t ctx)
 {
-    ca_pow_fmpq(res, x, exp, GR_CA_CTX(ctx));
+    ca_pow_fmpq(res, x, exp, GR_CALCIUM_CTX(ctx));
 
     if (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
     {
         truth_t real;
 
-        real = ca_check_is_real(res, GR_CA_CTX(ctx));
+        real = ca_check_is_real(res, GR_CALCIUM_CTX(ctx));
 
         if (real == T_UNKNOWN)
             return GR_UNABLE;
@@ -788,15 +788,15 @@ _gr_ca_pow_fmpq(ca_t res, const ca_t x, const fmpq_t exp, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_pow(ca_t res, const ca_t x, const ca_t exp, gr_ctx_t ctx)
+_gr_calcium_pow(ca_t res, const ca_t x, const ca_t exp, gr_ctx_t ctx)
 {
-    ca_pow(res, x, exp, GR_CA_CTX(ctx));
+    ca_pow(res, x, exp, GR_CALCIUM_CTX(ctx));
 
     if (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
     {
         truth_t real;
 
-        real = ca_check_is_real(res, GR_CA_CTX(ctx));
+        real = ca_check_is_real(res, GR_CALCIUM_CTX(ctx));
 
         if (real == T_UNKNOWN)
             return GR_UNABLE;
@@ -809,7 +809,7 @@ _gr_ca_pow(ca_t res, const ca_t x, const ca_t exp, gr_ctx_t ctx)
     {
         truth_t algebraic;
 
-        algebraic = ca_check_is_algebraic(res, GR_CA_CTX(ctx));
+        algebraic = ca_check_is_algebraic(res, GR_CALCIUM_CTX(ctx));
 
         if (algebraic == T_UNKNOWN)
             return GR_UNABLE;
@@ -822,11 +822,11 @@ _gr_ca_pow(ca_t res, const ca_t x, const ca_t exp, gr_ctx_t ctx)
 }
 
 static truth_t
-_gr_ca_is_square(const ca_t x, gr_ctx_t ctx)
+_gr_calcium_is_square(const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
     {
-        return truth_not(ca_check_is_negative_real(x, GR_CA_CTX(ctx)));
+        return truth_not(ca_check_is_negative_real(x, GR_CALCIUM_CTX(ctx)));
     }
     else
     {
@@ -835,15 +835,15 @@ _gr_ca_is_square(const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_sqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_sqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_sqrt(res, x, GR_CA_CTX(ctx));
+    ca_sqrt(res, x, GR_CALCIUM_CTX(ctx));
 
     if (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
     {
         truth_t real;
 
-        real = ca_check_is_real(res, GR_CA_CTX(ctx));
+        real = ca_check_is_real(res, GR_CALCIUM_CTX(ctx));
 
         if (real == T_UNKNOWN)
             return GR_UNABLE;
@@ -856,16 +856,16 @@ _gr_ca_sqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_rsqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_rsqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_sqrt(res, x, GR_CA_CTX(ctx));
-    ca_inv(res, res, GR_CA_CTX(ctx));
+    ca_sqrt(res, x, GR_CALCIUM_CTX(ctx));
+    ca_inv(res, res, GR_CALCIUM_CTX(ctx));
 
     if (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA)
     {
         truth_t real;
 
-        real = ca_check_is_real(res, GR_CA_CTX(ctx));
+        real = ca_check_is_real(res, GR_CALCIUM_CTX(ctx));
 
         if (real == T_UNKNOWN)
             return GR_UNABLE;
@@ -878,22 +878,22 @@ _gr_ca_rsqrt(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_floor(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_floor(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_floor(res, x, GR_CA_CTX(ctx));
+    ca_floor(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_ceil(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_ceil(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_ceil(res, x, GR_CA_CTX(ctx));
+    ca_ceil(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
@@ -902,27 +902,27 @@ _gr_ca_ceil(ca_t res, const ca_t x, gr_ctx_t ctx)
 /* todo: trunc, nint in calcium */
 
 static int
-_gr_ca_trunc(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_trunc(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     acb_t t;
     int status;
 
     acb_init(t);
 
-    ca_get_acb(t, x, 64, GR_CA_CTX(ctx));
+    ca_get_acb(t, x, 64, GR_CALCIUM_CTX(ctx));
 
     if (arf_cmpabs_2exp_si(arb_midref(acb_realref(t)), -1) < 0 && mag_cmp_2exp_si(arb_radref(acb_realref(t)), -1) < 0)
     {
-        ca_zero(res, GR_CA_CTX(ctx));
+        ca_zero(res, GR_CALCIUM_CTX(ctx));
         status = GR_SUCCESS;
     }
     else if (arb_is_positive(acb_realref(t)))
     {
-        status = _gr_ca_floor(res, x, ctx);
+        status = _gr_calcium_floor(res, x, ctx);
     }
     else if (arb_is_negative(acb_realref(t)))
     {
-        status = _gr_ca_ceil(res, x, ctx);
+        status = _gr_calcium_ceil(res, x, ctx);
     }
     else
     {
@@ -936,11 +936,11 @@ _gr_ca_trunc(ca_t res, const ca_t x, gr_ctx_t ctx)
 
 /* todo: fast numerical path */
 static int
-_gr_ca_nint(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_nint(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    if (ca_check_is_integer(x, GR_CA_CTX(ctx)) == T_TRUE)
+    if (ca_check_is_integer(x, GR_CALCIUM_CTX(ctx)) == T_TRUE)
     {
-        ca_set(res, x, GR_CA_CTX(ctx));
+        ca_set(res, x, GR_CALCIUM_CTX(ctx));
         return GR_SUCCESS;
     }
     else
@@ -949,23 +949,23 @@ _gr_ca_nint(ca_t res, const ca_t x, gr_ctx_t ctx)
         truth_t integer;
         int status = GR_SUCCESS;
 
-        ca_init(t, GR_CA_CTX(ctx));
+        ca_init(t, GR_CALCIUM_CTX(ctx));
 
-        ca_set_d(t, 0.5, GR_CA_CTX(ctx));
-        ca_add(t, x, t, GR_CA_CTX(ctx));
-        ca_re(t, t, GR_CA_CTX(ctx));
-        ca_floor(res, t, GR_CA_CTX(ctx));
+        ca_set_d(t, 0.5, GR_CALCIUM_CTX(ctx));
+        ca_add(t, x, t, GR_CALCIUM_CTX(ctx));
+        ca_re(t, t, GR_CALCIUM_CTX(ctx));
+        ca_floor(res, t, GR_CALCIUM_CTX(ctx));
 
-        integer = ca_check_is_integer(t, GR_CA_CTX(ctx));
+        integer = ca_check_is_integer(t, GR_CALCIUM_CTX(ctx));
 
         if (integer == T_TRUE)
         {
             fmpz_t m;
             fmpz_init(m);
-            if (ca_get_fmpz(m, t, GR_CA_CTX(ctx)))
+            if (ca_get_fmpz(m, t, GR_CALCIUM_CTX(ctx)))
             {
                 if (fmpz_is_odd(m))
-                    ca_sub_ui(res, res, 1, GR_CA_CTX(ctx));
+                    ca_sub_ui(res, res, 1, GR_CALCIUM_CTX(ctx));
             }
             else
             {
@@ -978,55 +978,43 @@ _gr_ca_nint(ca_t res, const ca_t x, gr_ctx_t ctx)
             status = GR_UNABLE;
         }
 
-        ca_clear(t, GR_CA_CTX(ctx));
+        ca_clear(t, GR_CALCIUM_CTX(ctx));
         return status;
     }
 }
 
 static int
-_gr_ca_i(ca_t res, gr_ctx_t ctx)
+_gr_calcium_i(ca_t res, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_RR_CA)
         return GR_DOMAIN;
 
-    ca_i(res, GR_CA_CTX(ctx));
+    ca_i(res, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_abs(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_abs(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_abs(res, x, GR_CA_CTX(ctx));
+    ca_abs(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_conj(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_conj(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_conj(res, x, GR_CA_CTX(ctx));
+    ca_conj(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
-        return GR_UNABLE;
-
-    return GR_SUCCESS;
-}
-
-/* todo: exploit when we know that the field is real */
-static int
-_gr_ca_re(ca_t res, const ca_t x, gr_ctx_t ctx)
-{
-    ca_re(res, x, GR_CA_CTX(ctx));
-
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
@@ -1034,44 +1022,56 @@ _gr_ca_re(ca_t res, const ca_t x, gr_ctx_t ctx)
 
 /* todo: exploit when we know that the field is real */
 static int
-_gr_ca_im(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_re(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_im(res, x, GR_CA_CTX(ctx));
+    ca_re(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
+        return GR_UNABLE;
+
+    return GR_SUCCESS;
+}
+
+/* todo: exploit when we know that the field is real */
+static int
+_gr_calcium_im(ca_t res, const ca_t x, gr_ctx_t ctx)
+{
+    ca_im(res, x, GR_CALCIUM_CTX(ctx));
+
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_sgn(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_sgn(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_sgn(res, x, GR_CA_CTX(ctx));
+    ca_sgn(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_csgn(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_csgn(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_csgn(res, x, GR_CA_CTX(ctx));
+    ca_csgn(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_arg(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_arg(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
-    ca_arg(res, x, GR_CA_CTX(ctx));
+    ca_arg(res, x, GR_CALCIUM_CTX(ctx));
 
-    if (ca_is_unknown(res, GR_CA_CTX(ctx)))
+    if (ca_is_unknown(res, GR_CALCIUM_CTX(ctx)))
         return GR_UNABLE;
 
     return GR_SUCCESS;
@@ -1082,9 +1082,9 @@ _gr_ca_arg(ca_t res, const ca_t x, gr_ctx_t ctx)
 #define CMP_UNKNOWN -3
 
 static int
-_gr_ca_cmp(int * res, const ca_t x, const ca_t y, gr_ctx_t ctx)
+_gr_calcium_cmp(int * res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 {
-    int cmp = _ca_cmp(x, y, GR_CA_CTX(ctx));
+    int cmp = _ca_cmp(x, y, GR_CALCIUM_CTX(ctx));
 
     if (cmp == CMP_UNKNOWN)
         return GR_UNABLE;
@@ -1097,46 +1097,46 @@ _gr_ca_cmp(int * res, const ca_t x, const ca_t y, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_pi(ca_t res, gr_ctx_t ctx)
+_gr_calcium_pi(ca_t res, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
         return GR_DOMAIN;
 
-    ca_pi(res, GR_CA_CTX(ctx));
+    ca_pi(res, GR_CALCIUM_CTX(ctx));
     return handle_possible_special_value(res, ctx);
 }
 
 static int
-_gr_ca_exp(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_exp(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_one(res, ctx);
+            return _gr_calcium_one(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_exp(res, x, GR_CA_CTX(ctx));
+        ca_exp(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_sinh(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_sinh(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
@@ -1160,15 +1160,15 @@ _gr_ca_sinh(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_cosh(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_cosh(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_one(res, ctx);
+            return _gr_calcium_one(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
@@ -1192,7 +1192,7 @@ _gr_ca_cosh(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_tanh(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_tanh(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     int status = GR_SUCCESS;
 
@@ -1210,7 +1210,7 @@ _gr_ca_tanh(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_coth(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_coth(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     int status = GR_SUCCESS;
 
@@ -1229,25 +1229,25 @@ _gr_ca_coth(ca_t res, const ca_t x, gr_ctx_t ctx)
 
 
 static int
-_gr_ca_log(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_log(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_one(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_one(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_log(res, x, GR_CA_CTX(ctx));
+        ca_log(res, x, GR_CALCIUM_CTX(ctx));
 
         if (ctx->which_ring == GR_CTX_RR_CA)
         {
-            truth_t ok = ca_check_is_real(res, GR_CA_CTX(ctx));
+            truth_t ok = ca_check_is_real(res, GR_CALCIUM_CTX(ctx));
 
             if (ok == T_TRUE)
                 return GR_SUCCESS;
@@ -1260,87 +1260,87 @@ _gr_ca_log(ca_t res, const ca_t x, gr_ctx_t ctx)
 }
 
 static int
-_gr_ca_atan(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_atan(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_atan(res, x, GR_CA_CTX(ctx));
+        ca_atan(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_sin(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_sin(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_sin(res, x, GR_CA_CTX(ctx));
+        ca_sin(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_cos(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_cos(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_one(res, ctx);
+            return _gr_calcium_one(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_cos(res, x, GR_CA_CTX(ctx));
+        ca_cos(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_tan(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_tan(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_tan(res, x, GR_CA_CTX(ctx));
+        ca_tan(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_cot(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_cot(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
@@ -1349,140 +1349,140 @@ _gr_ca_cot(ca_t res, const ca_t x, gr_ctx_t ctx)
     }
     else
     {
-        ca_cot(res, x, GR_CA_CTX(ctx));
+        ca_cot(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_asin(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_asin(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_asin(res, x, GR_CA_CTX(ctx));
+        ca_asin(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_acos(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_acos(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_one(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_one(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return (ok == T_FALSE) ? GR_DOMAIN : GR_UNABLE;
     }
     else
     {
-        ca_acos(res, x, GR_CA_CTX(ctx));
+        ca_acos(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_erf(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_erf(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return GR_UNABLE;
     }
     else
     {
-        ca_erf(res, x, GR_CA_CTX(ctx));
+        ca_erf(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_erfi(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_erfi(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_zero(res, ctx);
+            return _gr_calcium_zero(res, ctx);
 
         return GR_UNABLE;
     }
     else
     {
-        ca_erfi(res, x, GR_CA_CTX(ctx));
+        ca_erfi(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_erfc(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_erfc(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_zero(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_zero(x, GR_CALCIUM_CTX(ctx));
 
         if (ok == T_TRUE)
-            return _gr_ca_one(res, ctx);
+            return _gr_calcium_one(res, ctx);
 
         return GR_UNABLE;
     }
     else
     {
-        ca_erfc(res, x, GR_CA_CTX(ctx));
+        ca_erfc(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_gamma(ca_t res, const ca_t x, gr_ctx_t ctx)
+_gr_calcium_gamma(ca_t res, const ca_t x, gr_ctx_t ctx)
 {
     if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA ||
         ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA)
     {
-        truth_t ok = ca_check_is_integer(x, GR_CA_CTX(ctx));
+        truth_t ok = ca_check_is_integer(x, GR_CALCIUM_CTX(ctx));
 
         if (ok != T_TRUE)
             return GR_UNABLE;
     }
 
     {
-        ca_gamma(res, x, GR_CA_CTX(ctx));
+        ca_gamma(res, x, GR_CALCIUM_CTX(ctx));
         return handle_possible_special_value(res, ctx);
     }
 }
 
 static int
-_gr_ca_poly_mullow(ca_ptr res,
+_gr_calcium_poly_mullow(ca_ptr res,
     ca_srcptr poly1, slong len1,
     ca_srcptr poly2, slong len2, slong n, gr_ctx_t ctx)
 {
-    _ca_poly_mullow(res, poly1, len1, poly2, len2, n, GR_CA_CTX(ctx));
+    _ca_poly_mullow(res, poly1, len1, poly2, len2, n, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_poly_factor(gr_ptr c, gr_vec_t fac, fmpz_vec_t mult, gr_srcptr elt,
+_gr_calcium_poly_factor(gr_ptr c, gr_vec_t fac, fmpz_vec_t mult, gr_srcptr elt,
                    int flags, gr_ctx_t ctx)
 {
     if (gr_ctx_is_algebraically_closed(ctx) == T_TRUE)
@@ -1491,7 +1491,7 @@ _gr_ca_poly_factor(gr_ptr c, gr_vec_t fac, fmpz_vec_t mult, gr_srcptr elt,
 }
 
 static int
-_gr_ca_poly_roots(gr_vec_t roots, fmpz_vec_t mult, const gr_poly_t poly, int flags, gr_ctx_t ctx)
+_gr_calcium_poly_roots(gr_vec_t roots, fmpz_vec_t mult, const gr_poly_t poly, int flags, gr_ctx_t ctx)
 {
     int status = GR_SUCCESS;
     ca_vec_t ca_roots;
@@ -1504,10 +1504,10 @@ _gr_ca_poly_roots(gr_vec_t roots, fmpz_vec_t mult, const gr_poly_t poly, int fla
 
     deg = poly->length - 1;
 
-    ca_vec_init(ca_roots, 0, GR_CA_CTX(ctx));
+    ca_vec_init(ca_roots, 0, GR_CALCIUM_CTX(ctx));
     exp = flint_malloc(sizeof(ulong) * deg);
 
-    if (ca_poly_roots(ca_roots, exp, (const ca_poly_struct *) poly, GR_CA_CTX(ctx)))
+    if (ca_poly_roots(ca_roots, exp, (const ca_poly_struct *) poly, GR_CALCIUM_CTX(ctx)))
     {
         gr_vec_set_length(roots, 0, ctx);
         fmpz_vec_set_length(mult, 0);
@@ -1516,7 +1516,7 @@ _gr_ca_poly_roots(gr_vec_t roots, fmpz_vec_t mult, const gr_poly_t poly, int fla
         {
             if (ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA || ctx->which_ring == GR_CTX_RR_CA)
             {
-                truth_t is_real = ca_check_is_real(ca_roots->entries + i, GR_CA_CTX(ctx));
+                truth_t is_real = ca_check_is_real(ca_roots->entries + i, GR_CALCIUM_CTX(ctx));
 
                 if (is_real == T_FALSE)
                     continue;
@@ -1539,66 +1539,66 @@ _gr_ca_poly_roots(gr_vec_t roots, fmpz_vec_t mult, const gr_poly_t poly, int fla
         fmpz_vec_set_length(mult, 0);
     }
 
-    ca_vec_clear(ca_roots, GR_CA_CTX(ctx));
+    ca_vec_clear(ca_roots, GR_CALCIUM_CTX(ctx));
     flint_free(exp);
 
     return status;
 }
 
 static int
-_gr_ca_mat_mul(ca_mat_t res, const ca_mat_t x, const ca_mat_t y, gr_ctx_t ctx)
+_gr_calcium_mat_mul(ca_mat_t res, const ca_mat_t x, const ca_mat_t y, gr_ctx_t ctx)
 {
     if (x->c != y->r || res->r != x->r || res->c != y->c)
         return GR_DOMAIN;
 
-    ca_mat_mul(res, x, y, GR_CA_CTX(ctx));
+    ca_mat_mul(res, x, y, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static int
-_gr_ca_mat_det(ca_t res, const ca_mat_t x, gr_ctx_t ctx)
+_gr_calcium_mat_det(ca_t res, const ca_mat_t x, gr_ctx_t ctx)
 {
-    ca_mat_det(res, x, GR_CA_CTX(ctx));
+    ca_mat_det(res, x, GR_CALCIUM_CTX(ctx));
     return GR_SUCCESS;
 }
 
 static void
-_gr_ca_ctx_clear(gr_ctx_t ctx)
+_gr_calcium_ctx_clear(gr_ctx_t ctx)
 {
-    ca_ctx_clear(GR_CA_CTX(ctx));
-    flint_free(GR_CA_CTX(ctx));
+    ca_ctx_clear(GR_CALCIUM_CTX(ctx));
+    flint_free(GR_CALCIUM_CTX(ctx));
 }
 
 static truth_t
-_gr_ca_ctx_is_field(gr_ctx_t ctx)
+_gr_calcium_ctx_is_field(gr_ctx_t ctx)
 {
     return (ctx->which_ring == GR_CTX_COMPLEX_EXTENDED_CA) ? T_FALSE : T_TRUE;
 }
 
 static truth_t
-_gr_ca_ctx_is_complex_field(gr_ctx_t ctx)
+_gr_calcium_ctx_is_complex_field(gr_ctx_t ctx)
 {
     return (ctx->which_ring == GR_CTX_CC_CA) ? T_TRUE : T_FALSE;
 }
 
 static truth_t
-_gr_ca_ctx_is_algebraically_closed(gr_ctx_t ctx)
+_gr_calcium_ctx_is_algebraically_closed(gr_ctx_t ctx)
 {
     return (ctx->which_ring == GR_CTX_CC_CA || ctx->which_ring == GR_CTX_COMPLEX_ALGEBRAIC_CA) ? T_TRUE : T_FALSE;
 }
 
 static truth_t
-_gr_ca_ctx_is_ordered_ring(gr_ctx_t ctx)
+_gr_calcium_ctx_is_ordered_ring(gr_ctx_t ctx)
 {
     return (ctx->which_ring == GR_CTX_RR_CA || ctx->which_ring == GR_CTX_REAL_ALGEBRAIC_CA) ? T_TRUE : T_FALSE;
 }
 
 static int
-_gr_ca_mat_find_nonzero_pivot(slong * pivot_row, ca_mat_t mat, slong start_row, slong end_row, slong column, gr_ctx_t ctx)
+_gr_calcium_mat_find_nonzero_pivot(slong * pivot_row, ca_mat_t mat, slong start_row, slong end_row, slong column, gr_ctx_t ctx)
 {
     truth_t ok;
 
-    ok = ca_mat_find_pivot(pivot_row, mat, start_row, end_row, column, GR_CA_CTX(ctx));
+    ok = ca_mat_find_pivot(pivot_row, mat, start_row, end_row, column, GR_CALCIUM_CTX(ctx));
 
     if (ok == T_TRUE)
         return GR_SUCCESS;
@@ -1614,22 +1614,22 @@ FLINT_DLL gr_static_method_table _ca_methods;
 
 gr_method_tab_input _ca_methods_input[] =
 {
-    {GR_METHOD_CTX_CLEAR,       (gr_funcptr) _gr_ca_ctx_clear},
-    {GR_METHOD_CTX_WRITE,       (gr_funcptr) _gr_ca_ctx_write},
+    {GR_METHOD_CTX_CLEAR,       (gr_funcptr) _gr_calcium_ctx_clear},
+    {GR_METHOD_CTX_WRITE,       (gr_funcptr) _gr_calcium_ctx_write},
 
-    {GR_METHOD_CTX_IS_RING,     (gr_funcptr) _gr_ca_ctx_is_field},
-    {GR_METHOD_CTX_IS_COMMUTATIVE_RING, (gr_funcptr) _gr_ca_ctx_is_field},
-    {GR_METHOD_CTX_IS_INTEGRAL_DOMAIN,  (gr_funcptr) _gr_ca_ctx_is_field},
-    {GR_METHOD_CTX_IS_FIELD,            (gr_funcptr) _gr_ca_ctx_is_field},
+    {GR_METHOD_CTX_IS_RING,     (gr_funcptr) _gr_calcium_ctx_is_field},
+    {GR_METHOD_CTX_IS_COMMUTATIVE_RING, (gr_funcptr) _gr_calcium_ctx_is_field},
+    {GR_METHOD_CTX_IS_INTEGRAL_DOMAIN,  (gr_funcptr) _gr_calcium_ctx_is_field},
+    {GR_METHOD_CTX_IS_FIELD,            (gr_funcptr) _gr_calcium_ctx_is_field},
 
-    {GR_METHOD_CTX_IS_UNIQUE_FACTORIZATION_DOMAIN, (gr_funcptr) _gr_ca_ctx_is_field},
+    {GR_METHOD_CTX_IS_UNIQUE_FACTORIZATION_DOMAIN, (gr_funcptr) _gr_calcium_ctx_is_field},
     {GR_METHOD_CTX_IS_FINITE, (gr_funcptr) gr_generic_ctx_predicate_false},
     {GR_METHOD_CTX_IS_FINITE_CHARACTERISTIC, (gr_funcptr) gr_generic_ctx_predicate_false},
-    {GR_METHOD_CTX_IS_ALGEBRAICALLY_CLOSED, (gr_funcptr) _gr_ca_ctx_is_algebraically_closed},
-    {GR_METHOD_CTX_IS_RATIONAL_VECTOR_SPACE, (gr_funcptr) _gr_ca_ctx_is_field},
-    {GR_METHOD_CTX_IS_REAL_VECTOR_SPACE, (gr_funcptr) _gr_ca_ctx_is_field},
-    {GR_METHOD_CTX_IS_COMPLEX_VECTOR_SPACE, (gr_funcptr) _gr_ca_ctx_is_complex_field},
-    {GR_METHOD_CTX_IS_ORDERED_RING, (gr_funcptr) _gr_ca_ctx_is_ordered_ring},
+    {GR_METHOD_CTX_IS_ALGEBRAICALLY_CLOSED, (gr_funcptr) _gr_calcium_ctx_is_algebraically_closed},
+    {GR_METHOD_CTX_IS_RATIONAL_VECTOR_SPACE, (gr_funcptr) _gr_calcium_ctx_is_field},
+    {GR_METHOD_CTX_IS_REAL_VECTOR_SPACE, (gr_funcptr) _gr_calcium_ctx_is_field},
+    {GR_METHOD_CTX_IS_COMPLEX_VECTOR_SPACE, (gr_funcptr) _gr_calcium_ctx_is_complex_field},
+    {GR_METHOD_CTX_IS_ORDERED_RING, (gr_funcptr) _gr_calcium_ctx_is_ordered_ring},
 
     /* important */
     {GR_METHOD_CTX_IS_THREADSAFE,       (gr_funcptr) gr_generic_ctx_predicate_false},
@@ -1637,130 +1637,130 @@ gr_method_tab_input _ca_methods_input[] =
     {GR_METHOD_CTX_IS_EXACT,     (gr_funcptr) gr_generic_ctx_predicate_true},
     {GR_METHOD_CTX_IS_CANONICAL, (gr_funcptr) gr_generic_ctx_predicate_false},
 
-    {GR_METHOD_INIT,            (gr_funcptr) _gr_ca_init},
+    {GR_METHOD_INIT,            (gr_funcptr) _gr_calcium_init},
 
-    {GR_METHOD_CLEAR,           (gr_funcptr) _gr_ca_clear},
-    {GR_METHOD_SWAP,            (gr_funcptr) _gr_ca_swap},
-    {GR_METHOD_SET_SHALLOW,     (gr_funcptr) _gr_ca_set_shallow},
-    {GR_METHOD_RANDTEST,        (gr_funcptr) _gr_ca_randtest},
-    {GR_METHOD_WRITE,           (gr_funcptr) _gr_ca_write},
+    {GR_METHOD_CLEAR,           (gr_funcptr) _gr_calcium_clear},
+    {GR_METHOD_SWAP,            (gr_funcptr) _gr_calcium_swap},
+    {GR_METHOD_SET_SHALLOW,     (gr_funcptr) _gr_calcium_set_shallow},
+    {GR_METHOD_RANDTEST,        (gr_funcptr) _gr_calcium_randtest},
+    {GR_METHOD_WRITE,           (gr_funcptr) _gr_calcium_write},
 
-    {GR_METHOD_ZERO,            (gr_funcptr) _gr_ca_zero},
-    {GR_METHOD_ONE,             (gr_funcptr) _gr_ca_one},
-    {GR_METHOD_IS_ZERO,         (gr_funcptr) _gr_ca_is_zero},
-    {GR_METHOD_IS_ONE,          (gr_funcptr) _gr_ca_is_one},
-    {GR_METHOD_IS_NEG_ONE,      (gr_funcptr) _gr_ca_is_neg_one},
-    {GR_METHOD_EQUAL,           (gr_funcptr) _gr_ca_equal},
+    {GR_METHOD_ZERO,            (gr_funcptr) _gr_calcium_zero},
+    {GR_METHOD_ONE,             (gr_funcptr) _gr_calcium_one},
+    {GR_METHOD_IS_ZERO,         (gr_funcptr) _gr_calcium_is_zero},
+    {GR_METHOD_IS_ONE,          (gr_funcptr) _gr_calcium_is_one},
+    {GR_METHOD_IS_NEG_ONE,      (gr_funcptr) _gr_calcium_is_neg_one},
+    {GR_METHOD_EQUAL,           (gr_funcptr) _gr_calcium_equal},
 
-    {GR_METHOD_SET,             (gr_funcptr) _gr_ca_set},
-    {GR_METHOD_SET_SI,          (gr_funcptr) _gr_ca_set_si},
-    {GR_METHOD_SET_UI,          (gr_funcptr) _gr_ca_set_ui},
-    {GR_METHOD_SET_FMPZ,        (gr_funcptr) _gr_ca_set_fmpz},
-    {GR_METHOD_SET_FMPQ,        (gr_funcptr) _gr_ca_set_fmpq},
-    {GR_METHOD_SET_OTHER,       (gr_funcptr) _gr_ca_set_other},
+    {GR_METHOD_SET,             (gr_funcptr) _gr_calcium_set},
+    {GR_METHOD_SET_SI,          (gr_funcptr) _gr_calcium_set_si},
+    {GR_METHOD_SET_UI,          (gr_funcptr) _gr_calcium_set_ui},
+    {GR_METHOD_SET_FMPZ,        (gr_funcptr) _gr_calcium_set_fmpz},
+    {GR_METHOD_SET_FMPQ,        (gr_funcptr) _gr_calcium_set_fmpq},
+    {GR_METHOD_SET_OTHER,       (gr_funcptr) _gr_calcium_set_other},
     {GR_METHOD_SET_STR,         (gr_funcptr) gr_generic_set_str_ring_exponents},
 
-    {GR_METHOD_GET_SI,          (gr_funcptr) _gr_ca_get_si},
-    {GR_METHOD_GET_UI,          (gr_funcptr) _gr_ca_get_ui},
-    {GR_METHOD_GET_FMPZ,        (gr_funcptr) _gr_ca_get_fmpz},
-    {GR_METHOD_GET_FMPQ,        (gr_funcptr) _gr_ca_get_fmpq},
-    {GR_METHOD_GET_D,           (gr_funcptr) _gr_ca_get_d},
+    {GR_METHOD_GET_SI,          (gr_funcptr) _gr_calcium_get_si},
+    {GR_METHOD_GET_UI,          (gr_funcptr) _gr_calcium_get_ui},
+    {GR_METHOD_GET_FMPZ,        (gr_funcptr) _gr_calcium_get_fmpz},
+    {GR_METHOD_GET_FMPQ,        (gr_funcptr) _gr_calcium_get_fmpq},
+    {GR_METHOD_GET_D,           (gr_funcptr) _gr_calcium_get_d},
 
-    {GR_METHOD_GET_FEXPR,                 (gr_funcptr) _gr_ca_get_fexpr},
-    {GR_METHOD_GET_FEXPR_SERIALIZE,       (gr_funcptr) _gr_ca_get_fexpr_serialize},
+    {GR_METHOD_GET_FEXPR,                 (gr_funcptr) _gr_calcium_get_fexpr},
+    {GR_METHOD_GET_FEXPR_SERIALIZE,       (gr_funcptr) _gr_calcium_get_fexpr_serialize},
 
-    {GR_METHOD_NEG,             (gr_funcptr) _gr_ca_neg},
+    {GR_METHOD_NEG,             (gr_funcptr) _gr_calcium_neg},
 
-    {GR_METHOD_ADD,             (gr_funcptr) _gr_ca_add},
-    {GR_METHOD_ADD_UI,          (gr_funcptr) _gr_ca_add_ui},
-    {GR_METHOD_ADD_SI,          (gr_funcptr) _gr_ca_add_si},
-    {GR_METHOD_ADD_FMPZ,        (gr_funcptr) _gr_ca_add_fmpz},
-    {GR_METHOD_ADD_FMPQ,        (gr_funcptr) _gr_ca_add_fmpq},
+    {GR_METHOD_ADD,             (gr_funcptr) _gr_calcium_add},
+    {GR_METHOD_ADD_UI,          (gr_funcptr) _gr_calcium_add_ui},
+    {GR_METHOD_ADD_SI,          (gr_funcptr) _gr_calcium_add_si},
+    {GR_METHOD_ADD_FMPZ,        (gr_funcptr) _gr_calcium_add_fmpz},
+    {GR_METHOD_ADD_FMPQ,        (gr_funcptr) _gr_calcium_add_fmpq},
 
-    {GR_METHOD_SUB,             (gr_funcptr) _gr_ca_sub},
-    {GR_METHOD_SUB_UI,          (gr_funcptr) _gr_ca_sub_ui},
-    {GR_METHOD_SUB_SI,          (gr_funcptr) _gr_ca_sub_si},
-    {GR_METHOD_SUB_FMPZ,        (gr_funcptr) _gr_ca_sub_fmpz},
-    {GR_METHOD_SUB_FMPQ,        (gr_funcptr) _gr_ca_sub_fmpq},
+    {GR_METHOD_SUB,             (gr_funcptr) _gr_calcium_sub},
+    {GR_METHOD_SUB_UI,          (gr_funcptr) _gr_calcium_sub_ui},
+    {GR_METHOD_SUB_SI,          (gr_funcptr) _gr_calcium_sub_si},
+    {GR_METHOD_SUB_FMPZ,        (gr_funcptr) _gr_calcium_sub_fmpz},
+    {GR_METHOD_SUB_FMPQ,        (gr_funcptr) _gr_calcium_sub_fmpq},
 
-    {GR_METHOD_MUL,             (gr_funcptr) _gr_ca_mul},
-    {GR_METHOD_MUL_UI,          (gr_funcptr) _gr_ca_mul_ui},
-    {GR_METHOD_MUL_SI,          (gr_funcptr) _gr_ca_mul_si},
-    {GR_METHOD_MUL_FMPZ,        (gr_funcptr) _gr_ca_mul_fmpz},
-    {GR_METHOD_MUL_FMPQ,        (gr_funcptr) _gr_ca_mul_fmpq},
+    {GR_METHOD_MUL,             (gr_funcptr) _gr_calcium_mul},
+    {GR_METHOD_MUL_UI,          (gr_funcptr) _gr_calcium_mul_ui},
+    {GR_METHOD_MUL_SI,          (gr_funcptr) _gr_calcium_mul_si},
+    {GR_METHOD_MUL_FMPZ,        (gr_funcptr) _gr_calcium_mul_fmpz},
+    {GR_METHOD_MUL_FMPQ,        (gr_funcptr) _gr_calcium_mul_fmpq},
 
-    {GR_METHOD_DIV,             (gr_funcptr) _gr_ca_div},
-    {GR_METHOD_DIV_UI,          (gr_funcptr) _gr_ca_div_ui},
-    {GR_METHOD_DIV_SI,          (gr_funcptr) _gr_ca_div_si},
-    {GR_METHOD_DIV_FMPZ,        (gr_funcptr) _gr_ca_div_fmpz},
-    {GR_METHOD_DIV_FMPQ,        (gr_funcptr) _gr_ca_div_fmpq},
+    {GR_METHOD_DIV,             (gr_funcptr) _gr_calcium_div},
+    {GR_METHOD_DIV_UI,          (gr_funcptr) _gr_calcium_div_ui},
+    {GR_METHOD_DIV_SI,          (gr_funcptr) _gr_calcium_div_si},
+    {GR_METHOD_DIV_FMPZ,        (gr_funcptr) _gr_calcium_div_fmpz},
+    {GR_METHOD_DIV_FMPQ,        (gr_funcptr) _gr_calcium_div_fmpq},
 
-    {GR_METHOD_IS_INVERTIBLE,   (gr_funcptr) _gr_ca_is_invertible},
-    {GR_METHOD_INV,             (gr_funcptr) _gr_ca_inv},
+    {GR_METHOD_IS_INVERTIBLE,   (gr_funcptr) _gr_calcium_is_invertible},
+    {GR_METHOD_INV,             (gr_funcptr) _gr_calcium_inv},
 
-    {GR_METHOD_POW,             (gr_funcptr) _gr_ca_pow},
-    {GR_METHOD_POW_UI,          (gr_funcptr) _gr_ca_pow_ui},
-    {GR_METHOD_POW_SI,          (gr_funcptr) _gr_ca_pow_si},
-    {GR_METHOD_POW_FMPZ,        (gr_funcptr) _gr_ca_pow_fmpz},
-    {GR_METHOD_POW_FMPQ,        (gr_funcptr) _gr_ca_pow_fmpq},
+    {GR_METHOD_POW,             (gr_funcptr) _gr_calcium_pow},
+    {GR_METHOD_POW_UI,          (gr_funcptr) _gr_calcium_pow_ui},
+    {GR_METHOD_POW_SI,          (gr_funcptr) _gr_calcium_pow_si},
+    {GR_METHOD_POW_FMPZ,        (gr_funcptr) _gr_calcium_pow_fmpz},
+    {GR_METHOD_POW_FMPQ,        (gr_funcptr) _gr_calcium_pow_fmpq},
 
-    {GR_METHOD_IS_SQUARE,       (gr_funcptr) _gr_ca_is_square},
-    {GR_METHOD_SQRT,            (gr_funcptr) _gr_ca_sqrt},
-    {GR_METHOD_RSQRT,           (gr_funcptr) _gr_ca_rsqrt},
+    {GR_METHOD_IS_SQUARE,       (gr_funcptr) _gr_calcium_is_square},
+    {GR_METHOD_SQRT,            (gr_funcptr) _gr_calcium_sqrt},
+    {GR_METHOD_RSQRT,           (gr_funcptr) _gr_calcium_rsqrt},
 
-    {GR_METHOD_POS_INF,         (gr_funcptr) _gr_ca_pos_inf},
-    {GR_METHOD_NEG_INF,         (gr_funcptr) _gr_ca_neg_inf},
-    {GR_METHOD_UINF,            (gr_funcptr) _gr_ca_uinf},
-    {GR_METHOD_UNDEFINED,       (gr_funcptr) _gr_ca_undefined},
-    {GR_METHOD_UNKNOWN,         (gr_funcptr) _gr_ca_unknown},
+    {GR_METHOD_POS_INF,         (gr_funcptr) _gr_calcium_pos_inf},
+    {GR_METHOD_NEG_INF,         (gr_funcptr) _gr_calcium_neg_inf},
+    {GR_METHOD_UINF,            (gr_funcptr) _gr_calcium_uinf},
+    {GR_METHOD_UNDEFINED,       (gr_funcptr) _gr_calcium_undefined},
+    {GR_METHOD_UNKNOWN,         (gr_funcptr) _gr_calcium_unknown},
 
-    {GR_METHOD_FLOOR,           (gr_funcptr) _gr_ca_floor},
-    {GR_METHOD_CEIL,            (gr_funcptr) _gr_ca_ceil},
-    {GR_METHOD_TRUNC,           (gr_funcptr) _gr_ca_trunc},
-    {GR_METHOD_NINT,            (gr_funcptr) _gr_ca_nint},
+    {GR_METHOD_FLOOR,           (gr_funcptr) _gr_calcium_floor},
+    {GR_METHOD_CEIL,            (gr_funcptr) _gr_calcium_ceil},
+    {GR_METHOD_TRUNC,           (gr_funcptr) _gr_calcium_trunc},
+    {GR_METHOD_NINT,            (gr_funcptr) _gr_calcium_nint},
 
-    {GR_METHOD_I,               (gr_funcptr) _gr_ca_i},
-    {GR_METHOD_ABS,             (gr_funcptr) _gr_ca_abs},
-    {GR_METHOD_CONJ,            (gr_funcptr) _gr_ca_conj},
-    {GR_METHOD_RE,              (gr_funcptr) _gr_ca_re},
-    {GR_METHOD_IM,              (gr_funcptr) _gr_ca_im},
-    {GR_METHOD_SGN,             (gr_funcptr) _gr_ca_sgn},
-    {GR_METHOD_CSGN,            (gr_funcptr) _gr_ca_csgn},
-    {GR_METHOD_ARG,             (gr_funcptr) _gr_ca_arg},
+    {GR_METHOD_I,               (gr_funcptr) _gr_calcium_i},
+    {GR_METHOD_ABS,             (gr_funcptr) _gr_calcium_abs},
+    {GR_METHOD_CONJ,            (gr_funcptr) _gr_calcium_conj},
+    {GR_METHOD_RE,              (gr_funcptr) _gr_calcium_re},
+    {GR_METHOD_IM,              (gr_funcptr) _gr_calcium_im},
+    {GR_METHOD_SGN,             (gr_funcptr) _gr_calcium_sgn},
+    {GR_METHOD_CSGN,            (gr_funcptr) _gr_calcium_csgn},
+    {GR_METHOD_ARG,             (gr_funcptr) _gr_calcium_arg},
 
-    {GR_METHOD_CMP,              (gr_funcptr) _gr_ca_cmp},
+    {GR_METHOD_CMP,              (gr_funcptr) _gr_calcium_cmp},
 
-    {GR_METHOD_PI,              (gr_funcptr) _gr_ca_pi},
-    {GR_METHOD_EXP,             (gr_funcptr) _gr_ca_exp},
-    {GR_METHOD_LOG,             (gr_funcptr) _gr_ca_log},
+    {GR_METHOD_PI,              (gr_funcptr) _gr_calcium_pi},
+    {GR_METHOD_EXP,             (gr_funcptr) _gr_calcium_exp},
+    {GR_METHOD_LOG,             (gr_funcptr) _gr_calcium_log},
 
-    {GR_METHOD_SIN,             (gr_funcptr) _gr_ca_sin},
-    {GR_METHOD_COS,             (gr_funcptr) _gr_ca_cos},
-    {GR_METHOD_TAN,             (gr_funcptr) _gr_ca_tan},
-    {GR_METHOD_COT,             (gr_funcptr) _gr_ca_cot},
+    {GR_METHOD_SIN,             (gr_funcptr) _gr_calcium_sin},
+    {GR_METHOD_COS,             (gr_funcptr) _gr_calcium_cos},
+    {GR_METHOD_TAN,             (gr_funcptr) _gr_calcium_tan},
+    {GR_METHOD_COT,             (gr_funcptr) _gr_calcium_cot},
 
-    {GR_METHOD_SINH,             (gr_funcptr) _gr_ca_sinh},
-    {GR_METHOD_COSH,             (gr_funcptr) _gr_ca_cosh},
-    {GR_METHOD_TANH,             (gr_funcptr) _gr_ca_tanh},
-    {GR_METHOD_COTH,             (gr_funcptr) _gr_ca_coth},
+    {GR_METHOD_SINH,             (gr_funcptr) _gr_calcium_sinh},
+    {GR_METHOD_COSH,             (gr_funcptr) _gr_calcium_cosh},
+    {GR_METHOD_TANH,             (gr_funcptr) _gr_calcium_tanh},
+    {GR_METHOD_COTH,             (gr_funcptr) _gr_calcium_coth},
 
-    {GR_METHOD_ATAN,            (gr_funcptr) _gr_ca_atan},
-    {GR_METHOD_ASIN,            (gr_funcptr) _gr_ca_asin},
-    {GR_METHOD_ACOS,            (gr_funcptr) _gr_ca_acos},
+    {GR_METHOD_ATAN,            (gr_funcptr) _gr_calcium_atan},
+    {GR_METHOD_ASIN,            (gr_funcptr) _gr_calcium_asin},
+    {GR_METHOD_ACOS,            (gr_funcptr) _gr_calcium_acos},
 
-    {GR_METHOD_ERF,             (gr_funcptr) _gr_ca_erf},
-    {GR_METHOD_ERFC,            (gr_funcptr) _gr_ca_erfc},
-    {GR_METHOD_ERFI,            (gr_funcptr) _gr_ca_erfi},
+    {GR_METHOD_ERF,             (gr_funcptr) _gr_calcium_erf},
+    {GR_METHOD_ERFC,            (gr_funcptr) _gr_calcium_erfc},
+    {GR_METHOD_ERFI,            (gr_funcptr) _gr_calcium_erfi},
 
-    {GR_METHOD_GAMMA,            (gr_funcptr) _gr_ca_gamma},
+    {GR_METHOD_GAMMA,            (gr_funcptr) _gr_calcium_gamma},
 
-    {GR_METHOD_POLY_MULLOW,     (gr_funcptr) _gr_ca_poly_mullow},
-    {GR_METHOD_POLY_FACTOR,     (gr_funcptr) _gr_ca_poly_factor},
-    {GR_METHOD_POLY_ROOTS,      (gr_funcptr) _gr_ca_poly_roots},
-    /* {GR_METHOD_POLY_ROOTS_OTHER,(gr_funcptr) _gr_ca_poly_roots_other}, */
-    {GR_METHOD_MAT_MUL,         (gr_funcptr) _gr_ca_mat_mul},
-    {GR_METHOD_MAT_DET,         (gr_funcptr) _gr_ca_mat_det},
-    {GR_METHOD_MAT_FIND_NONZERO_PIVOT,      (gr_funcptr) _gr_ca_mat_find_nonzero_pivot},
+    {GR_METHOD_POLY_MULLOW,     (gr_funcptr) _gr_calcium_poly_mullow},
+    {GR_METHOD_POLY_FACTOR,     (gr_funcptr) _gr_calcium_poly_factor},
+    {GR_METHOD_POLY_ROOTS,      (gr_funcptr) _gr_calcium_poly_roots},
+    /* {GR_METHOD_POLY_ROOTS_OTHER,(gr_funcptr) _gr_calcium_poly_roots_other}, */
+    {GR_METHOD_MAT_MUL,         (gr_funcptr) _gr_calcium_mat_mul},
+    {GR_METHOD_MAT_DET,         (gr_funcptr) _gr_calcium_mat_det},
+    {GR_METHOD_MAT_FIND_NONZERO_PIVOT,      (gr_funcptr) _gr_calcium_mat_find_nonzero_pivot},
 
     {0,                         (gr_funcptr) NULL},
 };
@@ -1773,7 +1773,7 @@ _gr_ctx_init_ca(gr_ctx_t ctx, int which_ring)
     ctx->size_limit = WORD_MAX;
 
     GR_CTX_DATA_AS_PTR(ctx) = flint_malloc(sizeof(ca_ctx_struct));
-    ca_ctx_init(GR_CA_CTX(ctx));
+    ca_ctx_init(GR_CALCIUM_CTX(ctx));
 
     ctx->methods = _ca_methods;
 

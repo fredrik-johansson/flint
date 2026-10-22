@@ -17,8 +17,9 @@ for integers. Most programs do not need to include it; it is needed for
 `truth_print`, which `ca.h` does not declare.
 
 The user guide page [](guide/types/choosing#exact) gives an overview of the exact
-number types; [](ca/using) and [](qqbar/using) introduce the two main
-modules.
+number types; [](gr_ca/using), [](ca/using) and [](qqbar/using) introduce
+the main modules. The castle fields of [](gr_ca), which supersede [](ca),
+use `truth_t` as well.
 
 ## Triple-valued logic {#truth}
 

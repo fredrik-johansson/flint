@@ -491,6 +491,20 @@ with `fexpr_set_d`, `NumberI`, `Mul` and `Add` (omitting zero parts).
 :::
 
 ::: function
+void fexpr_set_arb_decimal(fexpr_t res, const arb_t x, slong digits)
+void fexpr_set_acb_decimal(fexpr_t res, const acb_t z, slong digits)
+
+Sets `res` to a decimal approximation of the ball `x`, respectively of
+the complex ball `z` (as `Add(Decimal(re), Mul(Decimal(im), NumberI))`,
+omitting a zero part): `Decimal(str)` with `str` the output of
+`arb_get_str` with at most `digits` digits and the flag
+`ARB_STR_NO_RADIUS`, so that all printed digits are correct and the
+radius is not represented. An exact zero becomes the integer 0, an
+infinite midpoint `Infinity` with a sign, and a NaN or a ball of
+infinite radius (in either part of a complex ball) `Undefined`.
+:::
+
+::: function
 void fexpr_neg(fexpr_t res, const fexpr_t a)
 void fexpr_add(fexpr_t res, const fexpr_t a, const fexpr_t b)
 void fexpr_sub(fexpr_t res, const fexpr_t a, const fexpr_t b)

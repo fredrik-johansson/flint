@@ -6,6 +6,12 @@ category: Exact real and complex numbers
 order: 4
 ---
 
+::: note The legacy design
+This module belongs to the legacy design of exact real and complex
+numbers ([](ca)); castle arithmetic ([](gr_ca)) provides the same
+functionality through [](gr_vec), [](gr_poly) and [](gr_mat).
+:::
+
 This module implements dense univariate polynomials whose coefficients
 are exact real or complex numbers of type `ca_t` (see [](ca)), that is,
 elements of $\mathbb{C}[x]$ with coefficients in the subfield of

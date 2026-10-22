@@ -169,6 +169,13 @@ constant.
 :::
 
 ::: function
+int fmpz_mpoly_q_get_fmpq(fmpq_t res, const fmpz_mpoly_q_t x, const fmpz_mpoly_ctx_t ctx)
+
+If `x` is a constant, sets `res` to its value (in canonical form when
+`x` is) and returns 1; otherwise returns 0 and leaves `res` unchanged.
+:::
+
+::: function
 void fmpz_mpoly_q_used_vars(int * used, const fmpz_mpoly_q_t f, const fmpz_mpoly_ctx_t ctx)
 void fmpz_mpoly_q_used_vars_num(int * used, const fmpz_mpoly_q_t f, const fmpz_mpoly_ctx_t ctx)
 void fmpz_mpoly_q_used_vars_den(int * used, const fmpz_mpoly_q_t f, const fmpz_mpoly_ctx_t ctx)

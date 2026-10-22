@@ -735,6 +735,15 @@ The underscore functions assume:
 :::
 
 ::: function
+int _gr_poly_div_root(gr_ptr Q, gr_ptr R, gr_srcptr A, slong len, gr_srcptr c, gr_ctx_t ctx)
+int gr_poly_div_root(gr_poly_t Q, gr_ptr R, const gr_poly_t A, gr_srcptr c, gr_ctx_t ctx)
+
+Division by $x - c$ (Horner's scheme): sets $Q$ to the quotient and $R$
+to the remainder $A(c)$. The underscore version requires `len` $\ge 2$
+(writing `len - 1` coefficients of $Q$) and allows $Q$ to alias $A$.
+:::
+
+::: function
 int _gr_poly_div(gr_ptr Q, gr_srcptr A, slong lenA, gr_srcptr B, slong lenB, gr_ctx_t ctx)
 int gr_poly_div(gr_poly_t Q, const gr_poly_t A, const gr_poly_t B, gr_ctx_t ctx)
 int _gr_poly_div_basecase_preinv1(gr_ptr Q, gr_srcptr A, slong lenA, gr_srcptr B, slong lenB, gr_srcptr invB, gr_ctx_t ctx)

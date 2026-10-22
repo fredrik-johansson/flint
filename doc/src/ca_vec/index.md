@@ -6,6 +6,12 @@ category: Exact real and complex numbers
 order: 3
 ---
 
+::: note The legacy design
+This module belongs to the legacy design of exact real and complex
+numbers ([](ca)); castle arithmetic ([](gr_ca)) provides the same
+functionality through [](gr_vec), [](gr_poly) and [](gr_mat).
+:::
+
 This module implements vectors of exact real and complex numbers of type
 `ca_t` (see [](ca)). A `ca_vec_t` is a growable array with a length that
 is set by the user: unlike a [](ca_poly) polynomial, it is never
