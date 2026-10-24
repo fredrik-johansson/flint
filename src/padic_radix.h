@@ -173,11 +173,16 @@ int _padic_radix_poly_mulmid(padic_radix_struct * res, const padic_radix_struct 
 int _padic_radix_poly_mullow(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong n, gr_ctx_t ctx);
 
 int _padic_radix_mat_charpoly_berkowitz(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx);
+int padic_radix_mat_charpoly_hessenberg(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx);
+int padic_radix_mat_charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx);
 int padic_radix_mat_charpoly(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx);
 
 int padic_radix_mat_find_nonzero_pivot(slong * pivot_row, gr_mat_t mat, slong start_row, slong end_row, slong column, gr_ctx_t ctx);
 int padic_radix_mat_det_lu_full(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx);
+int padic_radix_mat_det_levels(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx);
 int padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx);
+int padic_radix_mat_nonsingular_solve(gr_mat_t X, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx);
+int padic_radix_mat_inv(gr_mat_t X, const gr_mat_t A, gr_ctx_t ctx);
 
 slong _padic_radix_exp_bound(slong v, slong N, ulong p);
 

@@ -42,6 +42,7 @@ TEST_FUNCTION_START(padic_radix_det, state)
         gr_ctx_init_padic_radix_randtest(ctx, state, 1 + n_randint(state, 100));
         gr_mat_test_det((gr_method_mat_unary_op_get_scalar) padic_radix_mat_det, state, 10, 8, ctx);
         gr_mat_test_det((gr_method_mat_unary_op_get_scalar) padic_radix_mat_det_lu_full, state, 10, 8, ctx);
+        gr_mat_test_det((gr_method_mat_unary_op_get_scalar) padic_radix_mat_det_levels, state, 10, 8, ctx);
         gr_ctx_clear(ctx);
     }
 
@@ -59,7 +60,7 @@ TEST_FUNCTION_START(padic_radix_det, state)
         slong n, N, amax, i, j, opt, k;
 
         p = n_randint(state, 2) ? n_nth_prime(1 + n_randint(state, 5)) : n_randprime(state, 2 + n_randint(state, 30), 1);
-        n = n_randint(state, 12);
+        n = n_randint(state, n_randint(state, 4) ? 12 : 40);
         N = 1 + n_randint(state, 40);
         amax = n_randint(state, 4);
 
@@ -99,7 +100,7 @@ TEST_FUNCTION_START(padic_radix_det, state)
 
         GR_MUST_SUCCEED(padic_radix_exact_set_fmpz(e, det, ctx));
 
-        for (k = 0; k < 3; k++)
+        for (k = 0; k < 4; k++)
         {
             int status;
 
@@ -107,8 +108,10 @@ TEST_FUNCTION_START(padic_radix_det, state)
                 status = padic_radix_mat_det_lu_full(d, A, ctx);
             else if (k == 1)
                 status = padic_radix_mat_det(d, A, ctx);
-            else
+            else if (k == 2)
                 status = gr_mat_det_lu(d, A, ctx);   /* via the pivot method */
+            else
+                status = padic_radix_mat_det_levels(d, A, ctx);
 
             if (status == GR_UNABLE && k == 2)
                 continue;
@@ -125,7 +128,7 @@ TEST_FUNCTION_START(padic_radix_det, state)
                 flint_abort();
             }
 
-            if (k == 0 && !fmpz_is_zero(det))
+            if ((k == 0 || k == 3) && !fmpz_is_zero(det))
             {
                 fmpz_mat_inv(Mi, den, M);
                 opt = WORD_MAX;

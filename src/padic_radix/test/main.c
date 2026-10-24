@@ -14,6 +14,7 @@
 #include "t-charpoly.c"
 #include "t-det.c"
 #include "t-minplus.c"
+#include "t-solve.c"
 #include "t-dot.c"
 #include "t-exp.c"
 #include "t-exp_balanced.c"
@@ -33,6 +34,7 @@ test_struct tests[] =
     TEST_FUNCTION(padic_radix_charpoly),
     TEST_FUNCTION(padic_radix_det),
     TEST_FUNCTION(padic_radix_minplus),
+    TEST_FUNCTION(padic_radix_solve),
     TEST_FUNCTION(padic_radix_dot),
     TEST_FUNCTION(padic_radix_exp),
     TEST_FUNCTION(padic_radix_exp_balanced),

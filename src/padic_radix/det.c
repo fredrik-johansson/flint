@@ -9,6 +9,8 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
+#include "nmod_mat.h"
+#include "perm.h"
 #include "gr.h"
 #include "gr_mat.h"
 #include "padic_radix.h"
@@ -221,11 +223,198 @@ padic_radix_mat_det_lu_full(padic_radix_t res, const gr_mat_t A0, gr_ctx_t ctx)
 }
 
 /*
-    Full pivoting requires the updated Schur complement at every step, so it
-    is done with rank-one updates. Above a size depending on the precision,
-    the blocked recursive LU decomposition (column pivots of minimal
-    valuation, Schur complements by matrix multiplication) is faster; its
-    precision is close to optimal but not always optimal.
+    Blocked elimination with full pivoting by valuation levels. At level a
+    (the minimal valuation of the current Schur complement S), the matrix
+    T = (S / p^a) mod p has some rank r; a rank-revealing LU decomposition of
+    T over F_p selects r rows and columns such that S11 = p^a U with U
+    invertible modulo p. These r pivots are all of valuation a, as in full
+    pivoting, and they are eliminated at once: det(S) = +- det(S11)
+    det(S22 - S21 S11^(-1) S12), where det(S11) comes from an LU
+    decomposition of S11 (whose pivots are of valuation a) and the Schur
+    complement, whose entries have valuation at least a + 1, from a
+    triangular solve and a matrix product. As with full pivoting, the
+    Schur complements keep the absolute precision of the input, so the
+    determinant has the optimal precision; the work is that of a blocked LU
+    decomposition (a single level when A is invertible modulo p).
+*/
+int
+padic_radix_mat_det_levels(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
+{
+    const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
+    ulong p = GR_PADIC_RADIX_CTX(ctx)->p;
+    slong n = A->r, m, i, j, k, r, a;
+    gr_mat_t S;
+    int sign = 0, status = GR_SUCCESS;
+    nmod_t mod;
+
+    if (n != A->c)
+        return GR_DOMAIN;
+
+    if (n == 0)
+        return padic_radix_one(res, ctx);
+
+    nmod_init(&mod, p);
+    gr_mat_init(S, n, n, ctx);
+    status |= gr_mat_set(S, A, ctx);
+    status |= padic_radix_one(res, ctx);
+
+    while ((m = S->r) > 0 && status == GR_SUCCESS)
+    {
+        nmod_mat_t T;
+        slong * P, * rows, * cols, * pc, * P2;
+        char * used;
+        gr_mat_t S11, S12, S21, S22, LU;
+        slong rk;
+
+        a = WORD_MAX;
+        for (i = 0; i < m; i++)
+            for (j = 0; j < m; j++)
+            {
+                const padic_radix_struct * x = CENTRY(S, i, j);
+                if (x->u.size != 0)
+                    a = FLINT_MIN(a, x->v);
+            }
+
+        if (a == WORD_MAX)
+        {
+            /* a block of zeros */
+            padic_radix_t z;
+            slong zN = _zero_block_prec(S, 0, m, ctx);
+
+            if (zN == WORD_MIN)
+            {
+                status = GR_UNABLE;
+                break;
+            }
+
+            padic_radix_init(z, ctx);
+            z->N = zN;
+            status |= _padic_radix_finalize(z, ctx);
+            status |= padic_radix_mul(res, res, z, ctx);
+            padic_radix_clear(z, ctx);
+            break;
+        }
+
+        /* rank profile of S / p^a modulo p */
+        nmod_mat_init(T, m, m, p);
+        for (i = 0; i < m; i++)
+            for (j = 0; j < m; j++)
+            {
+                const padic_radix_struct * x = CENTRY(S, i, j);
+                ulong t = 0;
+                if (x->u.size != 0 && x->v == a)
+                {
+                    t = nmod_set_ui(x->u.d[0], mod);
+                    if (x->u.size < 0)
+                        t = nmod_neg(t, mod);
+                }
+                nmod_mat_entry(T, i, j) = t;
+            }
+
+        P = flint_malloc(sizeof(slong) * (4 * m));
+        rows = P + m;
+        cols = rows + m;
+        pc = cols + m;
+        used = flint_calloc(m, 1);
+
+        r = nmod_mat_lu(P, T, 0);
+
+        /* pivot columns: the first nonzero entry of each row of U */
+        for (k = 0, j = 0; k < r; k++)
+        {
+            while (j < m && nmod_mat_entry(T, k, j) == 0)
+                j++;
+            pc[k] = j++;
+        }
+        nmod_mat_clear(T);
+
+        for (k = 0; k < m; k++)
+            rows[k] = P[k];
+        for (k = 0; k < r; k++)
+        {
+            cols[k] = pc[k];
+            used[pc[k]] = 1;
+        }
+        for (j = 0, k = r; j < m; j++)
+            if (!used[j])
+                cols[k++] = j;
+
+        sign ^= _perm_parity(rows, m) ^ _perm_parity(cols, m);
+
+        gr_mat_init(S11, r, r, ctx);
+        gr_mat_init(S12, r, m - r, ctx);
+        gr_mat_init(S21, m - r, r, ctx);
+        gr_mat_init(S22, m - r, m - r, ctx);
+
+        for (i = 0; i < m; i++)
+            for (j = 0; j < m; j++)
+            {
+                padic_radix_struct * x = ENTRY(S, rows[i], cols[j]);
+                padic_radix_struct * y;
+                if (i < r)
+                    y = (j < r) ? ENTRY(S11, i, j) : ENTRY(S12, i, j - r);
+                else
+                    y = (j < r) ? ENTRY(S21, i - r, j) : ENTRY(S22, i - r, j - r);
+                padic_radix_swap(x, y, ctx);
+            }
+
+        /* det(S11) by LU (the pivots have valuation a) */
+        P2 = flint_malloc(sizeof(slong) * FLINT_MAX(r, 1));
+        gr_mat_init(LU, r, r, ctx);
+        status |= gr_mat_lu(&rk, P2, LU, S11, 1, ctx);
+        if (status == GR_SUCCESS && rk == r)
+        {
+            for (k = 0; k < r; k++)
+                status |= padic_radix_mul(res, res, ENTRY(LU, k, k), ctx);
+            sign ^= _perm_parity(P2, r);
+
+            /* Schur complement S22 - S21 S11^(-1) S12 */
+            if (r < m)
+            {
+                gr_mat_t W, Q;
+                gr_mat_init(W, r, m - r, ctx);
+                gr_mat_init(Q, m - r, m - r, ctx);
+                status |= gr_mat_nonsingular_solve_lu_precomp(W, P2, LU, S12, ctx);
+                status |= gr_mat_mul(Q, S21, W, ctx);
+                status |= gr_mat_sub(S22, S22, Q, ctx);
+                gr_mat_clear(W, ctx);
+                gr_mat_clear(Q, ctx);
+            }
+        }
+        else
+            status |= GR_UNABLE;
+
+        gr_mat_clear(LU, ctx);
+        flint_free(P2);
+        flint_free(P);
+        flint_free(used);
+        gr_mat_clear(S11, ctx);
+        gr_mat_clear(S12, ctx);
+        gr_mat_clear(S21, ctx);
+        gr_mat_swap(S, S22, ctx);
+        gr_mat_clear(S22, ctx);
+    }
+
+    gr_mat_clear(S, ctx);
+
+    if (status & GR_UNABLE)
+    {
+        radix_integer_zero(&res->u, radix);
+        res->v = 0;
+        res->N = -PADIC_RADIX_ERR_MAX;
+        return status;
+    }
+
+    if (sign)
+        status |= padic_radix_neg(res, res, ctx);
+
+    return status;
+}
+
+/*
+    Both algorithms give the optimal precision; full pivoting with rank-one
+    updates has less overhead for small matrices, the blocked version by
+    valuation levels is faster above a size depending on the precision.
 */
 int
 padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
@@ -253,11 +442,11 @@ padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
             L = FLINT_MAX(L, FLINT_ABS(CENTRY(A, i, i)->u.size));
     }
 
-    cut = (L <= 1) ? 32 : (L <= 2) ? 20 : 12;
+    cut = (L <= 1) ? 40 : (L <= 2) ? 24 : 16;
 
     if (n > cut)
     {
-        status = gr_mat_det_lu(res, A, ctx);
+        status = padic_radix_mat_det_levels(res, A, ctx);
         if (status == GR_SUCCESS)
             return status;
     }

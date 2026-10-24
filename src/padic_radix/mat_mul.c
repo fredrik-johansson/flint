@@ -52,28 +52,29 @@ typedef struct
 }
 _pack_mat_struct;
 
-/* the outputs marked PADIC_RADIX_PACK_EXACT_SUM, in order, as delayed dot
-   products (which keep exact sums exact when they fit) */
+/* c = the exact sum whose residue modulo B^s has the digits d[0, dn)
+   (dn <= s), relative to the limb frame W, given that |sum| < B^(s - 1):
+   a nonzero top limb means a negative sum */
 static int
-_exact_outputs(padic_radix_struct ** T, const slong * PN, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+_exact_sum_finish(padic_radix_struct * c, nn_srcptr d, slong dn, slong s, slong W, gr_ctx_t ctx)
 {
-    slong i, j, q = 0, cnt = 0, m = A->r, n = B->c, kk = A->c;
-    int status = GR_SUCCESS;
+    const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
+    nn_ptr u = radix_integer_fit_limbs(&c->u, s, radix);
+    slong sz;
+    int neg;
 
-    for (i = 0; i < m * n; i++)
-        cnt += (PN[i] == PADIC_RADIX_PACK_EXACT_SUM);
-
-    *T = flint_malloc(sizeof(padic_radix_struct) * cnt);
-    _gr_vec_init(*T, cnt, ctx);
-
-    for (i = 0; i < m; i++)
-        for (j = 0; j < n; j++)
-            if (PN[i * n + j] == PADIC_RADIX_PACK_EXACT_SUM)
-                status |= padic_radix_dot_strided_delayed(*T + q++, NULL, 0,
-                    gr_mat_entry_srcptr(A, i, 0, ctx), 1,
-                    gr_mat_entry_srcptr(B, 0, j, ctx), B->stride, kk, ctx);
-
-    return status;
+    flint_mpn_copyi(u, d, dn);
+    flint_mpn_zero(u + dn, s - dn);
+    neg = (u[s - 1] != 0);
+    if (neg)
+        radix_neg(u, u, s, radix);
+    sz = s;
+    while (sz > 0 && u[sz - 1] == 0)
+        sz--;
+    c->u.size = neg ? -sz : sz;
+    c->v = (slong) radix->exp * W;
+    c->N = PADIC_RADIX_EXACT;
+    return _padic_radix_finalize(c, ctx);
 }
 
 #define ADD3(c2, c1, c0, ph, pl) add_sssaaaaaa(c2, c1, c0, c2, c1, c0, 0, ph, pl)
@@ -84,8 +85,8 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     slong e = radix->exp;
     slong m = A->r, kk = A->c, n = B->c;
-    slong i, j, t, L, stride, nA, nB, nex = 0, qex;
-    padic_radix_struct * T = NULL;
+    slong i, j, t, L, stride, nA, nB, * hA, * hB;
+    int anyexA = 0, anyexB = 0;
     _pack_mat_struct PA, PB;
     slong * PN, * PW, * Pslots, * ex;
     nn_ptr acc;
@@ -139,6 +140,27 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
             PB.vv[q] = meta.vv; PB.ve[q] = meta.ve; PB.NN[q] = meta.NN; PB.ww[q] = meta.ww;
         }
 
+    /* a priori extents v + e |u| of the exact nonzero entries (for the
+       outputs whose terms are all exact, see padic_radix_dot_strided_delayed) */
+    hA = TMP_ALLOC(sizeof(slong) * (nA + nB));
+    hB = hA + nA;
+    for (i = 0; i < m; i++)
+        for (t = 0; t < kk; t++)
+        {
+            const padic_radix_struct * x = gr_mat_entry_srcptr(A, i, t, ctx);
+            int ex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
+            hA[i * kk + t] = ex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
+            anyexA |= ex;
+        }
+    for (t = 0; t < kk; t++)
+        for (j = 0; j < n; j++)
+        {
+            const padic_radix_struct * x = gr_mat_entry_srcptr(B, t, j, ctx);
+            int ex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
+            hB[j * kk + t] = ex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
+            anyexB |= ex;
+        }
+
     /* exponent bookkeeping for all outputs */
     L = 1;
     for (i = 0; i < m; i++)
@@ -171,12 +193,31 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
                 N = (Nt >= PADIC_RADIX_PACK_NONE) ? PADIC_RADIX_EXACT : Nt;
                 s = 0;
             }
-            else if (Nt >= PADIC_RADIX_PACK_NONE)
+            else if (Nt >= PADIC_RADIX_PACK_NONE && anyexA && anyexB)
             {
-                /* only exact terms */
-                N = PADIC_RADIX_PACK_EXACT_SUM;
+                /* only exact terms: the exact sum is kept if its a priori
+                   extent is at most one limb beyond the precision; it is
+                   then computed modulo B^s with a carry and a sign limb */
+                slong H = -2 * PADIC_RADIX_PACK_BIG, ext, prec;
+                const slong * ha = hA + i * kk, * hb = hB + j * kk;
+
+                for (t = 0; t < kk; t++)
+                    H = FLINT_MAX(H, ha[t] + hb[t]);
+
+                N = _padic_radix_pack_prec(vmin, PADIC_RADIX_PACK_NONE, ctx);
                 s = 0;
-                nex++;
+                if (N != PADIC_RADIX_EXACT && N > vmin)
+                {
+                    ext = (H - vmin + e - 1) / e + 1;
+                    prec = (N - vmin + e - 1) / e;
+                    if (ext <= prec + 1)
+                    {
+                        N = PADIC_RADIX_PACK_EXACT_SUM;
+                        s = (H - e * W + e - 1) / e + 2;
+                    }
+                    else
+                        s = (slong) radix_div_exp((ulong) (N - e * W) + e - 1, radix);
+                }
             }
             else
             {
@@ -234,10 +275,6 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
 
     acc = TMP_ALLOC(sizeof(ulong) * 3 * FLINT_MAX(L, 2));
 
-    /* the outputs with only exact terms, before C is written (aliasing) */
-    if (nex != 0)
-        status |= _exact_outputs(&T, PN, A, B, ctx);
-    qex = 0;
 
     for (i = 0; i < m; i++)
     {
@@ -252,12 +289,6 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
             slong N = PN[i * n + j], W = PW[i * n + j], nslots = Pslots[i * n + j];
             nn_ptr d;
 
-            if (N == PADIC_RADIX_PACK_EXACT_SUM)
-            {
-                padic_radix_swap(c, T + qex++, ctx);
-                continue;
-            }
-
             if (nslots == 0)
             {
                 radix_integer_zero(&c->u, radix);
@@ -269,6 +300,7 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
 
             if (L <= 2)
             {
+                /* (no exact sums here: their windows have at least 3 limbs) */
                 /* every window fits in two limbs: accumulate in registers;
                    zero entries have frame BIG and are skipped by the
                    offset test */
@@ -341,12 +373,31 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
 
             d = radix_integer_fit_limbs(&c->u, nslots + 3, radix);
             c->u.size = _padic_radix_pack_normalise(d, acc, nslots, radix);
+
+            if (N == PADIC_RADIX_PACK_EXACT_SUM)
+            {
+                /* the exact sum modulo B^nslots, |sum| < B^(nslots - 1) */
+                slong sz = FLINT_MIN(c->u.size, nslots);
+                int neg;
+
+                flint_mpn_zero(d + sz, nslots - sz);
+                neg = (d[nslots - 1] != 0);
+                if (neg)
+                    radix_neg(d, d, nslots, radix);
+                sz = nslots;
+                while (sz > 0 && d[sz - 1] == 0)
+                    sz--;
+                c->u.size = neg ? -sz : sz;
+                c->v = e * W;
+                c->N = PADIC_RADIX_EXACT;
+                status |= _padic_radix_finalize(c, ctx);
+                continue;
+            }
+
             status |= _padic_radix_pack_finish(c, W, N, ctx);
         }
     }
 
-    if (T != NULL)
-        _gr_vec_clear(T, nex, ctx), flint_free(T);
     TMP_END;
     return status;
 
@@ -380,8 +431,7 @@ _padic_radix_mat_mul_fmpz(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, int cu
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     slong e = radix->exp;
     slong m = A->r, kk = A->c, n = B->c;
-    slong i, j, t, b, nb, blk, nA, nB, Smax, binl, nex = 0;
-    padic_radix_struct * T = NULL;
+    slong i, j, t, b, nb, blk, nA, nB, Smax, binl, * hA, * hB;
     int pass;
     _pack_mat_struct PA, PB;
     padic_radix_pack_meta_struct meta;
@@ -442,6 +492,24 @@ _padic_radix_mat_mul_fmpz(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, int cu
             if (!_padic_radix_pack_meta(&meta, gr_mat_entry_srcptr(B, t, j, ctx), radix))
                 goto unable;
             PB.vv[q] = meta.vv; PB.ve[q] = meta.ve; PB.NN[q] = meta.NN; PB.ww[q] = meta.ww;
+        }
+
+    /* a priori extents v + e |u| of the exact nonzero entries */
+    hA = TMP_ALLOC(sizeof(slong) * (nA + nB));
+    hB = hA + nA;
+    for (i = 0; i < m; i++)
+        for (t = 0; t < kk; t++)
+        {
+            const padic_radix_struct * x = gr_mat_entry_srcptr(A, i, t, ctx);
+            hA[i * kk + t] = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT)
+                ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
+        }
+    for (t = 0; t < kk; t++)
+        for (j = 0; j < n; j++)
+        {
+            const padic_radix_struct * x = gr_mat_entry_srcptr(B, t, j, ctx);
+            hB[j * kk + t] = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT)
+                ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
         }
 
     /* block minima and base frames */
@@ -631,7 +699,27 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
                 if (vmin >= PADIC_RADIX_PACK_NONE || rw[i] >= PADIC_RADIX_PACK_NONE || cw[j] >= PADIC_RADIX_PACK_NONE)
                     N = (Nt >= PADIC_RADIX_PACK_NONE) ? PADIC_RADIX_EXACT : Nt;
                 else if (Nt >= PADIC_RADIX_PACK_NONE)
-                    N = PADIC_RADIX_PACK_EXACT_SUM;     /* only exact terms */
+                {
+                    /* only exact terms: as in the packed version */
+                    slong H = -2 * PADIC_RADIX_PACK_BIG, ext, prec;
+
+                    for (t = 0; t < kk; t++)
+                        H = FLINT_MAX(H, hA[i * kk + t] + hB[j * kk + t]);
+
+                    N = _padic_radix_pack_prec(vmin, PADIC_RADIX_PACK_NONE, ctx);
+                    if (N != PADIC_RADIX_EXACT && N > vmin)
+                    {
+                        ext = (H - vmin + e - 1) / e + 1;
+                        prec = (N - vmin + e - 1) / e;
+                        if (ext <= prec + 1)
+                        {
+                            N = PADIC_RADIX_PACK_EXACT_SUM;
+                            s = (H - e * (rw[i] + cw[j]) + e - 1) / e + 2;
+                        }
+                        else
+                            s = (slong) radix_div_exp((ulong) (N - e * (rw[i] + cw[j])) + e - 1, radix);
+                    }
+                }
                 else
                 {
                     N = _padic_radix_pack_prec(vmin, Nt, ctx);
@@ -651,20 +739,12 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
         }
     }
 
-    /* the outputs with only exact terms, before C is written (aliasing) */
-    for (i = 0; i < m * n; i++)
-        nex += (PN[i] == PADIC_RADIX_PACK_EXACT_SUM);
-    if (nex != 0)
-        status |= _exact_outputs(&T, PN, A, B, ctx);
-
     if (Smax == 0)
     {
         for (i = 0; i < m; i++)
             for (j = 0; j < n; j++)
             {
                 padic_radix_struct * c = gr_mat_entry_ptr(C, i, j, ctx);
-                if (PN[i * n + j] == PADIC_RADIX_PACK_EXACT_SUM)
-                    continue;
                 radix_integer_zero(&c->u, radix);
                 c->v = 0;
                 c->N = PN[i * n + j];
@@ -712,8 +792,6 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
             {
                 padic_radix_struct * c = gr_mat_entry_ptr(C, i, j, ctx);
                 slong N = PN[i * n + j];
-                if (N == PADIC_RADIX_PACK_EXACT_SUM)
-                    continue;
 
 
                 w = (PS[i * n + j] == 0) ? 0 : nmod_mat_entry(Cn, i, j);
@@ -810,12 +888,16 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
                 nn_srcptr z = gr_mat_entry_srcptr(Cm, i, j, mctx);
                 slong N = PN[i * n + j], sl = PS[i * n + j], zn = nl, dn, j0;
                 nn_ptr d;
-                if (N == PADIC_RADIX_PACK_EXACT_SUM)
-                    continue;
-
 
                 while (zn > 0 && z[zn - 1] == 0)
                     zn--;
+
+                if (N == PADIC_RADIX_PACK_EXACT_SUM)
+                {
+                    dn = (zn == 0) ? 0 : radix_set_mpn(bin, z, zn, radix);
+                    status |= _exact_sum_finish(c, bin, FLINT_MIN(dn, sl), sl, rw[i] + cw[j], ctx);
+                    continue;
+                }
 
                 if (sl == 0 || zn == 0)
                 {
@@ -909,9 +991,6 @@ use_fmpz:
             fmpz * z = fmpz_mat_entry(Cz, i, j);
             slong N = PN[i * n + j], s = PS[i * n + j], zn, dn, j0;
             nn_ptr d;
-            if (N == PADIC_RADIX_PACK_EXACT_SUM)
-                continue;
-
 
             if (s == 0)
             {
@@ -930,6 +1009,12 @@ use_fmpz:
 
             fmpz_mod(z, z, Bpow + s);
 
+            if (fmpz_is_zero(z) && N == PADIC_RADIX_PACK_EXACT_SUM)
+            {
+                status |= _exact_sum_finish(c, NULL, 0, s, rw[i] + cw[j], ctx);
+                continue;
+            }
+
             if (fmpz_is_zero(z))
             {
                 radix_integer_zero(&c->u, radix);
@@ -941,6 +1026,16 @@ use_fmpz:
 
             zn = fmpz_size(z);
             fmpz_get_ui_array(bin, zn, z);
+
+            if (N == PADIC_RADIX_PACK_EXACT_SUM)
+            {
+                nn_ptr dd = flint_malloc(sizeof(ulong) * (radix_set_mpn_need_alloc(zn, radix) + 1));
+                dn = radix_set_mpn(dd, bin, zn, radix);
+                status |= _exact_sum_finish(c, dd, FLINT_MIN(dn, s), s, rw[i] + cw[j], ctx);
+                flint_free(dd);
+                continue;
+            }
+
             d = radix_integer_fit_limbs(&c->u, radix_set_mpn_need_alloc(zn, radix) + 1, radix);
             dn = radix_set_mpn(d, bin, zn, radix);
 
@@ -962,25 +1057,10 @@ use_fmpz:
     fmpz_mat_clear(Cz);
 
 finish:
-    if (nex != 0)
-    {
-        slong q = 0;
-        for (i = 0; i < m; i++)
-            for (j = 0; j < n; j++)
-                if (PN[i * n + j] == PADIC_RADIX_PACK_EXACT_SUM)
-                    padic_radix_swap(gr_mat_entry_ptr(C, i, j, ctx), T + q++, ctx);
-        _gr_vec_clear(T, nex, ctx);
-        flint_free(T);
-    }
     TMP_END;
     return status;
 
 unable:
-    if (T != NULL)
-    {
-        _gr_vec_clear(T, nex, ctx);
-        flint_free(T);
-    }
     TMP_END;
     return GR_UNABLE;
 }

@@ -460,8 +460,9 @@ limbs by `mpn_mod_mat_mul` (classical with delayed reduction, Waksman or
 multimodular), and returns `GR_UNABLE` if $B^S$ does not have between 2 and
 `MPN_MOD_MAX_LIMBS` binary limbs; `padic_radix_mat_mul` uses it in that
 range, the nmod version for one-limb windows and the fmpz version above.
-Outputs whose terms are all exact are computed with
-`padic_radix_dot_strided_delayed`. Its precisions are computed
+Outputs whose terms are all exact are summed exactly, in windows covering
+the a priori extents of their terms plus a carry and a sign limb, when
+`padic_radix_dot_strided_delayed` would keep them exact. Its precisions are computed
 with blockwise minima of the exponents, in $O(mn \cdot \text{blocks})$
 operations for outputs whose row of $A$ or column of $B$ has exponents
 that are constant on blocks of the inner index (e.g. uniform valuations
@@ -556,18 +557,6 @@ frames are spread out); the packed version otherwise. Shorter products use
 the classical algorithm.
 :::
 
-::: function
-int _padic_radix_mat_charpoly_berkowitz(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
-int padic_radix_mat_charpoly(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
-
-Set `cp` to the characteristic polynomial of the square matrix `mat`
-by the division-free Berkowitz algorithm, with the matrix-vector
-products done on the matrix packed once. Falls back to
-`_gr_mat_charpoly_berkowitz` for dimension at most 5, in contexts
-without a relative precision, and for matrices with exact nonzero entries
-(whose dot products may keep exact sums exact).
-:::
-
 ## Linear algebra {#linear-algebra}
 
 ::: function
@@ -583,6 +572,7 @@ but some inexact zero, and `GR_DOMAIN` if all entries are exact zeros.
 
 ::: function
 int padic_radix_mat_det_lu_full(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
+int padic_radix_mat_det_levels(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
 int padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
 
 Set `res` to the determinant of the square matrix `A`. The *lu_full*
@@ -603,12 +593,90 @@ $n = 60$ for $p = 7$). If the remaining submatrix consists of
 zeros, the determinant of that block is bounded using the sums of the row
 and column minima of the precisions.
 
+The *levels* version is a blocked form of full pivoting. At the minimal
+valuation $a$ of the current Schur complement $S$, a rank-revealing LU
+decomposition of $(S / p^a) \bmod p$ over $\mathbb{F}_p$ selects $r$ rows
+and columns such that $S_{11} = p^a U$ with $U$ invertible modulo $p$: these
+$r$ pivots all have valuation $a$, as in full pivoting, and are eliminated
+at once, with $\det S = \pm \det(S_{11}) \det(S_{22} - S_{21} S_{11}^{-1} S_{12})$,
+using the LU decomposition of $S_{11}$, triangular solves and one matrix
+product. The new Schur complement has entries of valuation at least
+$a + 1$. The precision is again optimal, and the cost is that of a blocked
+LU decomposition (a single level for a matrix invertible modulo $p$).
+
 `padic_radix_mat_det` implements the generic method `gr_mat_det`: the
 cofactor formula for $n \le 2$, the *lu_full* version up to a dimension
-depending on the precision (32 at one limb, 20 at two limbs, 12 beyond),
-and above that the blocked recursive LU decomposition (which uses the
-column pivots of minimal valuation and the fast matrix multiplication),
-whose precision is within about a digit of the optimum on average.
+depending on the precision (40 at one limb, 24 at two limbs, 16 beyond),
+and the *levels* version above.
+:::
+
+::: function
+int padic_radix_mat_nonsingular_solve(gr_mat_t X, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+int padic_radix_mat_inv(gr_mat_t X, const gr_mat_t A, gr_ctx_t ctx)
+
+Set $X = A^{-1} B$ (respectively $X = A^{-1}$), returning `GR_DOMAIN` if
+$A$ is singular and `GR_UNABLE` if this cannot be decided. The algorithm
+is Gauss-Jordan elimination with full pivoting by valuation levels on
+$[A \mid B]$: at each level the pivot block (as in
+`padic_radix_mat_det_levels`) is applied to its rows, and its columns are
+eliminated from all the other rows, including the pivot rows of the
+previous levels, with one matrix product. This order of operations (that
+of Gauss-Jordan elimination with full pivoting) gives every entry of the
+solution with the optimal precision, that of the differential
+$dX = A^{-1}(dB - dA\, X)$; LU decompositions with column pivots and back
+substitution lose some digits when $A$ is not invertible modulo $p$.
+When $A / p^a$ is invertible modulo $p$ for the minimal valuation $a$ of
+its entries, all pivots have valuation $a$ and the generic LU solve (with
+the pivots of `padic_radix_mat_find_nonzero_pivot`) is used directly. These
+functions are not used by `gr_mat_nonsingular_solve` and `gr_mat_inv`,
+which have no method slots.
+:::
+
+::: function
+int _padic_radix_mat_charpoly_berkowitz(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+int padic_radix_mat_charpoly_hessenberg(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+int padic_radix_mat_charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+int padic_radix_mat_charpoly(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+
+Set `cp` to the characteristic polynomial $\chi(x) = \det(xI - A)$ of the
+square matrix `mat`.
+
+The *berkowitz* version is the division-free Berkowitz algorithm, with
+the matrix-vector products done on the matrix packed once (falling back to
+`_gr_mat_charpoly_berkowitz` for dimension at most 5, in contexts without
+a relative precision, and for matrices with exact nonzero entries). For
+integral entries known to $O(p^N)$ it gives every coefficient to
+precision about $N$, which is optimal when the matrix is cyclic modulo $p$
+but can lose many digits otherwise (dozens for the low coefficients of
+moderately structured matrices of dimension 16).
+
+The *hessenberg* version reduces the matrix to Hessenberg form by
+similarity transformations with pivots of minimal valuation (so that the
+transformations are in $\mathrm{GL}_n(\mathbb{Z}_p)$), in $O(n^3)$
+operations; it loses a few digits.
+
+The *lift* version gives the optimal precision. With the matrix scaled by
+a power of $p$ to make it integral, $M$ the exact lift of the entries and
+$\operatorname{adj}(xI - M) = \sum_k B_k x^k$, a perturbation $E$ with
+$v(E_{ij}) \ge N_{ij}$ changes $c_k$ by $-\operatorname{tr}(B_k E)$ plus
+terms of order at least two in $E$, whose coefficients (minors of
+$xI - M$) are integral. Hence $c_k(A) = c_k(M) + O(p^{N_k})$ with
+$N_k = \min(2 N_{\min}, \min_{ij} (N_{ij} + v((B_k)_{ji})))$, the precision of
+the differential of $\chi$. The coefficients $c_k(M)$ are computed modulo
+$p^{2 N_{\min}}$ by the *hessenberg* version at a raised working precision
+(retried with more digits if needed, with the *berkowitz* version as a
+last resort), and the $B_k$ by the recurrence $B_{n-1} = I$,
+$B_{k-1} = M B_k + c_k I$, modulo one word first and modulo $p^{N_{\min}}$
+if valuations at that bound matter, with $n$ matrix products. Exact
+matrices give the exact characteristic polynomial (multimodular), rounded
+to the context precision.
+
+`padic_radix_mat_charpoly` implements the generic method: the
+*berkowitz* version for matrices with integral entries of uniform
+precision that are cyclic modulo $p$ (tested with a random Krylov basis
+over $\mathbb{F}_p$), where it is optimal, and otherwise the *lift*
+version, together with Danilevsky's algorithm (keeping the more precise
+result for each coefficient) where the bound $2 N_{\min}$ limits it.
 :::
 
 ## Exponential and logarithm {#exp-log}
