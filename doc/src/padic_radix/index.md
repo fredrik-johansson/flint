@@ -94,6 +94,7 @@ PADIC_RADIX_SIGNED
 PADIC_RADIX_NO_ERROR
 PADIC_RADIX_DECIMAL
 PADIC_RADIX_TEST_LIMITS
+PADIC_RADIX_FAST_BOUNDS
 
 Context flags. `PADIC_RADIX_SIGNED` allows exact elements with negative
 units. `PADIC_RADIX_NO_ERROR` is reserved for a future floating-point
@@ -101,7 +102,11 @@ mode without error terms and currently has no effect.
 `PADIC_RADIX_DECIMAL` prints units as decimal integers rather than in
 the default form of `radix_get_str_sum`. `PADIC_RADIX_TEST_LIMITS` makes
 `padic_radix_randtest` produce valuations and precisions near
-`PADIC_RADIX_ERR_MAX`.
+`PADIC_RADIX_ERR_MAX`. `PADIC_RADIX_FAST_BOUNDS` lets polynomial
+products use quasi-linear lower bounds for the precisions of the
+coefficients when the exact computation would cost more (irregular
+precision patterns in long products, see [](#block)); the results may
+then have less precision than with the default exact bounds, never more.
 :::
 
 ::: function
@@ -263,7 +268,50 @@ int padic_radix_mul(padic_radix_t res, const padic_radix_t x, const padic_radix_
 Set `res` to $-x$, $x + y$, $x - y$ and $xy$. The error term of a sum is
 $O(p^{\min(N_x, N_y)})$ and that of a product
 $O(p^{\min(N_x + v_y, N_y + v_x)})$; the result is then truncated to the
-context precision. An exact zero factor gives an exact zero.
+context precision. An exact zero factor gives an exact zero. An inexact
+zero $O(p^{N})$ enters the error term of a product with valuation $N$,
+so that for example $O(p^{N_x}) \cdot O(p^{N_y}) = O(p^{N_x + N_y})$.
+:::
+
+::: function
+int padic_radix_mul_si(padic_radix_t res, const padic_radix_t x, slong c, gr_ctx_t ctx)
+int padic_radix_mul_ui(padic_radix_t res, const padic_radix_t x, ulong c, gr_ctx_t ctx)
+int padic_radix_mul_fmpz(padic_radix_t res, const padic_radix_t x, const fmpz_t c, gr_ctx_t ctx)
+
+Set `res` to $xc$, with the result of converting $c$ with
+`padic_radix_set_si` (etc.) followed by `padic_radix_mul`.
+:::
+
+::: function
+int padic_radix_addmul(padic_radix_t res, const padic_radix_t x, const padic_radix_t y, gr_ctx_t ctx)
+int padic_radix_submul(padic_radix_t res, const padic_radix_t x, const padic_radix_t y, gr_ctx_t ctx)
+int padic_radix_addmul_si(padic_radix_t res, const padic_radix_t x, slong c, gr_ctx_t ctx)
+int padic_radix_submul_si(padic_radix_t res, const padic_radix_t x, slong c, gr_ctx_t ctx)
+int padic_radix_addmul_ui(padic_radix_t res, const padic_radix_t x, ulong c, gr_ctx_t ctx)
+int padic_radix_submul_ui(padic_radix_t res, const padic_radix_t x, ulong c, gr_ctx_t ctx)
+int padic_radix_addmul_fmpz(padic_radix_t res, const padic_radix_t x, const fmpz_t c, gr_ctx_t ctx)
+int padic_radix_submul_fmpz(padic_radix_t res, const padic_radix_t x, const fmpz_t c, gr_ctx_t ctx)
+int _padic_radix_addmul_sub(padic_radix_t res, const padic_radix_t x, const padic_radix_t y, int sub, gr_ctx_t ctx)
+
+Set `res` to $\mathrm{res} \pm xy$ (respectively $\pm xc$), with exactly the
+result of a multiplication into a temporary followed by an addition or
+subtraction. Product digits that cannot reach the result (above its
+precision) are not computed, and sums of at most two limbs are formed
+inline without temporaries.
+:::
+
+::: function
+int padic_radix_pow_ui(padic_radix_t res, const padic_radix_t x, ulong n, gr_ctx_t ctx)
+int padic_radix_pow_si(padic_radix_t res, const padic_radix_t x, slong n, gr_ctx_t ctx)
+int padic_radix_pow_fmpz(padic_radix_t res, const padic_radix_t x, const fmpz_t n, gr_ctx_t ctx)
+
+Set `res` to $x^n$, computing the power of the unit with truncated
+multiplications and rounding once. For $x = u p^v + O(p^N)$ and $n \ge 1$
+the error term is $O(p^{(n - 1)v + N + v_p(n)})$, which is valid since
+every term $\binom{n}{k} a^{n - k} h^k$, $k \ge 1$, of $(a + h)^n - a^n$
+has valuation at least $(n - 1)v + N + v_p(n)$; for an inexact zero
+$O(p^N)$ it is $O(p^{nN})$. Negative exponents invert first. An exact
+input keeps an exact result when it fits the context precision.
 :::
 
 ::: function
@@ -312,6 +360,22 @@ or, for $p = 2$, a unit known to fewer than 3 digits.
 :::
 
 ::: function
+int _padic_radix_vec_mul_scalar(padic_radix_struct * res, const padic_radix_struct * vec, slong len, const padic_radix_t c, gr_ctx_t ctx)
+int _padic_radix_vec_mul_scalar_si(padic_radix_struct * res, const padic_radix_struct * vec, slong len, slong c, gr_ctx_t ctx)
+int _padic_radix_vec_mul_scalar_ui(padic_radix_struct * res, const padic_radix_struct * vec, slong len, ulong c, gr_ctx_t ctx)
+int _padic_radix_vec_mul_scalar_fmpz(padic_radix_struct * res, const padic_radix_struct * vec, slong len, const fmpz_t c, gr_ctx_t ctx)
+int _padic_radix_vec_addmul_scalar(padic_radix_struct * res, const padic_radix_struct * vec, slong len, const padic_radix_t c, gr_ctx_t ctx)
+int _padic_radix_vec_submul_scalar(padic_radix_struct * res, const padic_radix_struct * vec, slong len, const padic_radix_t c, gr_ctx_t ctx)
+int _padic_radix_vec_addmul_scalar_si(padic_radix_struct * res, const padic_radix_struct * vec, slong len, slong c, gr_ctx_t ctx)
+int _padic_radix_vec_submul_scalar_si(padic_radix_struct * res, const padic_radix_struct * vec, slong len, slong c, gr_ctx_t ctx)
+int _padic_radix_vec_addmul_scalar_fmpz(padic_radix_struct * res, const padic_radix_struct * vec, slong len, const fmpz_t c, gr_ctx_t ctx)
+
+Elementwise $\mathrm{res}_i = \mathrm{vec}_i c$ and
+$\mathrm{res}_i = \mathrm{res}_i \pm \mathrm{vec}_i c$, with the results of
+the corresponding scalar functions; the scalar is converted once.
+:::
+
+::: function
 truth_t padic_radix_is_zero(const padic_radix_t x, gr_ctx_t ctx)
 truth_t padic_radix_is_one(const padic_radix_t x, gr_ctx_t ctx)
 truth_t padic_radix_is_neg_one(const padic_radix_t x, gr_ctx_t ctx)
@@ -336,9 +400,20 @@ is nonzero. The *naive* version calls `padic_radix_mul` and
 `padic_radix_add` in a loop. The *delayed* version finds the minimum
 valuation and the precision of the result first, then accumulates the
 limb products of all terms in three-word accumulators, grouped by the
-residue of the digit offset modulo $e$ and by sign, and propagates
-carries, shifts and divisions by $p^e$ once at the end. The default
-uses the naive version for $len \le 7$.
+residue of the digit offset modulo $e$ and by sign; at the end the
+residue classes are combined in one pass (each accumulator multiplied by
+$p^r$ for its residue $r$) and the carries are propagated once. The
+default uses the naive version for at most 4 terms at a precision of one
+limb, 3 terms at two limbs and 2 terms above (relative precision, or
+absolute if there is none), and, at precisions of up to two limbs, also
+for up to 7 terms whose valuations $v(a_i) + v(b_i)$ are not all equal.
+
+When all terms are exact, the delayed version keeps the result exact if
+it fits in the context precision (as `padic_radix_mul` and
+`padic_radix_add` do), provided that the a priori extent of the terms,
+$\max_i (v(a_i) + e |a_i| + v(b_i) + e |b_i|)$ for units of $|a_i|$ and
+$|b_i|$ limbs, is at most one limb beyond the context precision;
+otherwise the sum is rounded to the context precision.
 :::
 
 ::: function
@@ -348,6 +423,192 @@ int padic_radix_dot_rev(padic_radix_t res, const padic_radix_t initial, int subt
 The contiguous dot product and the dot product with `vec2` reversed,
 as wrappers of `padic_radix_dot_strided`. These implement the generic
 dot product methods, which `gr_mat_mul` and the `gr_poly` products use.
+:::
+
+## Matrix and polynomial products {#block}
+
+The block products use a packed *limb-aligned* form internally: an element
+$u p^v$ is stored relative to the limb frame $w = \lfloor v/e \rfloor$ as the
+residue $u p^{v - ew} \bmod B^L$, so that all terms of an output land at
+whole-limb offsets of a single accumulator, without digit shifts. Each
+input is converted once, the precision of every output is computed up
+front from arrays of exponents (min-plus products or convolutions), and
+at precisions of up to two limbs the accumulation runs in registers.
+Every output is computed with exactly the semantics of
+`padic_radix_dot_strided_delayed` (the same precision, and the same
+value modulo it, including exact sums of exact terms). The packed versions return `GR_UNABLE` without
+modifying the output when they do not apply: in contexts without a
+finite precision (where exact results need full products) and for
+elements with exponents beyond $\pm\mathrm{WORD\_MAX}/16$.
+
+::: function
+int padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+int padic_radix_mat_mul_fmpz(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+int padic_radix_mat_mul_mpn_mod(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+int padic_radix_mat_mul(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
+
+Set $C = AB$. The packed version accumulates the limb products of every
+output directly. The *fmpz* version scales row $i$ of $A$ and column $j$
+of $B$ to base frames $r_i = \min_t w(A_{it})$ and $c_j = \min_t w(B_{tj})$,
+truncates the residues to the largest output window, multiplies the
+resulting integer matrices with `nmod_mat_mul` (modulo $B$, when every
+window is a single limb) or `fmpz_mat_mul` (multimodular and blocked
+algorithms), and reduces every output modulo $B^s$ for its window of $s$
+limbs before the conversion to radix $B$. The *mpn_mod* version is the
+same with the products done modulo $B^S$ for the largest window of $S$
+limbs by `mpn_mod_mat_mul` (classical with delayed reduction, Waksman or
+multimodular), and returns `GR_UNABLE` if $B^S$ does not have between 2 and
+`MPN_MOD_MAX_LIMBS` binary limbs; `padic_radix_mat_mul` uses it in that
+range, the nmod version for one-limb windows and the fmpz version above.
+Outputs whose terms are all exact are computed with
+`padic_radix_dot_strided_delayed`. Its precisions are computed
+with blockwise minima of the exponents, in $O(mn \cdot \text{blocks})$
+operations for outputs whose row of $A$ or column of $B$ has exponents
+that are constant on blocks of the inner index (e.g. uniform valuations
+and precisions), and with the exact $O(k)$ minimum for the others; the
+results are identical to those of the packed version.
+
+`padic_radix_mat_mul` implements the generic method `gr_mat_mul`: the
+classical algorithm for inner dimension at most 3, the modular versions
+above tuned crossovers (estimated from an upper bound for the output
+windows: from dimension 8 when all windows are one limb, about 32 at two
+limbs, 16 at 3 to 8 limbs, 28 up to 15 limbs and 48 beyond, raised when the
+limb frames of the entries are spread out and when the exact precision
+bookkeeping is needed), and the packed version otherwise.
+:::
+
+::: function
+int _padic_radix_poly_mulmid_KS(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
+int _padic_radix_poly_mulmid_mod(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
+
+Middle product by Kronecker substitution in radix $B$: the coefficients,
+scaled to the base frames of the two polynomials and truncated to the
+largest output window of $S$ limbs, are placed in slots of $2S + O(1)$
+limbs of a single radix integer, and one `radix_mulmid` (which uses the
+small-prime FFT directly in radix $B$ for large operands, without
+conversions to binary) gives every output in its own slot. The *mod*
+version instead multiplies the residues modulo $B^S$, avoiding the
+padding of the slots: with `_nmod_poly_mulmid` when $S = 1$ and with
+`_mpn_mod_poly_mulmid` (classical, Karatsuba or the small-prime FFT, as
+tuned for `mpn_mod`) when $B^S$ has at most `MPN_MOD_MAX_LIMBS` binary
+limbs, converting to binary and back; otherwise it returns `GR_UNABLE`.
+The output precisions come from min-plus convolutions of the exponent
+sequences (below), and coefficients whose terms are all exact are summed
+exactly (in windows covering the extents of the terms) when
+`padic_radix_dot_strided_delayed` would keep them exact. The results are
+those of `_padic_radix_poly_mulmid_packed`, except with the context flag
+`PADIC_RADIX_FAST_BOUNDS`, which allows smaller (but never larger)
+precisions. Both return `GR_UNABLE` in the same cases as the packed
+version.
+:::
+
+The per-coefficient precisions of a polynomial product are min-plus
+convolutions $c_k = \min_i (a_i + b_{k-i})$ of exponent sequences, with
+$+\infty$ for absent terms (exact zeros, or exact coefficients in the
+error terms). They are always computed exactly by default:
+
+* directly, over the pairs of finite entries only, when there are few of
+  these (sparse sequences, e.g. with exact zero padding, cost only the
+  number of pairs);
+* by the lower convex hulls (the Minkowski sum of their slopes, in linear
+  time) when both sequences are convex without gaps (in particular
+  constant or linear: uniform valuations and precisions);
+* by bivariate Kronecker substitution when, after subtracting a common
+  linear trend, the finite values span a small range $R$: the minimum is
+  the lowest power of $y$ present in the coefficient of $x^k$ in
+  $(\sum_i x^i y^{a_i})(\sum_j x^j y^{b_j})$, which one integer
+  multiplication of $O(nR \log n)$ bits provides;
+* otherwise by bands of values: with the values split into 32 bands, the
+  convolution is the minimum over the pairs of bands of the convolutions
+  restricted to those bands, each done directly or by Kronecker
+  substitution over the actual range of values of the band (small for
+  clustered values: block-dependent precisions, alternating or periodic
+  patterns). The pairs are processed by increasing sum of the band
+  levels, so that outputs become final as soon as their current value is
+  below the level of the remaining pairs, and pairs whose output range only
+  contains final outputs (or outputs without any finite term) are skipped.
+
+The cost is linear or quasi-linear in the regular cases and at most about
+that of the quadratic algorithm (often much less, thanks to the early
+termination) for irregular ones. With `PADIC_RADIX_FAST_BOUNDS`, when the
+exact computation would cost more than a Kronecker substitution of range
+64, the result may instead be a lower bound: the maximum of the convex
+hull bound and the Kronecker substitution on values rounded down to
+multiples of $\delta = \lceil R / 64 \rceil$ (within $2\delta$), with the
+outputs near the ends computed exactly and those without finite terms
+recognised exactly.
+
+::: function
+int _padic_radix_poly_mulmid_packed(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
+int _padic_radix_poly_mulmid(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
+int _padic_radix_poly_mullow(padic_radix_struct * res, const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2, slong len2, slong n, gr_ctx_t ctx)
+
+Set `res` to the coefficients $n_{lo}, \ldots, n_{hi} - 1$ (respectively
+$0, \ldots, n - 1$) of the product of the polynomials. Coefficients that
+are a single product are computed with `padic_radix_mul`. The unpacked
+versions implement the generic methods. For both lengths at least 4, from
+an estimate $S$ of the output windows in limbs (the size of the units,
+plus one if the valuations are not multiples of $e$, plus the spread of
+the limb frames): the mod version when $S = 1$; for $S = 2$ from a
+length of about 64, for $S \le 10$ from about 24, and the radix KS
+version for $S > 10$ from about 32 (these crossovers raised when the
+frames are spread out); the packed version otherwise. Shorter products use
+the classical algorithm.
+:::
+
+::: function
+int _padic_radix_mat_charpoly_berkowitz(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+int padic_radix_mat_charpoly(padic_radix_struct * cp, const gr_mat_t mat, gr_ctx_t ctx)
+
+Set `cp` to the characteristic polynomial of the square matrix `mat`
+by the division-free Berkowitz algorithm, with the matrix-vector
+products done on the matrix packed once. Falls back to
+`_gr_mat_charpoly_berkowitz` for dimension at most 5, in contexts
+without a relative precision, and for matrices with exact nonzero entries
+(whose dot products may keep exact sums exact).
+:::
+
+## Linear algebra {#linear-algebra}
+
+::: function
+int padic_radix_mat_find_nonzero_pivot(slong * pivot_row, gr_mat_t mat, slong start_row, slong end_row, slong column, gr_ctx_t ctx)
+
+Implements the generic method `gr_mat_find_nonzero_pivot`, used by the
+generic LU decomposition, solving, inversion and reduced row echelon form
+algorithms: chooses a row whose entry in the given column has minimal
+valuation, so that the elimination only involves multipliers of
+nonnegative valuation. Returns `GR_UNABLE` if there is no nonzero entry
+but some inexact zero, and `GR_DOMAIN` if all entries are exact zeros.
+:::
+
+::: function
+int padic_radix_mat_det_lu_full(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
+int padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
+
+Set `res` to the determinant of the square matrix `A`. The *lu_full*
+version uses Gaussian elimination with full pivoting on valuations (an
+entry of minimal valuation in the whole remaining submatrix). Then the
+multipliers and the pivot rows have valuations at least that of the pivot,
+the Schur complements keep the absolute precision of the input, and the
+pivots have the valuations $a_1 \le \cdots \le a_n$ of the elementary
+divisors. For a matrix with entries known to $O(p^N)$ (and $a_n < N$) the
+determinant is obtained to precision $N + a_1 + \cdots + a_{n-1}$, which is
+optimal: it is that of the differential
+$d \det(A) = \operatorname{tr}(\operatorname{adj}(A)\, dA)$. In comparison,
+division-free algorithms (Berkowitz, cofactor expansion) only give
+precision about $N$, losing up to $v(\det A) - a_n$ digits, and Gaussian
+elimination with the first nonzero pivot loses precision growing with the
+dimension for small $p$, even for generic matrices (about 19 digits at
+$n = 60$ for $p = 7$). If the remaining submatrix consists of
+zeros, the determinant of that block is bounded using the sums of the row
+and column minima of the precisions.
+
+`padic_radix_mat_det` implements the generic method `gr_mat_det`: the
+cofactor formula for $n \le 2$, the *lu_full* version up to a dimension
+depending on the precision (32 at one limb, 20 at two limbs, 12 beyond),
+and above that the blocked recursive LU decomposition (which uses the
+column pivots of minimal valuation and the fast matrix multiplication),
+whose precision is within about a digit of the optimum on average.
 :::
 
 ## Exponential and logarithm {#exp-log}
@@ -426,7 +687,9 @@ int _padic_radix_finalize(padic_radix_t res, gr_ctx_t ctx)
 Canonicalises a freshly computed element (moving factors of $p$ from
 the unit to the valuation), enforces the representability bounds of
 `PADIC_RADIX_ERR_MAX` and truncates to the context precision. Returns
-`GR_UNABLE` if the valuation or precision cannot be represented.
+`GR_UNABLE` if the valuation or precision cannot be represented, in
+which case `res` is set to $O(p^{-\mathrm{ERR\_MAX}})$ so that further
+arithmetic on it stays within the representable range.
 :::
 
 ::: function
