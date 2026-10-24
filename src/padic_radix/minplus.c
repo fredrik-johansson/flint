@@ -572,7 +572,7 @@ _best_trend(slong * amin, slong * amax, slong * bmin, slong * bmax,
         _detrended_range(&y0, &y1, b, blen, l);
         R = FLINT_MAX(x1 - x0, y1 - y0);
 
-        if (R < bestR)
+        if (c == 0 || R < bestR)
         {
             bestR = R;
             best = l;
@@ -605,7 +605,7 @@ int
 _padic_radix_minplus_conv(slong * res, const slong * a, slong alen,
     const slong * b, slong blen, slong klo, slong khi, int exact)
 {
-    slong lambda, amin, amax, bmin, bmax, R, k, i, i0, j0, nout, na, nb;
+    slong lambda, amin = 0, amax = 0, bmin = 0, bmax = 0, R, k, i, i0, j0, nout, na, nb;
     slong * ad, * bd, * ai, * bj;
     int result = 1;
     TMP_INIT;

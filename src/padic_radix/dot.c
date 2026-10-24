@@ -132,42 +132,6 @@ _radix_dot_normalize_acc(radix_integer_t T, nn_srcptr acc, slong nslots,
     T->size = outn;
 }
 
-/* normalise a delayed-dot accumulator into d (room for nslots + 3 limbs) */
-static slong
-_dot_norm_buf(nn_ptr d, nn_srcptr acc, slong nslots, const radix_t radix)
-{
-    nmod_t B = radix->B;
-    ulong cy[3] = { 0, 0, 0 };
-    slong s, outn = 0;
-
-    if (B.norm == 0)
-    {
-        for (s = 0; s < nslots; s++)
-        {
-            add_sssaaaaaa(cy[2], cy[1], cy[0], cy[2], cy[1], cy[0],
-                acc[3 * s + 2], acc[3 * s + 1], acc[3 * s]);
-            d[outn++] = flint_mpn_divrem_3_1_preinv_norm(cy, cy, B.n, B.ninv);
-        }
-        while (cy[0] | cy[1] | cy[2])
-            d[outn++] = flint_mpn_divrem_3_1_preinv_norm(cy, cy, B.n, B.ninv);
-    }
-    else
-    {
-        for (s = 0; s < nslots; s++)
-        {
-            add_sssaaaaaa(cy[2], cy[1], cy[0], cy[2], cy[1], cy[0],
-                acc[3 * s + 2], acc[3 * s + 1], acc[3 * s]);
-            d[outn++] = flint_mpn_divrem_3_1_preinv_unnorm(cy, cy, B.n, B.ninv, B.norm);
-        }
-        while (cy[0] | cy[1] | cy[2])
-            d[outn++] = flint_mpn_divrem_3_1_preinv_unnorm(cy, cy, B.n, B.ninv, B.norm);
-    }
-
-    while (outn > 0 && d[outn - 1] == 0)
-        outn--;
-    return outn;
-}
-
 /* res = P - N for normalised digit vectors (no heap temporaries) */
 static void
 _dot_set_diff(radix_integer_t res, nn_srcptr P, slong pn, nn_srcptr Nd, slong nn, const radix_t radix)
@@ -310,7 +274,6 @@ padic_radix_dot_strided_delayed(padic_radix_t res, const padic_radix_t initial,
     slong nused = 0;
     ulong maskp = 0, maskn = 0;    /* residues with an accumulator */
     TMP_INIT;
-    radix_integer_t Mp, Mn, T;
     radix_integer_t big, Ptmp;   /* running total + scratch for the radix_mulmid path */
 
     if (len <= 0)

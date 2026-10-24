@@ -155,17 +155,17 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
         for (t = 0; t < kk; t++)
         {
             const padic_radix_struct * x = gr_mat_entry_srcptr(A, i, t, ctx);
-            int ex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
-            hA[i * kk + t] = ex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
-            anyexA |= ex;
+            int isex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
+            hA[i * kk + t] = isex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
+            anyexA |= isex;
         }
     for (t = 0; t < kk; t++)
         for (j = 0; j < n; j++)
         {
             const padic_radix_struct * x = gr_mat_entry_srcptr(B, t, j, ctx);
-            int ex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
-            hB[j * kk + t] = ex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
-            anyexB |= ex;
+            int isex = (x->u.size != 0 && x->N == PADIC_RADIX_EXACT);
+            hB[j * kk + t] = isex ? x->v + e * FLINT_ABS(x->u.size) : -PADIC_RADIX_PACK_BIG;
+            anyexB |= isex;
         }
 
     /* exponent bookkeeping for all outputs */

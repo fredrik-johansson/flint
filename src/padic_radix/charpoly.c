@@ -667,9 +667,6 @@ _charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, int * capped, gr_ctx
     }
     else
     {
-        gr_ctx_t m1, m2;
-        gr_mat_t Mm, Bk, T;
-        gr_ptr cc;
         slong K = Nmin + sc;
 
         fmpz_ui_pow_ui(P1, p, K);

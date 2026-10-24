@@ -672,7 +672,7 @@ padic_radix_get_fmpz(fmpz_t res, const padic_radix_t x, gr_ctx_t ctx)
         return GR_SUCCESS;
     }
 
-    if (x->v > ctx->size_limit)
+    if ((ulong) x->v > ctx->size_limit)
         return GR_UNABLE;
 
     radix_integer_get_fmpz(res, &x->u, radix);
@@ -2913,7 +2913,7 @@ PADIC_RADIX_VEC_SCALAR(_padic_radix_vec_mul_scalar_fmpz, const fmpz_t, _padic_ra
 /* ---- powering on the unit (here the stored unit itself) ---- */
 
 /* v_p(n) for n >= 1 */
-slong
+static slong
 _padic_radix_fmpz_val_p(const fmpz_t n, ulong p)
 {
     if (!COEFF_IS_MPZ(*n))
@@ -3131,7 +3131,7 @@ _padic_radix_pow_chain(padic_radix_t res, const padic_radix_t x, const fmpz_t n,
     stored with v = 0, so products of two such elements claim min(N1, N2)
     instead of N1 + N2).
 */
-int
+static int
 _padic_radix_pow_zero_inexact(padic_radix_t res, slong N, const fmpz_t n, gr_ctx_t ctx)
 {
     fmpz_t t;
