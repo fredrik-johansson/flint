@@ -513,7 +513,7 @@ _charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, int * capped, gr_ctx
 {
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     ulong p = GR_PADIC_RADIX_CTX(ctx)->p;
-    slong n = mat->r, i, j, k, sc = 0, Nmin = WORD_MAX;
+    slong n = mat->r, i, j, k, sc = 0, Nmin = WORD_MAX, Wtop;
     fmpz_mat_t M;
     fmpz_poly_t c;
     fmpz_t t, P1, P2;
@@ -552,6 +552,74 @@ _charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, int * capped, gr_ctx
     if (Nmin != WORD_MAX && Nmin + sc <= 0)
         return GR_UNABLE;       /* nothing known modulo p: no gain */
 
+    /*
+        Sizes. With an inexact entry, everything is computed modulo
+        p^Wtop (Wtop the largest working precision below), so the lifted
+        entries are reduced modulo p^Wtop; the cost is then governed by
+        K = Nmin + s, which is large only when the entries have valuations
+        (or error terms) spread far beyond their relative precisions R. In
+        that case the precision is that of a much smaller computation, and
+        the lift is not worth it (UNABLE: the caller uses the algorithms that
+        work with the precisions of the entries). For an exact matrix, the
+        lift computes the exact characteristic polynomial, of about n D
+        digits where D is the largest size of an entry of M: only done when
+        the context keeps that many digits (or D is moderate compared with
+        the context precision).
+    */
+    {
+        slong R = 0, D = 0, Du = 0, vhi = 0, vlo = WORD_MAX;
+
+        for (i = 0; i < n; i++)
+            for (j = 0; j < n; j++)
+            {
+                const padic_radix_struct * x = gr_mat_entry_srcptr(mat, i, j, ctx);
+
+                if (x->u.size != 0)
+                {
+                    vlo = FLINT_MIN(vlo, x->v);
+                    vhi = FLINT_MAX(vhi, x->v + sc);
+                    Du = FLINT_MAX(Du, (slong) radix->exp * FLINT_ABS(x->u.size));
+                    D = FLINT_MAX(D, x->v + sc + (slong) radix->exp * FLINT_ABS(x->u.size));
+                    if (x->N != PADIC_RADIX_EXACT)
+                        R = FLINT_MAX(R, x->N - x->v);
+                }
+            }
+
+        if (Nmin != WORD_MAX)
+        {
+            slong K = Nmin + sc;
+
+            if (K > 64 * (R + n) + 1024 || !_padic_radix_digits_ok(4 * K + 64, 0, ctx))
+                return GR_UNABLE;
+        }
+        else
+        {
+            slong rel = PADIC_RADIX_CTX_PREC_REL(ctx), pabs = PADIC_RADIX_CTX_PREC_ABS(ctx), C;
+
+            if (D > (WORD_MAX / 2) / n || !_padic_radix_digits_ok(n * D, 1, ctx))
+                return GR_UNABLE;
+
+            if (rel != PADIC_RADIX_PREC_INF)
+                C = rel;
+            else if (pabs != PADIC_RADIX_PREC_INF && vlo != WORD_MAX)
+                C = pabs - FLINT_MIN(vlo, 0);
+            else
+                C = WORD_MAX;
+
+            if (C != WORD_MAX && D > 4 * C + 256)
+                return GR_UNABLE;
+
+            /* the integer matrix is dominated by powers of p which the
+               p-adic representation (and division-free algorithms in it)
+               avoids */
+            if (vhi > 4 * Du + 256)
+                return GR_UNABLE;
+        }
+    }
+
+    /* the largest working precision: W = 2 K + ((2 K / 4 + 16) << 2) */
+    Wtop = (Nmin == WORD_MAX) ? WORD_MAX : 2 * (Nmin + sc) + ((2 * (Nmin + sc) / 4 + 16) << 2);
+
     fmpz_mat_init(M, n, n);
     fmpz_poly_init(c);
     fmpz_init(t);
@@ -570,9 +638,23 @@ _charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, int * capped, gr_ctx
 
             if (x->u.size != 0)
             {
-                radix_integer_get_fmpz(m, &x->u, radix);
-                fmpz_ui_pow_ui(t, p, x->v + sc);
-                fmpz_mul(m, m, t);
+                if (Nmin == WORD_MAX)
+                {
+                    radix_integer_get_fmpz(m, &x->u, radix);
+                    fmpz_ui_pow_ui(t, p, x->v + sc);
+                    fmpz_mul(m, m, t);
+                }
+                else if (x->v + sc < Wtop)
+                {
+                    /* modulo p^Wtop */
+                    radix_integer_t r;
+                    radix_integer_init(r, radix);
+                    radix_integer_mod_digits(r, &x->u, Wtop - (x->v + sc), radix);
+                    radix_integer_get_fmpz(m, r, radix);
+                    radix_integer_clear(r, radix);
+                    fmpz_ui_pow_ui(t, p, x->v + sc);
+                    fmpz_mul(m, m, t);
+                }
             }
         }
 

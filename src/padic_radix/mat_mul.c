@@ -55,6 +55,13 @@ _pack_mat_struct;
 /* c = the exact sum whose residue modulo B^s has the digits d[0, dn)
    (dn <= s), relative to the limb frame W, given that |sum| < B^(s - 1):
    a nonzero top limb means a negative sum */
+/* floor(x / e) */
+static slong
+_fdiv(slong x, slong e)
+{
+    return (x >= 0) ? x / e : -((-x + e - 1) / e);
+}
+
 static int
 _exact_sum_finish(padic_radix_struct * c, nn_srcptr d, slong dn, slong s, slong W, gr_ctx_t ctx)
 {
@@ -234,6 +241,10 @@ padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ct
 
     /* limb-aligned residues; at least two limbs each for the register path */
     stride = FLINT_MAX(L, 2);
+
+    /* impossibly wide windows (huge precisions) */
+    if ((double) stride * (nA + nB) > (double) PADIC_RADIX_MAX_LIMBS)
+        goto unable;
     PA.U = TMP_ALLOC(sizeof(ulong) * stride * (nA + nB));
     PB.U = PA.U + stride * nA;
 
@@ -431,7 +442,7 @@ _padic_radix_mat_mul_fmpz(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, int cu
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     slong e = radix->exp;
     slong m = A->r, kk = A->c, n = B->c;
-    slong i, j, t, b, nb, blk, nA, nB, Smax, binl, * hA, * hB;
+    slong i, j, t, b, nb, blk, nA, nB, Smax, Sown, binl, * hA, * hB;
     int pass;
     _pack_mat_struct PA, PB;
     padic_radix_pack_meta_struct meta;
@@ -638,6 +649,7 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
     /* precisions and windows: blocked minima first (exact for most
        outputs, a lower bound for the others), then the exact minimum for
        the outputs where neither the row nor the column is block-constant */
+    Sown = 0;
     for (pass = 0; pass < 2; pass++)
     {
         slong nconst = 0;
@@ -730,6 +742,10 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
                 PN[i * n + j] = N;
                 PS[i * n + j] = s;
                 Smax = FLINT_MAX(Smax, s);
+
+                /* the window of this output in its own frame */
+                if (s != 0)
+                    Sown = FLINT_MAX(Sown, s - (_fdiv(vmin, e) - rw[i] - cw[j]));
             }
 
         if (pass == 0)
@@ -738,6 +754,17 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
                 break;
         }
     }
+
+    /* frames spread far beyond the precision (outputs whose windows in the
+       separable frames rw_i + cw_j are much wider than in their own frames):
+       the packed kernel, which uses the frame of every output, is cheaper,
+       and the temporary integers could be arbitrarily large */
+    if (Smax > 4 * Sown + 8)
+        goto unable;
+
+    /* impossibly wide windows (huge precisions) */
+    if ((double) (2 * Smax + 2) * (nA + nB + m * n) > (double) PADIC_RADIX_MAX_LIMBS)
+        goto unable;
 
     if (Smax == 0)
     {

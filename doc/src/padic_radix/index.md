@@ -50,6 +50,20 @@ $p^{N - v}$. Exact elements may have negative units only if the context
 has the flag `PADIC_RADIX_SIGNED`; otherwise a negative exact value is
 stored as an inexact residue if the context precision is finite.
 
+Valuations and precisions may differ by up to about `WORD_MAX / 2`, so a
+result can need more digits than can be stored: an exact sum such as
+$1 + p^{\mathrm{WORD\_MAX}/8}$ in a context without finite precision, or
+an inexact result with a negative valuation far below an absolute
+precision cap. Operations return `GR_UNABLE` instead of attempting such
+allocations: for unit sizes beyond $2^{36}$ limbs ($2^{27}$ on 32-bit
+systems), and for exact results beyond the `size_limit` of the context
+(in digits; unlimited by default). The fast algorithms for dot products,
+matrix and polynomial products and characteristic polynomials are
+designed so that their temporaries are bounded by the precision of the
+outputs (not by the spread of the exponents of the inputs); where an
+algorithm would need much larger temporaries, it gives up and a classical
+algorithm is used (see the individual functions).
+
 ::: macro
 PADIC_RADIX_EXACT
 
@@ -413,7 +427,11 @@ it fits in the context precision (as `padic_radix_mul` and
 `padic_radix_add` do), provided that the a priori extent of the terms,
 $\max_i (v(a_i) + e |a_i| + v(b_i) + e |b_i|)$ for units of $|a_i|$ and
 $|b_i|$ limbs, is at most one limb beyond the context precision;
-otherwise the sum is rounded to the context precision.
+otherwise the sum is rounded to the context precision. When the window
+of the delayed version (the precision of the result, or the extent of
+the exact terms) is impossibly large, it calls the naive version, which
+builds only the partial sums (and still gets exact cancellations of
+terms with huge valuations right).
 :::
 
 ::: function
@@ -438,8 +456,9 @@ Every output is computed with exactly the semantics of
 `padic_radix_dot_strided_delayed` (the same precision, and the same
 value modulo it, including exact sums of exact terms). The packed versions return `GR_UNABLE` without
 modifying the output when they do not apply: in contexts without a
-finite precision (where exact results need full products) and for
-elements with exponents beyond $\pm\mathrm{WORD\_MAX}/16$.
+finite precision (where exact results need full products), for
+elements with exponents beyond $\pm\mathrm{WORD\_MAX}/16$, and when the
+output windows (the precisions of the outputs) are impossibly large.
 
 ::: function
 int padic_radix_mat_mul_packed(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx)
@@ -467,7 +486,13 @@ with blockwise minima of the exponents, in $O(mn \cdot \text{blocks})$
 operations for outputs whose row of $A$ or column of $B$ has exponents
 that are constant on blocks of the inner index (e.g. uniform valuations
 and precisions), and with the exact $O(k)$ minimum for the others; the
-results are identical to those of the packed version.
+results are identical to those of the packed version. The base frames
+$r_i + c_j$ can be far below the frame of an output whose terms all have
+higher valuations; the fmpz and mpn_mod versions return `GR_UNABLE` when
+the largest window in the base frames exceeds four times (plus 8 limbs)
+the largest window of an output in its own frame, since the integers
+would then be much larger than the precision requires (arbitrarily large
+for valuations spread beyond the precision).
 
 `padic_radix_mat_mul` implements the generic method `gr_mat_mul`: the
 classical algorithm for inner dimension at most 3, the modular versions
@@ -500,7 +525,17 @@ exactly (in windows covering the extents of the terms) when
 those of `_padic_radix_poly_mulmid_packed`, except with the context flag
 `PADIC_RADIX_FAST_BOUNDS`, which allows smaller (but never larger)
 precisions. Both return `GR_UNABLE` in the same cases as the packed
-version.
+version. Outputs whose window in the base frames exceeds four times (plus
+8 limbs) the largest window of an output in its own frame (all of whose
+terms have valuations far above the base frames, e.g. next to a few
+coefficients of huge valuation) are computed separately by
+`padic_radix_dot_strided_delayed` when there are few of them (costing at
+most about the transform and a sixteenth of the classical algorithm);
+otherwise, that is when the valuations vary beyond the precision along
+the outputs (alternating, trending or random valuations spread over more
+digits than the precision), both return `GR_UNABLE`. High-valuation
+coefficients that are beyond the precision of every output they
+contribute to cost nothing.
 :::
 
 The per-coefficient precisions of a polynomial product are min-plus
@@ -553,7 +588,12 @@ plus one if the valuations are not multiples of $e$, plus the spread of
 the limb frames): the mod version when $S = 1$; for $S = 2$ from a
 length of about 64, for $S \le 10$ from about 24, and the radix KS
 version for $S > 10$ from about 32 (these crossovers raised when the
-frames are spread out); the packed version otherwise. Shorter products use
+frames are spread out); the packed version otherwise. Before choosing a
+Kronecker substitution route when the frames are spread out, the windows
+of 16 sampled outputs are estimated from the context precision, and the
+packed version is used if the base frames inflate at least three of them
+as above; if a route still gives up, the packed version is used without
+trying the other. Shorter products use
 the classical algorithm.
 :::
 
@@ -671,12 +711,26 @@ if valuations at that bound matter, with $n$ matrix products. Exact
 matrices give the exact characteristic polynomial (multimodular), rounded
 to the context precision.
 
+The lifted entries are reduced modulo the largest working precision, so
+that entries of high valuation cost nothing. The working precision
+$2(N_{\min} + s)$, where $p^s$ is the scaling, is large when an entry has
+a much smaller valuation (or error term) than the others; the *lift*
+version returns `GR_UNABLE` when $N_{\min} + s > 64(R + n) + 1024$, where
+$R$ is the largest relative precision of an inexact entry. For exact
+matrices it returns `GR_UNABLE` when the exact characteristic polynomial
+would not fit the context limits, when the entries of $M$ have more than
+$4 r + 256$ digits for a finite context precision $r$, or when they are
+dominated by powers of $p$ (valuations above four times the size of the
+units plus 256 digits), which Berkowitz's algorithm in
+$\mathbf{Q}_p$ handles without expanding them.
+
 `padic_radix_mat_charpoly` implements the generic method: the
 *berkowitz* version for matrices with integral entries of uniform
 precision that are cyclic modulo $p$ (tested with a random Krylov basis
 over $\mathbb{F}_p$), where it is optimal, and otherwise the *lift*
 version, together with Danilevsky's algorithm (keeping the more precise
-result for each coefficient) where the bound $2 N_{\min}$ limits it.
+result for each coefficient) where the bound $2 N_{\min}$ limits it,
+and the *berkowitz* version when the *lift* version gives up.
 :::
 
 ## Exponential and logarithm {#exp-log}

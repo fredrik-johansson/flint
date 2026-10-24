@@ -47,6 +47,35 @@
     overflow; a minimum >= PACK_NONE means that there is no such term.
 */
 
+/*
+    Limits on the size of radix integers built for exact intermediate
+    results (exact sums with a large valuation gap, exact powers, exact
+    delayed dot products, ...): beyond these, operations return GR_UNABLE
+    instead of attempting an allocation that cannot succeed. Exact results
+    are further limited by the size_limit of the context, in digits.
+*/
+#if FLINT_BITS == 64
+#define PADIC_RADIX_MAX_LIMBS (WORD(1) << 36)
+#else
+#define PADIC_RADIX_MAX_LIMBS (WORD(1) << 27)
+#endif
+
+/* whether a radix integer of the given number of digits (an exact result
+   if exact is set) is acceptable */
+static inline int
+_padic_radix_digits_ok(slong digits, int exact, gr_ctx_t ctx)
+{
+    const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
+
+    if (digits < 0)
+        return 1;
+    if (digits / (slong) radix->exp > PADIC_RADIX_MAX_LIMBS)
+        return 0;
+    if (exact && (ulong) digits > ctx->size_limit)
+        return 0;
+    return 1;
+}
+
 #define PADIC_RADIX_PACK_BIG      (WORD_MAX / 4)
 #define PADIC_RADIX_PACK_MODERATE (WORD_MAX / 16)
 #define PADIC_RADIX_PACK_NONE     (3 * (WORD_MAX / 16))

@@ -257,6 +257,18 @@ rounded to the context precision. The cost is about that of Berkowitz's
 algorithm for cyclic matrices and 1.5 to 5 times more for structured
 ones.
 
+The lift works with $K = N_{\min} + s$ digits, where $p^s$ is the
+scaling, and with entries of $M$ of any size. Entries of high valuation
+are harmless, since everything is computed modulo at most $p^{4K + 64}$
+and $M$ can be reduced modulo it. A large $K$ is not: one entry of
+valuation $-10^6$ among entries known to 20 digits gives $K \approx 10^6$,
+and the lift then works at a million digits for results that carry a few
+dozen. The lift gives up when $K$ exceeds $64(R + n) + 1024$ for the
+largest relative precision $R$ of an inexact entry (and for exact
+matrices whose entries are dominated by powers of $p$ or exceed what the
+context keeps), and Berkowitz's algorithm in ball arithmetic, whose cost
+follows the precisions of the entries, is used instead.
+
 ## Use in FLINT {#use}
 
 - `padic_radix_mat_find_nonzero_pivot` chooses pivots of minimal

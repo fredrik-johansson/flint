@@ -10,6 +10,7 @@
 */
 
 #include "padic_radix.h"
+#include "impl.h"
 #include "longlong.h"
 #include "fmpz.h"
 #include "gr.h"
@@ -305,12 +306,35 @@ _padic_radix_target_prec(slong v, gr_ctx_t ctx)
 }
 
 /*
+    x := x mod p^r (the nonnegative residue of an inexact element), or
+    GR_UNABLE with x set to 0 + O(p^-ERR_MAX) when the unit is negative and
+    the residue would have an impossibly large number of digits (possible
+    with an absolute precision cap far above a huge negative valuation).
+*/
+static int
+_padic_radix_residue(padic_radix_t x, slong r, gr_ctx_t ctx)
+{
+    radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
+
+    if (x->u.size < 0 && !_padic_radix_digits_ok(r, 0, ctx))
+    {
+        radix_integer_zero(&x->u, radix);
+        x->v = 0;
+        x->N = -PADIC_RADIX_ERR_MAX;
+        return GR_UNABLE;
+    }
+
+    _radix_integer_mod_digits_inplace(&x->u, r, radix);
+    return GR_SUCCESS;
+}
+
+/*
     Impose the context precision on a canonical element, truncating when
     required and recording the resulting absolute error. An exact element is
     preserved as exact when its value fits strictly within the target
     precision. Inexact results always use the nonnegative residue.
 */
-static void
+static int
 _padic_radix_reduce(padic_radix_t x, gr_ctx_t ctx)
 {
     radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
@@ -321,14 +345,14 @@ _padic_radix_reduce(padic_radix_t x, gr_ctx_t ctx)
         x->v = 0;
         if (x->N != PADIC_RADIX_EXACT)
             x->N = FLINT_MIN(x->N, PADIC_RADIX_ERR_MAX);
-        return;
+        return GR_SUCCESS;
     }
 
     target = _padic_radix_target_prec(x->v, ctx);
     Neff = (x->N == PADIC_RADIX_EXACT) ? target : FLINT_MIN(x->N, target);
 
     if (Neff == PADIC_RADIX_PREC_INF)
-        return;   /* stays exact */
+        return GR_SUCCESS;   /* stays exact */
 
     r = Neff - x->v;
 
@@ -337,18 +361,20 @@ _padic_radix_reduce(padic_radix_t x, gr_ctx_t ctx)
         radix_integer_zero(&x->u, radix);
         x->v = 0;
         x->N = FLINT_MIN(Neff, PADIC_RADIX_ERR_MAX);
-        return;
+        return GR_SUCCESS;
     }
 
     /* exact value that fits: keep it exact (allows signed units) */
     if (x->N == PADIC_RADIX_EXACT && _radix_integer_fits_digits(&x->u, r, radix))
-        return;
+        return GR_SUCCESS;
 
     /* otherwise the result is inexact: store the nonnegative residue */
-    _radix_integer_mod_digits_inplace(&x->u, r, radix);
+    if (_padic_radix_residue(x, r, ctx) != GR_SUCCESS)
+        return GR_UNABLE;
     if (x->u.size == 0)
         x->v = 0;
     x->N = FLINT_MIN(Neff, PADIC_RADIX_ERR_MAX);
+    return GR_SUCCESS;
 }
 
 /*
@@ -369,8 +395,7 @@ _padic_radix_finish(padic_radix_t res, gr_ctx_t ctx)
         res->N = target;        /* force inexact; reduce takes the nonneg residue */
     }
 
-    _padic_radix_reduce(res, ctx);
-    return GR_SUCCESS;
+    return _padic_radix_reduce(res, ctx);
 }
 
 
@@ -572,8 +597,7 @@ padic_radix_set(padic_radix_t res, const padic_radix_t x, gr_ctx_t ctx)
         res->N = x->N;
     }
 
-    _padic_radix_reduce(res, ctx);
-    return GR_SUCCESS;
+    return _padic_radix_reduce(res, ctx);
 }
 
 /*
@@ -732,7 +756,8 @@ padic_radix_neg(padic_radix_t res, const padic_radix_t x, gr_ctx_t ctx)
         }
         else
         {
-            _radix_integer_mod_digits_inplace(&res->u, r, radix);
+            if (_padic_radix_residue(res, r, ctx) != GR_SUCCESS)
+                return GR_UNABLE;
             if (res->u.size == 0)
                 res->v = 0;
         }
@@ -802,8 +827,7 @@ _padic_radix_finalize_assume_canonical(padic_radix_t res, gr_ctx_t ctx)
     if (res->N == PADIC_RADIX_EXACT)
         return _padic_radix_finish(res, ctx);
 
-    _padic_radix_reduce(res, ctx);
-    return GR_SUCCESS;
+    return _padic_radix_reduce(res, ctx);
 }
 
 int
@@ -930,6 +954,11 @@ _padic_radix_add_sub_reference(padic_radix_t res, const padic_radix_t x,
                 radix_integer_set(&res->u, &y->u, radix);
         }
     }
+    else if (!_padic_radix_digits_ok(vmax - vmin, P == PADIC_RADIX_PREC_INF, ctx))
+    {
+        radix_integer_clear(T, radix);
+        return GR_UNABLE;
+    }
     else if (vx < vy)
     {
         /* T holds the aligned higher-valuation operand; the combination is
@@ -1047,9 +1076,8 @@ _padic_radix_add_sub(padic_radix_t res, const padic_radix_t x,
         if (Nz != PADIC_RADIX_EXACT && res->u.size != 0
             && !_padic_radix_divisible_p(res->u.d[0], radix))
         {
-            _radix_integer_mod_digits_inplace(&res->u, P - vmin, radix);
             res->N = P;
-            return GR_SUCCESS;
+            return _padic_radix_residue(res, P - vmin, ctx);
         }
 
         return _padic_radix_finalize(res, ctx);
@@ -1082,6 +1110,11 @@ _padic_radix_add_sub(padic_radix_t res, const padic_radix_t x,
         slong d = vmax - vmin;
         int negate = (sub && vx > vy);    /* x - y with y the lower operand */
 
+        /* an exact sum (or a precision) spanning an impossibly large
+           number of digits */
+        if (!_padic_radix_digits_ok(d, P == PADIC_RADIX_PREC_INF, ctx))
+            return GR_UNABLE;
+
         if (sub)
             radix_integer_sublsh(&res->u, &lo->u, &hi->u, d, radix);
         else
@@ -1097,9 +1130,8 @@ _padic_radix_add_sub(padic_radix_t res, const padic_radix_t x,
     /* Fast finish: inexact, valuation vmin, so Neff = P. */
     if (Nresult != PADIC_RADIX_EXACT)
     {
-        _radix_integer_mod_digits_inplace(&res->u, P - vmin, radix);
         res->N = P;
-        return GR_SUCCESS;
+        return _padic_radix_residue(res, P - vmin, ctx);
     }
 
     /* low digit is the lower-valuation operand's (a unit): already canonical. */
@@ -1275,7 +1307,7 @@ _padic_radix_mul_capped(padic_radix_t res, const padic_radix_t x, const padic_ra
             {
                 res->N = Neff;
                 if (!nomod)
-                    _radix_integer_mod_digits_inplace(&res->u, K - vz, radix);
+                    return _padic_radix_residue(res, K - vz, ctx);
                 return GR_SUCCESS;
             }
 
@@ -1408,6 +1440,9 @@ _padic_radix_div(padic_radix_t res, const padic_radix_t a, const padic_radix_t b
     if (krel > PADIC_RADIX_ERR_MAX)
         krel = PADIC_RADIX_ERR_MAX;              /* never compute more than we can store */
 
+    if (!_padic_radix_digits_ok(krel, 0, ctx))
+        return GR_UNABLE;                        /* impossibly many digits */
+
     if (krel <= 0)
     {
         /* quotient valuation is at/below the precision horizon */
@@ -1523,6 +1558,9 @@ padic_radix_inv(padic_radix_t res, const padic_radix_t x, gr_ctx_t ctx)
 
     if (krel > PADIC_RADIX_ERR_MAX)
         krel = PADIC_RADIX_ERR_MAX;              /* never compute more than we can store */
+
+    if (!_padic_radix_digits_ok(krel, 0, ctx))
+        return GR_UNABLE;                        /* impossibly many digits */
 
     if (krel <= 0)
     {
@@ -1729,6 +1767,9 @@ padic_radix_sqrt(padic_radix_t res, const padic_radix_t x, gr_ctx_t ctx)
     if (krel != PADIC_RADIX_PREC_INF && krel > PADIC_RADIX_ERR_MAX)
         krel = PADIC_RADIX_ERR_MAX;
 
+    if (krel != PADIC_RADIX_PREC_INF && !_padic_radix_digits_ok(krel, 0, ctx))
+        return GR_UNABLE;                        /* impossibly many digits */
+
     /* Input precision to develop: one bit beyond the delivered root precision so
        that the unreliable top bit is computed for headroom and then truncated away
        by the finalizer, leaving every delivered bit pinned. */
@@ -1905,6 +1946,9 @@ padic_radix_rsqrt(padic_radix_t res, const padic_radix_t x, gr_ctx_t ctx)
 
     if (krel != PADIC_RADIX_PREC_INF && krel > PADIC_RADIX_ERR_MAX)
         krel = PADIC_RADIX_ERR_MAX;
+
+    if (krel != PADIC_RADIX_PREC_INF && !_padic_radix_digits_ok(krel, 0, ctx))
+        return GR_UNABLE;                        /* impossibly many digits */
 
     kin = (krel == PADIC_RADIX_PREC_INF) ? PADIC_RADIX_PREC_INF
         : (krel > PADIC_RADIX_ERR_MAX - loss ? PADIC_RADIX_ERR_MAX : krel + loss);
@@ -2973,6 +3017,9 @@ _padic_radix_pow_core(padic_radix_t res, const padic_radix_t x, const fmpz_t n, 
     if (exact && fmpz_cmp_ui(n, L / (xn + 1)) < 0)
         L = (slong) fmpz_get_ui(n) * (xn + 1);
 
+    if (L > PADIC_RADIX_MAX_LIMBS)
+        return GR_UNABLE;
+
     TMP_START;
     u = TMP_ALLOC((L + 2) * sizeof(ulong));
     R = TMP_ALLOC((2 * L + 2) * sizeof(ulong));
@@ -3106,6 +3153,25 @@ _padic_radix_pow_zero_inexact(padic_radix_t res, slong N, const fmpz_t n, gr_ctx
     return GR_SUCCESS;
 }
 
+/* an exact power computed by the multiplication chain (exact context) has
+   about n |u| limbs */
+static int
+_padic_radix_pow_chain_ok(const padic_radix_t x, const fmpz_t n, gr_ctx_t ctx)
+{
+    fmpz_t t;
+    int ok;
+
+    if (x->N != PADIC_RADIX_EXACT)
+        return 1;
+
+    fmpz_init(t);
+    fmpz_mul_ui(t, n, FLINT_ABS(x->u.size));
+    ok = fmpz_cmp_si(t, PADIC_RADIX_MAX_LIMBS) <= 0
+        && _padic_radix_digits_ok(fmpz_get_si(t) * (slong) PADIC_RADIX_CTX_RADIX(ctx)->exp, 1, ctx);
+    fmpz_clear(t);
+    return ok;
+}
+
 static int
 _padic_radix_pow_fmpz_nonneg(padic_radix_t res, const padic_radix_t x, const fmpz_t n, gr_ctx_t ctx)
 {
@@ -3130,7 +3196,8 @@ _padic_radix_pow_fmpz_nonneg(padic_radix_t res, const padic_radix_t x, const fmp
         padic_radix_init(t, ctx);
         status = _padic_radix_pow_core(t, x, n, ctx);
         if (status == -1)
-            status = _padic_radix_pow_chain(t, x, n, ctx);
+            status = _padic_radix_pow_chain_ok(x, n, ctx)
+                ? _padic_radix_pow_chain(t, x, n, ctx) : GR_UNABLE;
         padic_radix_swap(res, t, ctx);
         padic_radix_clear(t, ctx);
         return status;
@@ -3138,7 +3205,11 @@ _padic_radix_pow_fmpz_nonneg(padic_radix_t res, const padic_radix_t x, const fmp
 
     status = _padic_radix_pow_core(res, x, n, ctx);
     if (status == -1)
+    {
+        if (!_padic_radix_pow_chain_ok(x, n, ctx))
+            return GR_UNABLE;
         status = _padic_radix_pow_chain(res, x, n, ctx);
+    }
     return status;
 }
 

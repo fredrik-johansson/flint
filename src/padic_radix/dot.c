@@ -12,6 +12,7 @@
 
 #include "radix.h"
 #include "padic_radix.h"
+#include "impl.h"
 int _padic_radix_addmul_sub(padic_radix_t res, const padic_radix_t x, const padic_radix_t y, int sub, gr_ctx_t ctx);
 #include "gr.h"
 #include "longlong.h"
@@ -417,6 +418,15 @@ padic_radix_dot_strided_delayed(padic_radix_t res, const padic_radix_t initial,
         if (nslots < 1)
             nslots = 1;
     }
+
+    /* an impossibly wide window (exact terms spread over a huge range of
+       valuations, or a huge precision): the addmul chain only builds what
+       the partial sums need, and gives up cleanly if that is too large */
+    if (nslots > PADIC_RADIX_MAX_LIMBS
+        || ((N == DOT_INF || keep_exact) && !_padic_radix_digits_ok(
+                FLINT_MIN(nslots, WORD_MAX / e - 1) * e, 1, ctx)))
+        return padic_radix_dot_strided_naive(res, initial, subtract, vec1, stride1, vec2, stride2, len, ctx);
+
     Wdig = (N == DOT_INF || keep_exact) ? DOT_INF : (N - vmin);
 
     /* ---------------- Pass 2: accumulate ---------------- */

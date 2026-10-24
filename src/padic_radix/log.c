@@ -12,6 +12,7 @@
 
 #include "ulong_extras.h"
 #include "padic_radix.h"
+#include "impl.h"
 #include "gr.h"
 
 /*
@@ -124,6 +125,9 @@ _padic_radix_log_wrapper(padic_radix_t res, const padic_radix_t x, int algorithm
 
     if (prec > PADIC_RADIX_ERR_MAX)
         prec = PADIC_RADIX_ERR_MAX;
+
+    if (!_padic_radix_digits_ok(prec, 0, ctx))
+        return GR_UNABLE;
 
     if (prec <= 0)
     {

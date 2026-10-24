@@ -13,6 +13,7 @@
 #include "ulong_extras.h"
 #include "fmpz.h"
 #include "padic_radix.h"
+#include "impl.h"
 #include "gr.h"
 
 slong
@@ -135,6 +136,9 @@ _padic_radix_exp_wrapper(padic_radix_t res, const padic_radix_t x, int algorithm
 
     if (Nx != PADIC_RADIX_EXACT)
         prec = FLINT_MIN(prec, Nx);
+
+    if (!_padic_radix_digits_ok(prec, 0, ctx))
+        return GR_UNABLE;
 
     if (algorithm == 0)
         _padic_radix_exp(&res->u, &x->u, vx, prec, radix);

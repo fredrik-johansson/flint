@@ -258,6 +258,52 @@ with the nested classical product, and the exact coefficients remain
 exact. For the exact sums the extents of [](#dot) form a max-plus
 convolution, computed by the same algorithm on negated sequences.
 
+## Spread exponents {#spread}
+
+The packed classical kernels work in the frame of every output, so their
+temporaries are bounded by the output windows, that is, by the precision.
+The matrix and polynomial routes through integer or modular arithmetic
+instead use base frames shared by many outputs (the row and column
+frames $r_i + c_j$, or the frames of the two polynomials), and an output
+whose terms all have high valuations then needs a window reaching from
+the base frame up to its precision. When the valuations vary by more than
+the precision along the outputs (alternating valuations $0, 10^6, 0,
+10^6, \ldots$ at 20 digits of precision, valuations growing linearly
+with the degree, or valuations at random in a wide range), these windows
+are as wide as the spread of the valuations, and the products are
+arbitrarily more expensive than the classical algorithm, or impossible.
+High valuations are harmless when they lie beyond the precision of every
+output they contribute to (for example a few coefficients of huge
+valuation among coefficients of valuation zero): they are truncated
+away.
+
+The routes therefore compare the window $S_k$ of every output in the
+base frames with the largest window $S_{\text{own}}$ of an output in its
+own frame, both available after the precision computation. The matrix
+routes give up when $\max_k S_k > 4 S_{\text{own}} + 8$, and the
+dispatcher then uses the packed kernel. The polynomial routes compute
+the outputs with $S_k > 4 S_{\text{own}} + 8$ separately by dot products
+when there are few of them (this covers coefficients next to a few
+coefficients of huge valuation, such as a polynomial whose first or last
+coefficients have huge valuations), and give up otherwise. Since the
+min-plus convolutions are not free, the polynomial dispatcher first
+estimates the windows at 16 sampled outputs (from the minimal valuations
+of their terms and the context precision) when the frames are spread
+out, which detects the common spread patterns in $O(n)$ operations. A
+product of length $10^4$ with alternating, trending or random valuations
+spread over $10^6$ digits at 20 digits of precision takes the time of the
+packed kernel (0.2 seconds), and one in which a fifth of the coefficients
+have valuation $10^6$ is done by the transform in 0.03 seconds.
+
+Independently of the algorithms, valuations up to $\pm$`WORD_MAX/4` can
+make the result itself impossibly large: an exact sum with a huge
+valuation gap, an exact power with a huge exponent, or an inexact result
+with a negative valuation far below an absolute precision cap (whose
+residue has as many digits as the gap). Such operations return
+`GR_UNABLE` instead of attempting the allocation; the delayed dot product
+falls back to the chain of additions, which only builds the partial sums
+and so still handles exact cancellations of terms with huge valuations.
+
 ## Use in FLINT {#use}
 
 - `padic_radix_dot_strided_delayed` implements [](#dot); the generic

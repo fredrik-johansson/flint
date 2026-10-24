@@ -185,6 +185,14 @@ _padic_radix_poly_mulmid_packed(padic_radix_struct * res,
     }
 
     stride = FLINT_MAX(L, 2);
+
+    /* impossibly wide windows (huge precisions) */
+    if ((double) stride * (len1 + len2) > (double) PADIC_RADIX_MAX_LIMBS)
+    {
+        TMP_END;
+        return GR_UNABLE;
+    }
+
     P1.U = TMP_ALLOC(sizeof(ulong) * stride * (len1 + len2));
     P2.U = P1.U + stride * len1;
     _pack_vec_units(&P1, poly1, len1, L, stride, radix);
@@ -292,6 +300,13 @@ _padic_radix_poly_mulmid_packed(padic_radix_struct * res,
     return status;
 }
 
+/* floor(x / e) */
+static slong
+_fdiv(slong x, slong e)
+{
+    return (x >= 0) ? x / e : -((-x + e - 1) / e);
+}
+
 /*
     Polynomial (middle) product by Kronecker substitution in radix B.
     Relative to the base frames wa = min w(a_i) and wb = min w(b_j) (over the
@@ -312,14 +327,14 @@ static int
 _poly_mulmid_frames(padic_radix_struct * res,
     const padic_radix_struct * poly1, slong len1,
     const padic_radix_struct * poly2, slong len2,
-    slong nlo, slong nhi, int alg, gr_ctx_t ctx)
+    slong nlo, slong nhi, int alg, int * spread, gr_ctx_t ctx)
 {
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     slong e = radix->exp;
     slong k, i, nout = nhi - nlo;
-    slong wa, wb, wamax, wbmax, Wb, Smax, S, cl, an, bn;
+    slong wa, wb, wamax, wbmax, Wb, Smax, Sown, S, cl, an, bn;
     _pack_vec_struct P1, P2;
-    slong * ex, * V, * E, * E2, * PN, * XW, nex;
+    slong * ex, * V, * E, * E2, * PN, * XW, * SW, nex, nouts;
     nn_ptr A, B, C;
     int status = GR_SUCCESS, exact;
     TMP_INIT;
@@ -336,7 +351,7 @@ _poly_mulmid_frames(padic_radix_struct * res,
 
     TMP_START;
 
-    ex = TMP_ALLOC(sizeof(slong) * (4 * (len1 + len2) + 5 * nout));
+    ex = TMP_ALLOC(sizeof(slong) * (4 * (len1 + len2) + 6 * nout));
     P1.vv = ex;           P1.ve = P1.vv + len1;  P1.NN = P1.ve + len1;
     P1.ww = P1.NN + len1;
     P2.vv = P1.ww + len1; P2.ve = P2.vv + len2;  P2.NN = P2.ve + len2;
@@ -346,6 +361,7 @@ _poly_mulmid_frames(padic_radix_struct * res,
     E2 = E + nout;
     PN = E2 + nout;
     XW = PN + nout;
+    SW = XW + nout;
 
     if (!_pack_vec_meta(&P1, poly1, len1, radix) || !_pack_vec_meta(&P2, poly2, len2, radix))
         goto unable;
@@ -428,10 +444,14 @@ _poly_mulmid_frames(padic_radix_struct * res,
         }
     }
 
-    Smax = 0;
+    /* windows in the base frame (SW) and in the own frames of the outputs
+       (the maximum Sown); the outputs that are single products are done
+       separately with padic_radix_mul and need no window */
+    Sown = 0;
     for (k = 0; k < nout; k++)
     {
         slong N, Nt = FLINT_MIN(E[k], E2[k]);
+        slong kk = k + nlo, ilo = FLINT_MAX(0, kk - len2 + 1), ihi = FLINT_MIN(kk, len1 - 1);
 
         if (V[k] >= PADIC_RADIX_PACK_NONE)
             N = (Nt >= PADIC_RADIX_PACK_NONE) ? PADIC_RADIX_EXACT : Nt;
@@ -441,14 +461,62 @@ _poly_mulmid_frames(padic_radix_struct * res,
             N = _padic_radix_pack_prec(V[k], Nt, ctx);
 
         PN[k] = N;
+        SW[k] = 0;
+
+        if (ihi <= ilo)
+            continue;
 
         if (N == PADIC_RADIX_PACK_EXACT_SUM)
-            Smax = FLINT_MAX(Smax, XW[k]);
+            SW[k] = XW[k];
         else if (V[k] < PADIC_RADIX_PACK_NONE && N != PADIC_RADIX_EXACT && N > V[k])
+            SW[k] = (slong) radix_div_exp((ulong) (N - e * Wb) + e - 1, radix);
+
+        if (SW[k] != 0)
+            Sown = FLINT_MAX(Sown, SW[k] - (_fdiv(V[k], e) - Wb));
+    }
+
+    /*
+        Outputs whose windows in the base frame are much wider than in their
+        own frames (all their terms have valuations far above the base
+        frame): when there are few of them, they are computed separately by
+        dot products (marked SW = -1); otherwise (valuations or precisions
+        spread far beyond the precision along the outputs) the packed
+        kernel, which uses the frame of every output, is cheaper, and the
+        slots could be arbitrarily large.
+    */
+    nouts = 0;
+    for (k = 0; k < nout; k++)
+        nouts += (SW[k] > 4 * Sown + 8);
+
+    if (nouts != 0)
+    {
+        /* at most about the cost of the transform, and a small part of
+           that of the classical algorithm */
+        double budget = 4.0 * (len1 + len2) * (4 * Sown + 9) * (FLINT_BIT_COUNT(len1 + len2) + 1);
+        budget = FLINT_MIN(budget, (double) len1 * len2 / 16);
+
+        if ((double) nouts * FLINT_MIN(len1, len2) > budget)
         {
-            slong s = (slong) radix_div_exp((ulong) (N - e * Wb) + e - 1, radix);
-            Smax = FLINT_MAX(Smax, s);
+            if (spread != NULL)
+                *spread = 1;
+            goto unable;
         }
+
+        for (k = 0; k < nout; k++)
+            if (SW[k] > 4 * Sown + 8)
+                SW[k] = -1;
+    }
+
+    Smax = 0;
+    for (k = 0; k < nout; k++)
+        Smax = FLINT_MAX(Smax, SW[k]);
+
+    /* impossibly wide windows (huge precisions) */
+    if ((double) (2 * Smax + 2) * (len1 + len2 + nout) > (double) PADIC_RADIX_MAX_LIMBS)
+    {
+        if (spread != NULL)
+            *spread = 1;
+        goto unable;
     }
 
     if (Smax == 0)
@@ -460,6 +528,9 @@ _poly_mulmid_frames(padic_radix_struct * res,
             padic_radix_struct * c = res + (k - nlo);
             if (ihi == ilo)
                 status |= padic_radix_mul(c, poly1 + ilo, poly2 + (k - ilo), ctx);
+            else if (SW[k - nlo] == -1)
+                status |= padic_radix_dot_strided_delayed(c, NULL, 0, poly1 + ilo, 1,
+                    poly2 + (k - ilo), -1, ihi - ilo + 1, ctx);
             else if (PN[k - nlo] == PADIC_RADIX_PACK_EXACT_SUM)
                 status |= _exact_output(c, poly1, len1, poly2, len2, k, ctx);
             else
@@ -625,6 +696,13 @@ extract:
             continue;
         }
 
+        if (SW[k - nlo] == -1)
+        {
+            status |= padic_radix_dot_strided_delayed(c, NULL, 0, poly1 + ilo, 1,
+                poly2 + (k - ilo), -1, ihi - ilo + 1, ctx);
+            continue;
+        }
+
         if (N == PADIC_RADIX_PACK_EXACT_SUM)
         {
             /* the exact sum modulo B^w, |sum| < B^(w - 1): signed digits */
@@ -688,7 +766,7 @@ _padic_radix_poly_mulmid_KS(padic_radix_struct * res,
     const padic_radix_struct * poly2, slong len2,
     slong nlo, slong nhi, gr_ctx_t ctx)
 {
-    return _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 0, ctx);
+    return _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 0, NULL, ctx);
 }
 
 int
@@ -697,7 +775,7 @@ _padic_radix_poly_mulmid_mod(padic_radix_struct * res,
     const padic_radix_struct * poly2, slong len2,
     slong nlo, slong nhi, gr_ctx_t ctx)
 {
-    return _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 1, ctx);
+    return _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 1, NULL, ctx);
 }
 
 /* below these lengths the classical algorithm (dot products, or addmul
@@ -715,9 +793,62 @@ _padic_radix_poly_mulmid_mod(padic_radix_struct * res,
     about 64; up to 10 limbs from about 24; for wider windows, the radix KS
     (which avoids conversions and beats mpn_mod there) from about 32.
 */
+/*
+    Whether several outputs at a sample of positions have windows, in the
+    base frame of the Kronecker substitution, much wider than in their own
+    frames (valuations spread beyond the precision, e.g. alternating or
+    trending valuations), in which case the frames routes would give up
+    (after the min-plus precision computation) or be slow. Uses the context
+    precision as an upper bound for the precision of every output.
+*/
+static int
+_sampled_spread(const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2,
+    slong len2, slong nlo, slong nhi, slong Wb, gr_ctx_t ctx)
+{
+    slong e = PADIC_RADIX_CTX_RADIX(ctx)->exp;
+    slong rel = PADIC_RADIX_CTX_PREC_REL(ctx), pabs = PADIC_RADIX_CTX_PREC_ABS(ctx);
+    slong s, nsamp = FLINT_MIN(nhi - nlo, 16), ninfl = 0;
+    double wb[16], maxo = 0;
+
+    for (s = 0; s < nsamp; s++)
+    {
+        slong k = nlo + (nsamp == 1 ? 0 : (s * (nhi - 1 - nlo)) / (nsamp - 1));
+        slong i, ilo = FLINT_MAX(0, k - len2 + 1), ihi = FLINT_MIN(k, len1 - 1);
+        double V = HUGE_VAL, N;
+
+        wb[s] = 0;
+        if (ihi <= ilo)     /* single products are done separately */
+            continue;
+
+        for (i = ilo; i <= ihi; i++)
+            if (poly1[i].u.size != 0 && poly2[k - i].u.size != 0)
+                V = FLINT_MIN(V, (double) poly1[i].v + (double) poly2[k - i].v);
+
+        if (V == HUGE_VAL)
+            continue;
+
+        N = HUGE_VAL;
+        if (rel != PADIC_RADIX_PREC_INF)
+            N = V + rel;
+        if (pabs != PADIC_RADIX_PREC_INF)
+            N = FLINT_MIN(N, (double) pabs);
+        if (N == HUGE_VAL || N <= V)
+            continue;
+
+        wb[s] = ceil((N - e * (double) Wb) / e);
+        maxo = FLINT_MAX(maxo, ceil((N - e * floor(V / e)) / e));
+    }
+
+    /* a few inflated outputs are computed separately by the frames routes */
+    for (s = 0; s < nsamp; s++)
+        ninfl += (wb[s] > 4 * maxo + 8);
+
+    return ninfl >= 3;
+}
+
 static int
 _choose_alg(const padic_radix_struct * poly1, slong len1, const padic_radix_struct * poly2,
-    slong len2, gr_ctx_t ctx)
+    slong len2, slong nlo, slong nhi, gr_ctx_t ctx)
 {
     const radix_struct * radix = PADIC_RADIX_CTX_RADIX(ctx);
     slong i, L = 1, wlo1 = WORD_MAX, whi1 = WORD_MIN, wlo2 = WORD_MAX, whi2 = WORD_MIN, shift = 0, n, S;
@@ -760,6 +891,11 @@ _choose_alg(const padic_radix_struct * poly1, slong len1, const padic_radix_stru
     if (n < thresh)
         return 0;
 
+    /* (only needed when the frames are spread out) */
+    if ((whi1 - wlo1) + (whi2 - wlo2) > 2 * L + 2
+        && _sampled_spread(poly1, len1, poly2, len2, nlo, nhi, wlo1 + wlo2, ctx))
+        return 0;
+
     return (S <= 10) ? 2 : 1;
 }
 
@@ -773,19 +909,21 @@ _padic_radix_poly_mulmid(padic_radix_struct * res,
 
     if (FLINT_MIN(len1, len2) >= PACKED_MIN_LEN)
     {
-        int alg = _choose_alg(poly1, FLINT_MIN(len1, nhi), poly2, FLINT_MIN(len2, nhi), ctx);
+        int alg = _choose_alg(poly1, FLINT_MIN(len1, nhi), poly2, FLINT_MIN(len2, nhi), nlo, nhi, ctx);
+
+        int spread = 0;
 
         if (alg == 2)
         {
-            status = _padic_radix_poly_mulmid_mod(res, poly1, len1, poly2, len2, nlo, nhi, ctx);
+            status = _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 1, &spread, ctx);
             if (status != GR_UNABLE)
                 return status;
-            alg = (FLINT_MIN(len1, len2) >= 32);
+            alg = (FLINT_MIN(len1, len2) >= 32) && !spread;
         }
 
         if (alg == 1)
         {
-            status = _padic_radix_poly_mulmid_KS(res, poly1, len1, poly2, len2, nlo, nhi, ctx);
+            status = _poly_mulmid_frames(res, poly1, len1, poly2, len2, nlo, nhi, 0, &spread, ctx);
             if (status != GR_UNABLE)
                 return status;
         }
