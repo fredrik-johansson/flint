@@ -43,6 +43,19 @@ _robust_elem(padic_radix_struct * x, slong v, slong N, int neg, flint_rand_t sta
     fmpz_clear(f);
 }
 
+/* primes for the tests with huge exponents: with one digit per limb on
+   32-bit systems, so that gaps of WORD_MAX/32 digits are beyond the size
+   limit (with small primes they need only some tens of megabytes) */
+static ulong
+_robust_prime(flint_rand_t state)
+{
+#if FLINT_BITS == 64
+    return n_nth_prime(1 + n_randint(state, 5));
+#else
+    return n_nextprime((UWORD(1) << 20) + n_randint(state, 1000), 1);
+#endif
+}
+
 /* the balls of x and y intersect */
 static int
 _robust_agree(const padic_radix_struct * x, const padic_radix_struct * y, gr_ctx_t ctx)
@@ -83,7 +96,7 @@ TEST_FUNCTION_START(padic_radix_robust, state)
             default: rel = 30; pabs = 50; break;
         }
 
-        gr_ctx_init_padic_radix(ctx, n_nth_prime(1 + n_randint(state, 5)), rel, pabs, PADIC_RADIX_SIGNED);
+        gr_ctx_init_padic_radix(ctx, _robust_prime(state), rel, pabs, PADIC_RADIX_SIGNED);
         padic_radix_init(x, ctx);
         padic_radix_init(y, ctx);
         padic_radix_init(z, ctx);
@@ -107,7 +120,7 @@ TEST_FUNCTION_START(padic_radix_robust, state)
                 case 4: s = padic_radix_inv(z, x, ctx); break;
                 case 5: s = padic_radix_sqrt(z, x, ctx); break;
                 case 6: s = padic_radix_pow_ui(z, x, 1000003, ctx); break;
-                case 7: s = padic_radix_pow_ui(z, y, UWORD(1) << 40, ctx); break;
+                case 7: s = padic_radix_pow_ui(z, y, UWORD(1) << (FLINT_BITS - 4), ctx); break;
                 default: s = padic_radix_addmul(z, x, y, ctx); break;
             }
             if (s & GR_TEST_FAIL)
@@ -123,6 +136,41 @@ TEST_FUNCTION_START(padic_radix_robust, state)
         gr_ctx_clear(ctx);
     }
 
+    /* huge powers in a context with finite precision saturate (they are
+       computed with truncated products, whatever the exponent) */
+    {
+        gr_ctx_t ctx;
+        padic_radix_t x, y;
+        fmpz_t n;
+
+        gr_ctx_init_padic_radix(ctx, 7, 3, PADIC_RADIX_PREC_INF, 0);
+        padic_radix_init(x, ctx);
+        padic_radix_init(y, ctx);
+        fmpz_init(n);
+        fmpz_ui_pow_ui(n, 10, 100);
+
+        GR_MUST_SUCCEED(padic_radix_exact_set_ui(x, 7, ctx));
+        GR_MUST_SUCCEED(padic_radix_pow_fmpz(y, x, n, ctx));
+        if (y->u.size != 0 || y->N != PADIC_RADIX_ERR_MAX)
+        {
+            flint_printf("FAIL (7^(10^100) with relative precision 3)\n");
+            flint_abort();
+        }
+
+        GR_MUST_SUCCEED(padic_radix_exact_set_ui(x, 14, ctx));
+        GR_MUST_SUCCEED(padic_radix_pow_fmpz(y, x, n, ctx));
+        if (y->u.size != 0 || y->N != PADIC_RADIX_ERR_MAX)
+        {
+            flint_printf("FAIL (14^(10^100) with relative precision 3)\n");
+            flint_abort();
+        }
+
+        padic_radix_clear(x, ctx);
+        padic_radix_clear(y, ctx);
+        fmpz_clear(n);
+        gr_ctx_clear(ctx);
+    }
+
     /* exact sums with a huge valuation gap: impossible in an exact context
        (GR_UNABLE), but the delayed dot product falls back to the addmul
        chain, which gets exact cancellations right */
@@ -131,7 +179,7 @@ TEST_FUNCTION_START(padic_radix_robust, state)
         padic_radix_struct * a, * b;
         padic_radix_t r;
 
-        gr_ctx_init_padic_radix(ctx, 7, PADIC_RADIX_PREC_INF, PADIC_RADIX_PREC_INF, PADIC_RADIX_SIGNED);
+        gr_ctx_init_padic_radix(ctx, _robust_prime(state), PADIC_RADIX_PREC_INF, PADIC_RADIX_PREC_INF, PADIC_RADIX_SIGNED);
         a = gr_heap_init_vec(3, ctx);
         b = gr_heap_init_vec(3, ctx);
         padic_radix_init(r, ctx);
@@ -150,10 +198,16 @@ TEST_FUNCTION_START(padic_radix_robust, state)
             flint_abort();
         }
 
-        if (padic_radix_dot_strided_delayed(r, NULL, 0, a, 1, b, 1, 3, ctx) != GR_SUCCESS
-            || r->N != PADIC_RADIX_EXACT || r->v != 0 || r->u.size != 1 || r->u.d[0] != 6)
+        if (padic_radix_dot_strided_delayed(r, NULL, 0, a, 1, b, 1, 3, ctx) != GR_SUCCESS)
         {
             flint_printf("FAIL (exact dot with a huge gap)\n");
+            flint_abort();
+        }
+
+        GR_MUST_SUCCEED(padic_radix_exact_set_si(a + 0, 6, ctx));
+        if (r->N != PADIC_RADIX_EXACT || !_robust_identical(r, a + 0, ctx))
+        {
+            flint_printf("FAIL (exact dot with a huge gap: value)\n");
             flint_abort();
         }
 
@@ -383,7 +437,7 @@ TEST_FUNCTION_START(padic_radix_robust, state)
         }
         vb = n_randint(state, 2) ? big : WORD_MAX / 32;
 
-        gr_ctx_init_padic_radix(ctx, n_nth_prime(1 + n_randint(state, 5)), rel, pabs, PADIC_RADIX_SIGNED);
+        gr_ctx_init_padic_radix(ctx, _robust_prime(state), rel, pabs, PADIC_RADIX_SIGNED);
         gr_mat_init(A, n, n, ctx);
         gr_mat_init(B, n, n, ctx);
         gr_mat_init(C, n, n, ctx);

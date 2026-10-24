@@ -3153,15 +3153,20 @@ _padic_radix_pow_zero_inexact(padic_radix_t res, slong N, const fmpz_t n, gr_ctx
     return GR_SUCCESS;
 }
 
-/* an exact power computed by the multiplication chain (exact context) has
-   about n |u| limbs */
+/* an exact power computed by the multiplication chain in a context
+   without finite precision (where nothing is truncated) has about n |u|
+   limbs; in other contexts the products are truncated to the precision,
+   and powers of +-1 stay one limb (the valuation saturates) */
 static int
 _padic_radix_pow_chain_ok(const padic_radix_t x, const fmpz_t n, gr_ctx_t ctx)
 {
     fmpz_t t;
     int ok;
 
-    if (x->N != PADIC_RADIX_EXACT)
+    if (x->N != PADIC_RADIX_EXACT
+        || PADIC_RADIX_CTX_PREC_REL(ctx) != PADIC_RADIX_PREC_INF
+        || PADIC_RADIX_CTX_PREC_ABS(ctx) != PADIC_RADIX_PREC_INF
+        || (FLINT_ABS(x->u.size) == 1 && x->u.d[0] == 1))
         return 1;
 
     fmpz_init(t);

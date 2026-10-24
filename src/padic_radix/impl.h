@@ -57,7 +57,7 @@
 #if FLINT_BITS == 64
 #define PADIC_RADIX_MAX_LIMBS (WORD(1) << 36)
 #else
-#define PADIC_RADIX_MAX_LIMBS (WORD(1) << 27)
+#define PADIC_RADIX_MAX_LIMBS (WORD(1) << 22)
 #endif
 
 /* whether a radix integer of the given number of digits (an exact result

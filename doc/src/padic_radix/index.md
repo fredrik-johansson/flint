@@ -55,7 +55,7 @@ result can need more digits than can be stored: an exact sum such as
 $1 + p^{\mathrm{WORD\_MAX}/8}$ in a context without finite precision, or
 an inexact result with a negative valuation far below an absolute
 precision cap. Operations return `GR_UNABLE` instead of attempting such
-allocations: for unit sizes beyond $2^{36}$ limbs ($2^{27}$ on 32-bit
+allocations: for unit sizes beyond $2^{36}$ limbs ($2^{22}$ on 32-bit
 systems), and for exact results beyond the `size_limit` of the context
 (in digits; unlimited by default). The fast algorithms for dot products,
 matrix and polynomial products and characteristic polynomials are

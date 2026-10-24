@@ -589,7 +589,7 @@ _charpoly_lift(padic_radix_struct * cp, const gr_mat_t mat, int * capped, gr_ctx
         {
             slong K = Nmin + sc;
 
-            if (K > 64 * (R + n) + 1024 || !_padic_radix_digits_ok(4 * K + 64, 0, ctx))
+            if ((double) K > 64.0 * ((double) R + n) + 1024 || !_padic_radix_digits_ok(4 * K + 64, 0, ctx))
                 return GR_UNABLE;
         }
         else

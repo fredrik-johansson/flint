@@ -631,7 +631,7 @@ Bx[j * nb + b] = xm; Bv[j * nb + b] = x; Bve[j * nb + b] = y; BN[j * nb + b] = z
             /* windows wider than the precision (spread frames) make the
                products more expensive than in the packed kernel, which
                uses the frame of every output */
-            Lr = (rel == PADIC_RADIX_PREC_INF) ? (double) Sest : (double) ((FLINT_MIN(rel, WORD(1) << 40) + e - 1) / e);
+            Lr = (rel == PADIC_RADIX_PREC_INF) ? (double) Sest : (double) ((FLINT_MIN(rel, WORD_MAX / 4) + e - 1) / e);
             if (Sest > Lr)
                 c *= pow((double) Sest / Lr, 1.5);
 
@@ -1146,7 +1146,7 @@ padic_radix_mat_mul(gr_mat_t C, const gr_mat_t A, const gr_mat_t B, gr_ctx_t ctx
             else
                 vhi = vlo + FLINT_MIN(vhi - vlo, WORD(1) << 20);
 
-            Lr = (FLINT_MIN(rel, WORD(1) << 40) + 2 * (vhi - vlo) + e - 1) / e;
+            Lr = (FLINT_MIN(rel, WORD_MAX / 4) + 2 * (vhi - vlo) + e - 1) / e;
             cut = (Lr <= 1) ? 8 : (Lr == 2) ? 32 : (Lr <= 8) ? 16 : (Lr <= 15) ? 28 : 48;
             if (vhi != vlo)
                 cut = 3 * cut / 2;

@@ -432,7 +432,7 @@ padic_radix_mat_det(padic_radix_t res, const gr_mat_t A, gr_ctx_t ctx)
     if (PADIC_RADIX_CTX_PREC_REL(ctx) != PADIC_RADIX_PREC_INF)
     {
         slong e = PADIC_RADIX_CTX_RADIX(ctx)->exp;
-        L = (FLINT_MIN(PADIC_RADIX_CTX_PREC_REL(ctx), WORD(1) << 40) + e - 1) / e;
+        L = (FLINT_MIN(PADIC_RADIX_CTX_PREC_REL(ctx), WORD_MAX / 4) + e - 1) / e;
     }
     else
     {
