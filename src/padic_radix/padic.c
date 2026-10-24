@@ -2284,6 +2284,8 @@ gr_method_tab_input _padic_radix_methods_input[] =
     {GR_METHOD_MAT_MUL,         (gr_funcptr) padic_radix_mat_mul},
     {GR_METHOD_MAT_DET,         (gr_funcptr) padic_radix_mat_det},
     {GR_METHOD_MAT_FIND_NONZERO_PIVOT, (gr_funcptr) padic_radix_mat_find_nonzero_pivot},
+    {GR_METHOD_MAT_NONSINGULAR_SOLVE, (gr_funcptr) padic_radix_mat_nonsingular_solve},
+    {GR_METHOD_MAT_INV,         (gr_funcptr) padic_radix_mat_inv},
     {GR_METHOD_MAT_CHARPOLY,    (gr_funcptr) padic_radix_mat_charpoly},
     {0,                         (gr_funcptr) NULL},
 };

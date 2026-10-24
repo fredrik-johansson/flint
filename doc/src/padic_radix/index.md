@@ -628,8 +628,8 @@ substitution lose some digits when $A$ is not invertible modulo $p$.
 When $A / p^a$ is invertible modulo $p$ for the minimal valuation $a$ of
 its entries, all pivots have valuation $a$ and the generic LU solve (with
 the pivots of `padic_radix_mat_find_nonzero_pivot`) is used directly. These
-functions are not used by `gr_mat_nonsingular_solve` and `gr_mat_inv`,
-which have no method slots.
+functions implement the generic methods `gr_mat_nonsingular_solve` and
+`gr_mat_inv`.
 :::
 
 ::: function
