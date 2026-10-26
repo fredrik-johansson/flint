@@ -180,11 +180,21 @@ TEST_FUNCTION_START(arb_approx_dot, state)
             flint_abort();
         }
 
-        /* Compare with arb_dot */
-        arb_approx_dot(s2, initial ? z : NULL, subtract,
+        /* Compare with arb_dot: the inputs are exact now, and the midpoint
+           of the ball must be exactly the approximate dot product */
+        arb_dot(s2, initial ? z : NULL, subtract,
             revx ? (x + len - 1) : x, revx ? -1 : 1,
             revy ? (y + len - 1) : y, revy ? -1 : 1,
             len, prec);
+
+        if (!arf_equal(arb_midref(s1), arb_midref(s2)))
+        {
+            flint_printf("FAIL (midpoint)\n\n");
+            flint_printf("iter = %wd, len = %wd, prec = %wd, ebits = %wd\n\n", iter, len, prec, ebits);
+            flint_printf("s1 = "); arb_printn(s1, 100, ARB_STR_MORE); flint_printf("\n\n");
+            flint_printf("s2 = "); arb_printn(s2, 100, ARB_STR_MORE); flint_printf("\n\n");
+            flint_abort();
+        }
 
         {
             mag_t err, xx, yy;
@@ -199,7 +209,7 @@ TEST_FUNCTION_START(arb_approx_dot, state)
             for (i = 0; i < len; i++)
             {
                 arb_get_mag(xx, revx ? x + len - 1 - i : x + i);
-                arb_get_mag(yy, revx ? y + len - 1 - i : y + i);
+                arb_get_mag(yy, revy ? y + len - 1 - i : y + i);
                 mag_addmul(err, xx, yy);
             }
 

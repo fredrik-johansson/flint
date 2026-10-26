@@ -39,6 +39,7 @@
 #include "t-dump_str.c"
 #include "t-floor.c"
 #include "t-fma.c"
+#include "t-fmma.c"
 #include "t-frexp.c"
 #include "t-get_d.c"
 #include "t-get_fmpz.c"
@@ -50,7 +51,6 @@
 #include "t-mul_fmpz.c"
 #include "t-mul_si.c"
 #include "t-mul_ui.c"
-#include "t-mul_via_mpfr.c"
 #include "t-neg_round.c"
 #include "t-nint.c"
 #include "t-root.c"
@@ -106,6 +106,7 @@ test_struct tests[] =
     TEST_FUNCTION(arf_dump_str),
     TEST_FUNCTION(arf_floor),
     TEST_FUNCTION(arf_fma),
+    TEST_FUNCTION(arf_fmma),
     TEST_FUNCTION(arf_frexp),
     TEST_FUNCTION(arf_get_d),
     TEST_FUNCTION(arf_get_fmpz),
@@ -117,7 +118,6 @@ test_struct tests[] =
     TEST_FUNCTION(arf_mul_fmpz),
     TEST_FUNCTION(arf_mul_si),
     TEST_FUNCTION(arf_mul_ui),
-    TEST_FUNCTION(arf_mul_via_mpfr),
     TEST_FUNCTION(arf_neg_round),
     TEST_FUNCTION(arf_nint),
     TEST_FUNCTION(arf_root),

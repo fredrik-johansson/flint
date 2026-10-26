@@ -47,44 +47,9 @@ nfloat_should_round_up(int sgnbit, gr_ctx_t ctx)
         } \
     } while (0)
 
-/* Copying and zeroing for short operands. Plain loops are turned into
-   calls to memcpy / memset by the compiler, which costs more than the
-   operation itself for a few limbs. */
-FLINT_FORCE_INLINE void
-_nfloat_copy_limbs(nn_ptr d, nn_srcptr s, slong n)
-{
-    switch (n)
-    {
-        case 8: d[7] = s[7]; /* fallthrough */
-        case 7: d[6] = s[6]; /* fallthrough */
-        case 6: d[5] = s[5]; /* fallthrough */
-        case 5: d[4] = s[4]; /* fallthrough */
-        case 4: d[3] = s[3]; /* fallthrough */
-        case 3: d[2] = s[2]; /* fallthrough */
-        case 2: d[1] = s[1]; /* fallthrough */
-        case 1: d[0] = s[0]; /* fallthrough */
-        case 0: break;
-        default: flint_mpn_copyi(d, s, n);
-    }
-}
-
-FLINT_FORCE_INLINE void
-_nfloat_zero_limbs(nn_ptr d, slong n)
-{
-    switch (n)
-    {
-        case 8: d[7] = 0; /* fallthrough */
-        case 7: d[6] = 0; /* fallthrough */
-        case 6: d[5] = 0; /* fallthrough */
-        case 5: d[4] = 0; /* fallthrough */
-        case 4: d[3] = 0; /* fallthrough */
-        case 3: d[2] = 0; /* fallthrough */
-        case 2: d[1] = 0; /* fallthrough */
-        case 1: d[0] = 0; /* fallthrough */
-        case 0: break;
-        default: flint_mpn_zero(d, n);
-    }
-}
+/* Copying and zeroing for short operands (mpn_extras.h). */
+#define _nfloat_copy_limbs _flint_mpn_copy_small
+#define _nfloat_zero_limbs _flint_mpn_zero_small
 
 /* One-limb division kernels (div.c, complex.c). */
 

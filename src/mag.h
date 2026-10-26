@@ -350,6 +350,52 @@ mag_fast_mul_2exp_si(mag_t z, const mag_t x, slong y)
     }
 }
 
+/* z = x + y rounded up, for small exponents (LAGOM) */
+MAG_INLINE void
+mag_fast_add(mag_t z, const mag_t x, const mag_t y)
+{
+    if (MAG_MAN(x) == 0)
+    {
+        MAG_MAN(z) = MAG_MAN(y);
+        MAG_EXP(z) = MAG_EXP(y);
+    }
+    else if (MAG_MAN(y) == 0)
+    {
+        MAG_MAN(z) = MAG_MAN(x);
+        MAG_EXP(z) = MAG_EXP(x);
+    }
+    else
+    {
+        slong shift = MAG_EXP(x) - MAG_EXP(y);
+
+        if (shift < 0)
+        {
+            FLINT_SWAP(mag_srcptr, x, y);
+            shift = -shift;
+        }
+
+        MAG_EXP(z) = MAG_EXP(x);
+
+        if (shift == 0)
+        {
+            /* exact sum, at most one bit too large, then possibly one
+               more after rounding (as in mag_add) */
+            MAG_MAN(z) = MAG_MAN(x) + MAG_MAN(y);
+            MAG_FAST_ADJUST_ONE_TOO_LARGE(z);
+            MAG_FAST_ADJUST_ONE_TOO_LARGE(z);
+        }
+        else
+        {
+            if (shift >= MAG_BITS)
+                MAG_MAN(z) = MAG_MAN(x) + LIMB_ONE;
+            else
+                MAG_MAN(z) = MAG_MAN(x) + (MAG_MAN(y) >> shift) + LIMB_ONE;
+
+            MAG_FAST_ADJUST_ONE_TOO_LARGE(z);
+        }
+    }
+}
+
 MAG_INLINE void
 mag_fast_addmul(mag_t z, const mag_t x, const mag_t y)
 {

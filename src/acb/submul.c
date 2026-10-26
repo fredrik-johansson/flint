@@ -10,10 +10,14 @@
 */
 
 #include "acb.h"
+#include "acb/impl.h"
 
 void
 acb_submul(acb_t z, const acb_t x, const acb_t y, slong prec)
 {
+    if (_acb_mul_onepass(z, z, x, y, 1, prec))
+        return;
+
     if (arb_is_zero(acb_imagref(y)))
     {
         arb_submul(acb_imagref(z), acb_imagref(x), acb_realref(y), prec);

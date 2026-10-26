@@ -604,12 +604,13 @@ is zero.
 :::
 
 ::: function
+void mag_fast_add(mag_t res, const mag_t x, const mag_t y)
 void mag_fast_mul(mag_t res, const mag_t x, const mag_t y)
 void mag_fast_addmul(mag_t z, const mag_t x, const mag_t y)
 void mag_fast_add_2exp_si(mag_t res, const mag_t x, slong e)
 
-Set `res` to an upper bound for $xy$, `z` to an upper bound for $z + xy$,
-and `res` to an upper bound for $x + 2^e$.
+Set `res` to an upper bound for $x + y$ or $xy$, `z` to an upper bound
+for $z + xy$, and `res` to an upper bound for $x + 2^e$.
 :::
 
 ::: function

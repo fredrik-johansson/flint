@@ -67,8 +67,11 @@ TEST_FUNCTION_START(arb_atan_arf_bb, state)
         else
             arb_mul_2exp_si(x, x, -n_randint(state, 1.5 * prec));
 
+        /* the reference with 100 more bits (more for tiny x); the result
+           can be tighter than an ulp (measured rounding errors), so the
+           reference must not be less accurate for large x */
         if (!arf_is_special(arb_midref(x)))
-            prec2 = prec + 100 + 2 * (-ARF_EXP(arb_midref(x)));
+            prec2 = prec + 100 + 2 * FLINT_MAX(0, -ARF_EXP(arb_midref(x)));
         else
             prec2 = prec + 100;
 

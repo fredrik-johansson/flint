@@ -1,6 +1,6 @@
 ---
 title: Arithmetic and precision
-functions: arb_add arb_sub arb_mul arb_div arb_inv arb_addmul arb_fma
+functions: arb_add arb_sub arb_mul arb_div arb_inv arb_addmul arb_fma arb_fmma arb_sosq arb_set_round_mpn_2exp_si
 ---
 
 The arithmetic functions are the building blocks of every computation
@@ -18,10 +18,26 @@ For $x = [m_x \pm r_x]$ and $y = [m_y \pm r_y]$:
 | `arb_mul` | $m_x m_y$ | $\lvert m_x\rvert r_y + \lvert m_y\rvert r_x + r_x r_y$ |
 | `arb_div` | $m_x / m_y$ | $\dfrac{\lvert m_x\rvert r_y + \lvert m_y\rvert r_x}{\lvert m_y\rvert (\lvert m_y\rvert - r_y)}$ |
 | `arb_addmul` | $m_z + m_x m_y$ | $r_z + \lvert m_x\rvert r_y + \lvert m_y\rvert r_x + r_x r_y$ |
+| `arb_fmma` | $m_a m_b + m_c m_d$ | the two product terms added |
+| `arb_sosq` | $m_a^2 + m_b^2$ | likewise |
 
-The midpoint is rounded to `prec` bits towards zero (`ARB_RND`), and if
-the rounding changed it, one unit in the last place of the rounded
-midpoint is added to the radius. All radius computations round upward.
+For `arb_add`, `arb_sub`, `arb_mul`, `arb_addmul`, `arb_submul`,
+`arb_fma`, `arb_fmma`, `arb_sosq`, `arb_div`, `arb_inv`, `arb_sqrt`,
+`arb_rsqrt`, `arb_set_round`, `arb_neg_round` and `arb_set_str` (and the
+variants taking `arf`, integer or `fmpz` operands), the midpoint is
+rounded to `prec` bits to nearest and the actual rounding error (bounded
+to within $2^{-\mathrm{MAG\_BITS}}$ of an ulp) is added to the radius, by
+`arb_set_round_mpn_2exp_si`; when the propagated error exceeds the
+rounding error by more than `MAG_BITS` bits, the midpoint is rounded at
+a correspondingly lower precision, since further bits would not be
+meaningful. The quotients and roots are computed with a guard limb
+(`flint_mpn_divhigh`, `flint_mpn_sqrthigh`, `flint_mpn_rsqrthigh`, see
+[](mpn_extras#fphigh)), one more unit of $2^{-\mathrm{MAG\_BITS}}$ ulp
+covering the error of the approximation; an exact quotient or root
+(detected when the guard limb is near a limb boundary) is found exactly.
+The remaining operations round the midpoint towards zero (`ARB_RND`) and
+add one unit in the last place to the radius when the rounding was
+inexact. All radius computations round upward.
 The bounds are proved in
 [](algorithms/ball-arithmetic/error-propagation); for addition and
 multiplication of real balls they are the best possible up to the
@@ -93,15 +109,16 @@ int main(void)
 ```
 ```output
 3 * 4 at 2 bits:  (3 * 2^2) +/- (0)
-3 + 4 at 2 bits:  (3 * 2^1) +/- (536870912 * 2^-28)
+3 + 4 at 2 bits:  (1 * 2^3) +/- (536870912 * 2^-29)
 3 / 4 at 53 bits: (3 * 2^-2) +/- (0)
-3 / 7 at 53 bits: [0.428571428571429 +/- 5.08e-16]
+3 / 7 at 53 bits: [0.4285714285714285 +/- 7.15e-17]
 x * x:            [9.000000000 +/- 6.01e-10]
 x / y:            nan
 ```
 
 $12 = 3 \cdot 2^2$ fits in 2 bits and is exact, while 7 does not and
-becomes $[6 \pm 2]$, a correct but coarse enclosure. $3/4$ is exact and
+becomes $[8 \pm 2]$ (rounded to nearest), a correct but coarse
+enclosure. $3/4$ is exact and
 $3/7$ is rounded. The square of $[3 \pm 10^{-10}]$ has radius $6 \cdot
 10^{-10} + 10^{-20}$, whatever the precision.
 
@@ -122,16 +139,11 @@ Infinite midpoints are handled as limits: $[+\infty] + [1 \pm 1] =
 extended real line $[+\infty \pm \infty]$. $\infty - \infty$ and $0 \cdot
 \infty$ give a NaN midpoint.
 
-At high precision `arb_div`, `arb_inv`, `arb_ui_div`,
-`arb_fmpz_div_fmpz`, `arb_sqrt` and `arb_rsqrt` compute the midpoint with
-the relaxed mode `ARF_RND_FAST`, which above the Newton cutoffs (5000
-bits for inversion, 12000 for a quotient by a divisor of more than
-`prec`/2 bits, 100000 for the square root and 4000 for the reciprocal
-square root) uses Newton iteration with an error below one unit in the
-last place. The inexact flag of that mode is reliable, so for exact
-input the radius is zero exactly when the result is exact: an exact
-quotient or the square root of a perfect square still gets radius 0,
-and every other result gets a radius of one ulp.
+For exact input the radius is zero exactly when the result is exact: an
+exact quotient or the square root of a perfect square gets radius 0,
+and every other result a radius of about half an ulp. Above a few
+thousand bits the kernels switch to the Newton iterations of
+[mp_real](mp_real) internally.
 
 ## Aliasing and fused operations {#aliasing}
 

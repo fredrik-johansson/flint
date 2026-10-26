@@ -19,12 +19,16 @@ $$
 xy = (ac - bd) + (ad + bc) i.
 $$
 
-The midpoints of both parts are computed with `arf_complex_mul`, each
-correctly rounded from the exact products (using three real
-multiplications instead of four for long mantissas), and the radius of
-each part is bounded from the radii of the four real products with the
-product bound of [](algorithms/ball-arithmetic/error-propagation#thm-mul).
-Several cases are recognised first:
+Each part is computed in one pass, as `arb_mul` and `arb_add` do for real
+balls: the two products of midpoints are formed (exactly when short,
+otherwise truncated to the working precision plus a guard limb, the
+deficit being charged to the radius), added exactly in a limb frame and
+rounded to nearest once, the measured rounding error going into the
+radius together with the componentwise propagated error of the four real
+products (the product bound of
+[](algorithms/ball-arithmetic/error-propagation#thm-mul)). When the two
+products of a part nearly cancel they are computed exactly. Several cases
+are recognised first:
 
 - if one of $a, b, c, d$ is exactly zero, the product needs only two real
   multiplications and no addition, so real and purely imaginary factors

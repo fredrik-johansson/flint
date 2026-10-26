@@ -452,8 +452,13 @@ void acb_mul(acb_t z, const acb_t x, const acb_t y, slong prec)
 
 Sets `z` to $xy$. If a part of `x` or `y` is exactly zero, two real
 multiplications are used; if `x` and `y` are the same object, the squaring
-formula $(a + bi)^2 = (a^2 - b^2) + 2abi$; otherwise the midpoints are
-multiplied with `arf_complex_mul` and the radii bounded componentwise.
+formula $(a + bi)^2 = (a^2 - b^2) + 2abi$. Otherwise each part is computed
+in one pass: the two products of midpoints (truncated to the working
+precision plus a guard limb when long) are added exactly and rounded once,
+and the rounding error, the truncation deficits and the componentwise
+propagated error $|a| r_c + |b| r_d + |c| r_a + |d| r_b + r_a r_c + r_b r_d$
+(respectively the imaginary analogue) are accumulated into the radius, as
+in `arb_mul`.
 :::
 
 ::: function
@@ -494,7 +499,10 @@ void acb_submul_si(acb_t z, const acb_t x, slong y, slong prec)
 void acb_submul_fmpz(acb_t z, const acb_t x, const fmpz_t y, slong prec)
 void acb_submul_arb(acb_t z, const acb_t x, const arb_t y, slong prec)
 
-Set `z` to $z + xy$, respectively $z - xy$.
+Set `z` to $z + xy$, respectively $z - xy$. For complex `x` and `y` with
+nonzero parts, `acb_addmul` and `acb_submul` add the two products of
+midpoints and the old midpoint of each part exactly before rounding once,
+so the result is as tight as a single rounding allows.
 :::
 
 ::: function
@@ -504,9 +512,11 @@ Sets `z` to $1/x$. If `x` contains zero, the result is indeterminate.
 
 ::: details
 For $x = a + bi$ with both parts nonzero, the midpoint is computed as
-$(a - bi)/(a^2 + b^2)$ with $a^2 + b^2$ rounded once (`arf_sosq`), and the
-propagated error of each part is bounded directly from the exact
-expression of the perturbation, for example
+$(a - bi)/s$ with $s$ a lower approximation of $a^2 + b^2$ at `prec + 3`
+bits (`arf_sosq`), each quotient rounded to nearest once with the
+measured rounding error and the error of $s$, $|a/s| \, 2^{-\mathrm{prec}
+- 2}$, added to the radius; the propagated error of each part is bounded
+directly from the exact expression of the perturbation, for example
 $$
 \frac{a + x'}{(a + x')^2 + (b + y')^2} - \frac{a}{a^2 + b^2} =
 \frac{(b^2 - a^2) x' - a(x'^2 + y'^2 + 2 b y')}{(a^2 + b^2)((a + x')^2
@@ -514,6 +524,12 @@ $$
 $$
 for the real part, with $|x'| \le r_1$, $|y'| \le r_2$. If a part of `x`
 is exactly zero, a real inversion is used.
+
+With `prec` at most two limbs and midpoints of at most two limbs (64-bit
+limbs), everything is done in registers: $s$ is formed exactly to three
+limbs (a lower approximation with the deficit below one unit of the
+lowest limb) and the quotients by the three-limb division kernel of
+`mpn_extras/fp_small.h`, each truncated exactly to three limbs.
 :::
 :::
 
@@ -557,7 +573,8 @@ result once; both are mainly for testing. See
 void acb_approx_dot(acb_t res, const acb_t initial, int subtract, acb_srcptr x, slong xstep, acb_srcptr y, slong ystep, slong len, slong prec)
 
 Computes the same dot product without error bounds: the radii of the
-inputs are ignored and only the midpoint of `res` is written.
+inputs are ignored and only the midpoint of `res` is written, which is
+exactly the midpoint `acb_dot` computes from the midpoints alone.
 :::
 
 ::: function

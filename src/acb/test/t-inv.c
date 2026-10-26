@@ -137,5 +137,38 @@ TEST_FUNCTION_START(acb_inv, state)
         arf_clear(t);
     }
 
+    /* exact input with both parts nonzero: the parts are accurate to
+       about prec bits (each is a quotient rounded once) */
+    for (iter = 0; iter < 10000 * 0.1 * flint_test_multiplier(); iter++)
+    {
+        acb_t a, b;
+        slong prec;
+
+        acb_init(a);
+        acb_init(b);
+
+        prec = 2 + n_randint(state, 1000);
+        acb_randtest(a, state, 1 + n_randint(state, 1000), 10);
+        mag_zero(arb_radref(acb_realref(a)));
+        mag_zero(arb_radref(acb_imagref(a)));
+
+        if (!arb_is_zero(acb_realref(a)) && !arb_is_zero(acb_imagref(a)))
+        {
+            acb_inv(b, a, prec);
+
+            if (arb_rel_accuracy_bits(acb_realref(b)) < prec - 4 ||
+                arb_rel_accuracy_bits(acb_imagref(b)) < prec - 4)
+            {
+                flint_printf("FAIL: accuracy\n\nprec = %wd\n", prec);
+                flint_printf("a = "); acb_printd(a, 30); flint_printf("\n\n");
+                flint_printf("b = "); acb_printd(b, 30); flint_printf("\n\n");
+                flint_abort();
+            }
+        }
+
+        acb_clear(a);
+        acb_clear(b);
+    }
+
     TEST_FUNCTION_END(state);
 }

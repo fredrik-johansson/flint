@@ -26,10 +26,7 @@ arb_hypot(arb_t z, const arb_t x, const arb_t y, slong prec)
     {
         arb_t t;
         arb_init(t);
-        /* TODO: use arb_fmma */
-        arb_mul(t, x, x, prec + 4);
-        arb_mul(z, y, y, prec + 4);
-        arb_add(t, t, z, prec + 4);
+        arb_sosq(t, x, y, prec + 4);
         arb_sqrtpos(z, t, prec);
         arb_clear(t);
     }

@@ -393,6 +393,10 @@ void arb_mul_ui(arb_t z, const arb_t x, ulong y, slong prec);
 void arb_mul_fmpz(arb_t z, const arb_t x, const fmpz_t y, slong prec);
 
 void arb_addmul(arb_t z, const arb_t x, const arb_t y, slong prec);
+void arb_set_round_mpn_2exp_si(arb_t res, nn_srcptr x, slong xn, int sgnbit, slong exp, slong prec);
+void _arb_set_round_mpn_2exp_si_inplace(arb_t res, slong xn, int sgnbit, slong exp, slong prec);
+void arb_fmma(arb_t res, const arb_t a, const arb_t b, const arb_t c, const arb_t d, slong prec);
+void arb_sosq(arb_t res, const arb_t a, const arb_t b, slong prec);
 void arb_addmul_arf(arb_t z, const arb_t x, const arf_t y, slong prec);
 void arb_addmul_si(arb_t z, const arb_t x, slong y, slong prec);
 void arb_addmul_ui(arb_t z, const arb_t x, ulong y, slong prec);

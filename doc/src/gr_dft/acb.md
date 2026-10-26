@@ -163,7 +163,7 @@ int main(void)
 }
 ```
 ```output
-fixed point: 123 bits, ball arithmetic: 117 bits, consistent
-round trip contains input: 1, accuracy 113 bits
+fixed point: 125 bits, ball arithmetic: 119 bits, consistent
+round trip contains input: 1, accuracy 115 bits
 [5.05661018752866038020114767365 +/- 3.06e-30] + [-1.38326640178665733205654167633 +/- 1.27e-30]*I
 ```

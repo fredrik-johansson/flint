@@ -173,6 +173,22 @@ TEST_FUNCTION_START(acf_approx_dot, state)
                 revy ? (ay + len - 1) : ay, revy ? -1 : 1,
                 len, prec);
 
+            /* with rounding to nearest, exactly the midpoint of acb_dot */
+            acf_approx_dot(s2, initial ? z : NULL, subtract,
+                revx ? (x + len - 1) : x, revx ? -1 : 1,
+                revy ? (y + len - 1) : y, revy ? -1 : 1,
+                len, prec, ARF_RND_NEAR);
+
+            if (!arf_equal(acf_realref(s2), arb_midref(acb_realref(as2))) ||
+                !arf_equal(acf_imagref(s2), arb_midref(acb_imagref(as2))))
+            {
+                flint_printf("FAIL (midpoint)\n\n");
+                flint_printf("iter = %wd, len = %wd, prec = %wd, ebits = %wd\n\n", iter, len, prec, ebits);
+                flint_printf("s2 = "); acf_printd(s2, 100); flint_printf("\n\n");
+                flint_printf("as2 = "); acb_printn(as2, 100, ARB_STR_MORE); flint_printf("\n\n");
+                flint_abort();
+            }
+
             {
                 mag_t err, xx, yy;
 
@@ -186,7 +202,7 @@ TEST_FUNCTION_START(acf_approx_dot, state)
                 for (i = 0; i < len; i++)
                 {
                     acf_get_mag(xx, revx ? x + len - 1 - i : x + i);
-                    acf_get_mag(yy, revx ? y + len - 1 - i : y + i);
+                    acf_get_mag(yy, revy ? y + len - 1 - i : y + i);
                     mag_addmul(err, xx, yy);
                 }
 

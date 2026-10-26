@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2014 Fredrik Johansson
+    Copyright (C) 2014, 2026 Fredrik Johansson
 
     This file is part of FLINT.
 
@@ -9,26 +9,29 @@
     (at your option) any later version.  See <https://www.gnu.org/licenses/>.
 */
 
-#include <mpfr.h>
 #include "mpn_extras.h"
 #include "arf.h"
 
+#define ARF_RSQRT_STACK_LIMBS 64
+
+/*
+    1/sqrt(x) = M 2^((1 - t) - (e - t) / 2) for x = A 2^e, t = e mod 2 and
+    M = (2^(2-t) A)^(-1/2) in (1/2, 1), from flint_mpn_rsqrthigh (n limbs
+    and a guard limb, within FLINT_MPN_RSQRTHIGH_GUARD_ERR_BOUND units)
+    when the guard bits certify the rounding (always for a relaxed mode),
+    else from the exact truncated value with its remainder
+    (flint_mpn_rsqrthigh_exact). The result is dyadic only for x a power
+    of four, handled separately, so it is always inexact otherwise.
+*/
 int
 arf_rsqrt(arf_ptr z, arf_srcptr x, slong prec, arf_rnd_t rnd)
 {
-    slong xn, zn, val;
+    slong xn, n, fix;
     nn_srcptr xptr;
-    nn_ptr tmp, zptr;
-    mpfr_t xf, zf;
-    int inexact, odd_exp;
-    ARF_MUL_TMP_DECL
-
-    if (rnd >= ARF_RND_FAST)
-    {
-        if (_arf_want_newton_rsqrt(x, prec))
-            return _arf_rsqrt_newton(z, x, prec, rnd);
-        rnd = arf_rnd_relaxed_to_strict(rnd);
-    }
+    ulong q_stack[ARF_RSQRT_STACK_LIMBS + 1];
+    nn_ptr q;
+    int t, inexact;
+    fmpz_t e;
 
     if (arf_is_special(x))
     {
@@ -56,39 +59,45 @@ arf_rsqrt(arf_ptr z, arf_srcptr x, slong prec, arf_rnd_t rnd)
         return 0;
     }
 
+    if (prec == ARF_PREC_EXACT)
+        flint_throw(FLINT_ERROR, "arf_rsqrt: exact precision not supported\n");
+
     ARF_GET_MPN_READONLY(xptr, xn, x);
-    odd_exp = fmpz_is_odd(ARF_EXPREF(x)) ? 1 : 0;
+    t = fmpz_is_odd(ARF_EXPREF(x));
 
-    zn = (prec + FLINT_BITS - 1) / FLINT_BITS;
+    n = (prec + FLINT_BITS - 1) / FLINT_BITS;
+    q = (n <= ARF_RSQRT_STACK_LIMBS) ? q_stack : flint_malloc((n + 1) * sizeof(ulong));
 
-    ARF_MUL_TMP_ALLOC(tmp, zn)
+    /* exponent (1 - t) - (e - t) / 2 (e - t is even) */
+    fmpz_init(e);
+    if (!COEFF_IS_MPZ(ARF_EXP(x)))
+        *e = (1 - t) - ((ARF_EXP(x) - t) >> 1);
+    else
+    {
+        fmpz_sub_ui(e, ARF_EXPREF(x), t);
+        fmpz_tdiv_q_2exp(e, e, 1);
+        fmpz_neg(e, e);
+        fmpz_add_ui(e, e, 1 - t);
+    }
 
-    zf->_mpfr_d = tmp;
-    zf->_mpfr_prec = prec;
-    zf->_mpfr_sign = 1;
-    zf->_mpfr_exp = 0;
+    flint_mpn_rsqrthigh(q, xptr, xn, t, n);
 
-    xf->_mpfr_d = (nn_ptr) xptr;
-    xf->_mpfr_prec = xn * FLINT_BITS;
-    xf->_mpfr_sign = 1;
-    xf->_mpfr_exp = odd_exp;
+    if (_arf_set_round_approx(z, q, n, FLINT_BIT_COUNT(FLINT_MPN_RSQRTHIGH_GUARD_ERR_BOUND), e, 0, prec, rnd))
+    {
+        inexact = 1;
+    }
+    else
+    {
+        inexact = flint_mpn_rsqrthigh_exact(q, xptr, xn, t, n);
+        FLINT_ASSERT(inexact);
+        q[0] |= 1;
+        _arf_set_round_mpn(z, &fix, q, n + 1, 0, prec, rnd);
+        _fmpz_add_fast(ARF_EXPREF(z), e, fix);
+        inexact = 1;
+    }
 
-    inexact = mpfr_rec_sqrt(zf, xf, arf_rnd_to_mpfr(rnd));
-    inexact = (inexact != 0);
-
-    val = 0;
-    while (tmp[val] == 0)
-        val++;
-
-    ARF_GET_MPN_WRITE(zptr, zn - val, z);
-    flint_mpn_copyi(zptr, tmp + val, zn - val);
-
-    fmpz_fdiv_q_2exp(ARF_EXPREF(z), ARF_EXPREF(x), 1);
-    fmpz_neg(ARF_EXPREF(z), ARF_EXPREF(z));
-
-    fmpz_add_si(ARF_EXPREF(z), ARF_EXPREF(z), zf->_mpfr_exp);
-
-    ARF_MUL_TMP_FREE(tmp, zn)
-
+    fmpz_clear(e);
+    if (q != q_stack)
+        flint_free(q);
     return inexact;
 }

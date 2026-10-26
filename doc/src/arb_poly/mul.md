@@ -148,9 +148,9 @@ int main(void)
 }
 ```
 ```output
-k = 50: 3.70190194189053e-50  accuracy 124, 125 bits, correct: 1
-k = 150: 2.49807767793329e-218  accuracy 124, 124 bits, correct: 1
-k = 250: 5.59644861483662e-418  accuracy 124, 124 bits, correct: 1
+k = 50: 3.70190194189053e-50  accuracy 127, 127 bits, correct: 1
+k = 150: 2.49807767793329e-218  accuracy 126, 127 bits, correct: 1
+k = 250: 5.59644861483662e-418  accuracy 126, 126 bits, correct: 1
 mulmid: 1 1 1
 ```
 

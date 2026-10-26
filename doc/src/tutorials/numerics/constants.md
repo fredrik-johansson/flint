@@ -20,9 +20,10 @@ about $2^{-\text{prec}}$. The result is a ball `arb_t` with a midpoint and
 a radius, and the true value is guaranteed to lie in the ball. The
 *accuracy* of the result is measured on the result itself:
 `arb_rel_accuracy_bits` returns about $-\log_2$ of the relative radius.
-It is usually a little smaller than the precision, because of rounding
-errors, and it can be much smaller when there is cancellation or when
-the input balls are wide.
+It is usually close to the precision (a few bits more when the only
+error is the final rounding to nearest, a few bits less when rounding
+errors accumulate), and it can be much smaller when there is
+cancellation or when the input balls are wide.
 
 For $d$ decimal digits, a precision of $d \log_2 10 \approx 3.32 d$ bits
 plus a few guard bits suffices for the constants below. The following
@@ -70,16 +71,16 @@ int main(void)
 ```
 
 ```output
-prec = 137 bits, accuracy = 136 bits
-pi    = [3.141592653589793238462643383279502884197 +/- 1.81e-40]
+prec = 137 bits, accuracy = 141 bits
+pi    = [3.141592653589793238462643383279502884197 +/- 1.70e-40]
 pi    = [3.14159265358979 +/- 3.24e-15]
 pi    ~ 3.14159265358979
-e     = [2.718281828459045235360287471352662497757 +/- 2.60e-40]
-log 2 = [0.6931471805599453094172321214581765680755 +/- 3.58e-42]
+e     = [2.718281828459045235360287471352662497757 +/- 2.48e-40]
+log 2 = [0.6931471805599453094172321214581765680755 +/- 1.28e-42]
 gamma = [0.5772156649015328606065120900824024310422 +/- 4.14e-41]
-G     = [0.9159655941772190150546035149323841107741 +/- 5.21e-41]
-z(3)  = [1.202056903159594285399738161511449990765 +/- 2.58e-41]
-[3.1415926535{...9979 digits...}5525637568 +/- 1.72e-10000]
+G     = [0.9159655941772190150546035149323841107742 +/- 5.07e-41]
+z(3)  = [1.202056903159594285399738161511449990765 +/- 1.48e-41]
+[3.1415926535{...9979 digits...}5525637568 +/- 1.44e-10000]
 ```
 
 ## Reading the output {#printing}
@@ -234,8 +235,8 @@ step 5: truncation error < 2^-276, 3.141592653589793238462643383279502884197
 step 6: truncation error < 2^-565, 3.141592653589793238462643383279502884197
 step 7: truncation error < 2^-1144, 3.141592653589793238462643383279502884197
 overlaps arb_const_pi: 1
-accuracy: 994 bits
-[3.1415926535{...278 digits...}2602491413 +/- 3.64e-299]
+accuracy: 996 bits
+[3.1415926535{...279 digits...}6024914127 +/- 5.95e-300]
 ```
 
 Some remarks on the program:
@@ -250,7 +251,7 @@ Some remarks on the program:
   the same number: two correct balls for $\pi$ must overlap, so a result
   of 0 proves a bug. A result of 1 does not prove that both are correct,
   but agreement between two independent methods is strong evidence.
-- The 994 accurate bits out of 1000 reflect the accumulated rounding
+- The 996 accurate bits out of 1000 reflect the accumulated rounding
   errors of 7 steps. `examples/pi_agm.c` uses a working precision of
   $p + 5 + 2 \log_2 p$ for a target of $p$ bits to compensate, and rounds
   the final division to $p$ bits.
