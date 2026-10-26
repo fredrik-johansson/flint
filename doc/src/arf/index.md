@@ -75,22 +75,21 @@ value.
 
 ::: details
 A unit in the last place here is $2^{e - \mathit{prec}}$ where $2^{e-1}
-\le |f| < 2^e$ for the exact result $f$. Below a cutoff the functions use
-the standard algorithm with `ARF_RND_DOWN`, respectively
-`ARF_RND_NEAR` (see `arf_rnd_relaxed_to_strict`). Above it, they use the
-Newton iterations of [mp_real](mp_real): inversion from 5000 bits (with
-a divisor of more than $\mathit{prec}/2$ bits), division from 12000 bits,
-reciprocal square root from 4000 bits and square root from 100000 bits.
-The Newton result carries 8 (fast) or 11 (accurate) guard bits and is
-rounded to nearest, which gives errors of at most 0.5625 and 0.508 units;
-its exponent is that of $f$, or it is exactly $2^e$, so adding one unit in
-the last place of the result is a valid error bound. The inexact flag
-is not that of the final rounding of the Newton approximation, which
-says nothing about $f$, but is determined separately: $1/x$ and
-$1/\sqrt{x}$ are dyadic only for powers of two (resp. powers of four),
-which are handled without Newton iteration, and an exact quotient or
-square root that fits in `prec` bits is found exactly by the iteration,
-so it is verified by one exact multiplication, made only when the bit
+\le |f| < 2^e$ for the exact result $f$. The functions compute the
+result with a guard limb (`flint_mpn_divhigh`, `flint_mpn_sqrthigh`,
+`flint_mpn_rsqrthigh`, see [](mpn_extras#fphigh)), within a few units
+of the guard limb of $f$, and round it to nearest, which gives an error
+of at most $1/2$ ulp plus $2^{-55}$ ulp; the exponent is that of $f$,
+or the result is exactly $2^e$, so adding one unit in the last place of
+the result is a valid error bound. Both relaxed modes therefore give
+the same result; `ARF_RND_ACCURATE` is kept for callers that need the
+stronger guarantee. The inexact flag is not that of the final rounding,
+which says nothing about $f$, but is determined separately: it is
+certain when the guard limb would certify a strict rounding; otherwise
+$1/x$ and $1/\sqrt{x}$ are dyadic only for powers of two (resp. powers
+of four), which are handled exactly, and an exact quotient or square
+root that fits in `prec` bits is found exactly by the approximation, so
+it is verified by one exact multiplication, made only when the bit
 lengths and the low bits of the mantissas allow an exact result.
 :::
 :::
@@ -563,12 +562,11 @@ int arf_mul_fmpz(arf_ptr z, arf_srcptr x, const fmpz_t y, slong prec, arf_rnd_t 
 Set `z` to $xy$, correctly rounded.
 
 ::: details
-`arf_mul` is a macro that calls `arf_mul_rnd_down` for `ARF_RND_DOWN`
-and `arf_mul_rnd_any` otherwise. Rounding down is the mode used by
-ball arithmetic, and `arf_mul_rnd_down` has dedicated code for one- and
-two-limb operands; for operands between 25 limbs and a few hundred limbs
-it calls MPFR, whose short product computes only the top half of the
-mantissa.
+All rounding modes are equally fast: one- and two-limb operands are
+multiplied in registers, and longer operands use the high products of
+[mpn_extras](mpn_extras#short) with a guard limb (see the next
+section). `arf_mul_rnd_down` and `arf_mul_rnd_any` remain as macros for
+`arf_mul`.
 :::
 :::
 
@@ -601,10 +599,31 @@ Sets `res` to $xy + z$ with a single rounding.
 :::
 
 ::: function
+int arf_fmma(arf_ptr res, arf_srcptr a, arf_srcptr b, arf_srcptr c, arf_srcptr d, slong prec, arf_rnd_t rnd)
+
+Sets `res` to $ab + cd$ with a single rounding. Aliasing is allowed.
+:::
+
+::: function
 int arf_sosq(arf_t z, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd)
 
 Sets `z` to $x^2 + y^2$ with a single rounding.
 :::
+
+The functions `arf_mul`, `arf_addmul`, `arf_submul`, `arf_fma`, `arf_fmma`,
+`arf_sosq` and `arf_complex_mul` compute only the top limbs of the
+products when the exact products would be much longer than the output
+precision (or than the part of the product that can affect the result,
+given the magnitude of the other term), and verify that the rounding is
+unaffected, computing the exact product only when this check is
+inconclusive (which happens with probability roughly $2^{-30}$ for random
+operands, and after heavy cancellation). All rounding modes are handled
+by the same code paths; `arf_mul_rnd_down` and `arf_mul_rnd_any` are kept
+as aliases of `arf_mul`. These functions accept the relaxed rounding modes
+`ARF_RND_FAST` and `ARF_RND_ACCURATE`, with which the check is skipped
+and the result is within $1$ respectively $0.51$ ulp of the exact value;
+the returned inexact flag is then reliable only in the sense that a zero
+return value guarantees an exact result.
 
 ::: function
 int arf_div(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd)
@@ -621,12 +640,14 @@ zero gives NaN. The relaxed modes `ARF_RND_FAST` and `ARF_RND_ACCURATE`
 are accepted.
 
 ::: details
-The standard algorithm computes a truncated quotient with at least 32
-extra bits (`flint_mpn_tdiv_q`) and decides exactness by multiplying back
-only when the low bits of the quotient are zero. Division by a power of
-two is a rounding of the numerator. With a relaxed mode and a large
-precision, Newton iteration from [mp_real](mp_real) is used instead (see
-`ARF_RND_FAST`).
+The quotient is computed with a guard limb by `flint_mpn_divhigh` (see
+[](mpn_extras#fphigh)): for a strict mode, the rounding is certified by
+the guard limb unless it lies within the error bound of a rounding
+boundary (probability about $2^{-55}$, but always for exact quotients),
+in which case the exact truncated quotient and remainder
+(`flint_mpn_divhigh_exact`) decide the rounding and the inexact flag.
+Division by a power of two is a rounding of the numerator. The relaxed
+modes round the approximation to nearest (see `ARF_RND_FAST`).
 :::
 :::
 
@@ -637,6 +658,13 @@ int arf_sqrt_fmpz(arf_t z, const fmpz_t x, slong prec, arf_rnd_t rnd)
 
 Set `z` to $\sqrt{x}$, correctly rounded for the strict modes. A negative
 `x` gives NaN. The relaxed modes are accepted.
+
+::: details
+As `arf_div`, with `flint_mpn_sqrthigh` and, when the guard limb is
+inconclusive, the exact truncated root with its remainder
+(`flint_mpn_sqrthigh_exact`). A power of two with an odd exponent is
+exact.
+:::
 :::
 
 ::: function
@@ -645,6 +673,12 @@ int arf_rsqrt(arf_ptr z, arf_srcptr x, slong prec, arf_rnd_t rnd)
 Sets `z` to $1/\sqrt{x}$, correctly rounded for the strict modes. A
 negative `x` gives NaN and $x = 0$ gives $+\infty$. The relaxed modes
 are accepted.
+
+::: details
+As `arf_div`, with `flint_mpn_rsqrthigh` and `flint_mpn_rsqrthigh_exact`.
+The result is dyadic only for a power of four, handled exactly; all
+other results are inexact.
+:::
 :::
 
 ::: function
@@ -697,8 +731,9 @@ Computes the same dot product as `arf_dot` approximately: the final
 rounding is in the direction `rnd`, but the intermediate roundings are
 not specified, so neither correct rounding nor an error bound is
 guaranteed. It uses the fixed-point accumulation of `arb_dot` without the
-error bound, and is the midpoint computation of
-`arb_approx_dot`.
+error bound. With `ARF_RND_NEAR` (or `ARF_RND_ACCURATE`) the result is
+exactly the midpoint `arb_dot` computes for the same (exact) inputs,
+through the same rounding code; `ARF_RND_FAST` rounds down.
 :::
 
 ## Complex arithmetic {#complex}
@@ -842,15 +877,6 @@ Sets `z` to $xy$ when at least one of `x` and `y` is a special value.
 :::
 
 ::: function
-int arf_mul_rnd_any(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd)
-int arf_mul_rnd_down(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec)
-int arf_mul_via_mpfr(arf_t z, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd)
-
-The implementations of `arf_mul`: for any rounding mode, for
-`ARF_RND_DOWN`, and through `mpfr_mul`.
-:::
-
-::: function
 int _arf_set_round_ui(arf_t x, ulong v, int sgnbit, slong prec, arf_rnd_t rnd)
 
 Sets `x` to $\pm v$ (negative if `sgnbit` is 1) rounded to `prec` bits.
@@ -872,8 +898,7 @@ Sets the mantissa of `y` to the `xn` limbs at `x` (top limb nonzero),
 negated if `sgnbit` is 1, rounded to `prec` bits, and returns the inexact
 flag. Writes the exponent shift caused by leading zero bits and by
 rounding up to a power of two to `exp_shift` without setting the exponent
-of `y`. `x` may point into the limbs of `y`, as the Newton division code
-does.
+of `y`. `x` may point into the limbs of `y`.
 :::
 
 ::: function
@@ -917,30 +942,27 @@ to inline storage.
 :::
 
 ::: function
-int _arf_want_newton_inv(const arf_t x, slong prec)
-int _arf_want_newton_div(const arf_t x, const arf_t y, slong prec)
-int _arf_want_newton_sqrt(const arf_t x, slong prec)
-int _arf_want_newton_rsqrt(const arf_t x, slong prec)
-int _arf_want_newton_inv_large(const arf_t x, slong prec)
-int _arf_want_newton_div_large(const arf_t x, const arf_t y, slong prec)
+int _arf_set_round_approx(arf_ptr z, nn_ptr q, slong n, slong e, const fmpz_t exp, int sgnbit, slong prec, arf_rnd_t rnd)
 
-Decide whether a relaxed-mode inversion, division, square root or
-reciprocal square root at precision `prec` uses Newton iteration; the
-`_large` versions contain the tests that are made only above the
-precision cutoffs.
+Sets `z` to the $n + 1$ limbs `q` (top bit set, the lowest a guard limb)
+with exponent `exp` (the value being $q B^{-(n+1)} 2^{\mathit{exp}}$),
+which lie within $2^e$ units of the guard limb of the exact result,
+rounded to `prec` $\le n \cdot$ `FLINT_BITS` bits: for a relaxed mode by
+rounding to nearest; for a strict mode only when the bits $e$ to
+`FLINT_BITS` $- 2$ of the guard limb are neither all zero nor all one,
+which certifies that the exact result is inexact and rounds like `q`.
+Returns 1 if `z` was set and 0 if the check failed. The inexact flag of
+the rounding is not that of the exact result and is not returned.
 :::
 
 ::: function
-int _arf_inv_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd)
-int _arf_div_newton(arf_t res, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd)
-int _arf_sqrt_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd)
-int _arf_rsqrt_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd)
+int _arf_div_inexact(const arf_t q, const arf_t x, const arf_t y)
+int _arf_sqrt_inexact(const arf_t q, const arf_t x)
 
-Compute $1/x$, $x/y$, $\sqrt{x}$ and $1/\sqrt{x}$ for a relaxed mode
-`rnd` by Newton iteration, with the error bounds stated for
-`ARF_RND_FAST`. Require finite nonzero (positive, for the roots) input.
-Return the inexact flag of the result (0 if and only if `res` equals
-the exact value; see `ARF_RND_FAST` for how it is determined).
+Whether $q \ne x / y$, respectively $q \ne \sqrt{x}$, for nonzero finite
+(positive) arguments: decided by one exact multiplication when the bit
+lengths and the lowest limbs of the odd parts of the mantissas allow an
+exact result, and 1 otherwise.
 :::
 
 ::: function

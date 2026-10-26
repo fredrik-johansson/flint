@@ -250,8 +250,8 @@ int main(void)
 ```
 
 ```output
-[1.2020569031{...979 digits...}7766181092 +/- 2.29e-1000]
-accuracy: 3328 bits
+[1.2020569031{...979 digits...}7766181092 +/- 2.28e-1000]
+accuracy: 3330 bits
 overlaps arb_zeta_ui: 1
 ```
 

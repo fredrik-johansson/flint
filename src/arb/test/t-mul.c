@@ -129,6 +129,88 @@ arb_mul_naive(arb_t z, const arb_t x, const arb_t y, slong prec)
     arf_clear(u);
 }
 
+/* arb_mul rounds the midpoint to nearest at a precision that may be
+   reduced when the propagated error dominates, and sets the radius from
+   the actual rounding error, whereas the naive version rounds down and
+   adds one ulp: we check that the balls overlap and that the radii agree
+   up to two ulp and a small factor; rigour is covered by the containment
+   tests above. */
+int
+arb_mul_close(const arb_t z, const arb_t v, slong prec)
+{
+    arf_t t, u;
+    mag_t m;
+    fmpz_t e;
+    int ok;
+
+    if (arf_is_special(arb_midref(v)) || arf_is_special(arb_midref(z)))
+        return arb_equal_mid_close_mag(z, v);
+
+    arf_init(t);
+    arf_init(u);
+    mag_init(m);
+    fmpz_init(e);
+
+    /* the balls overlap (the midpoint may be rounded to a lower
+       precision when the propagated error dominates) */
+    ok = arb_overlaps(z, v);
+
+    fmpz_sub_ui(e, ARF_EXPREF(arb_midref(v)), prec - 1);
+    arf_set_ui(u, 257);
+    arf_mul_2exp_fmpz(u, u, e);
+    arf_mul_2exp_si(u, u, -8);
+
+    /* radii within two ulp and a factor 257/256 of each other */
+    arf_set_mag(t, arb_radref(v));
+    arf_add(t, t, u, MAG_BITS, ARF_RND_UP);
+    arf_mul_ui(t, t, 257, MAG_BITS, ARF_RND_UP);
+    arf_mul_2exp_si(t, t, -8);
+    arf_set_mag(u, arb_radref(z));
+    ok = ok && (arf_cmp(u, t) <= 0);
+
+    arf_set_mag(t, arb_radref(z));
+    fmpz_sub_ui(e, ARF_EXPREF(arb_midref(v)), prec - 1);
+    arf_set_ui(u, 257);
+    arf_mul_2exp_fmpz(u, u, e);
+    arf_mul_2exp_si(u, u, -8);
+    arf_add(t, t, u, MAG_BITS, ARF_RND_UP);
+    arf_mul_ui(t, t, 257, MAG_BITS, ARF_RND_UP);
+    arf_mul_2exp_si(t, t, -8);
+    arf_set_mag(u, arb_radref(v));
+    ok = ok && (arf_cmp(u, t) <= 0);
+
+    arf_clear(t);
+    arf_clear(u);
+    mag_clear(m);
+    fmpz_clear(e);
+
+    return ok;
+}
+
+/* the endpoints of a ball as arf values */
+static void
+_corners_mul(arf_t lo, arf_t hi, const arb_t x)
+{
+    arf_t r;
+    arf_init(r);
+    arf_set_mag(r, arb_radref(x));
+    arf_sub(lo, arb_midref(x), r, ARF_PREC_EXACT, ARF_RND_DOWN);
+    arf_add(hi, arb_midref(x), r, ARF_PREC_EXACT, ARF_RND_DOWN);
+    arf_clear(r);
+}
+
+/* random ball, usually of few limbs, with the exponent near e (if e != NULL) */
+static void
+_randball_mul(arb_t x, flint_rand_t state, const fmpz * e)
+{
+    slong bits = n_randint(state, 8) == 0 ? 1 + n_randint(state, 3000) : 1 + n_randint(state, 200);
+    arb_randtest(x, state, bits, 12);
+    if (n_randint(state, 3) == 0)
+        mag_zero(arb_radref(x));
+    if (e != NULL && !arf_is_special(arb_midref(x)) && n_randint(state, 2))
+        fmpz_add_si(ARF_EXPREF(arb_midref(x)), e, (slong) n_randint(state, 600) - 300);
+}
+
 TEST_FUNCTION_START(arb_mul, state)
 {
     slong iter, iter2;
@@ -283,7 +365,7 @@ TEST_FUNCTION_START(arb_mul, state)
                 arb_mul(z, x, y, prec);
                 arb_mul_naive(v, x, y, prec);
 
-                if (!arb_equal_mid_close_mag(z, v))
+                if (!arb_mul_close(z, v, prec))
                 {
                     flint_printf("FAIL!\n");
                     flint_printf("x = "); arb_print(x); flint_printf("\n\n");
@@ -358,6 +440,89 @@ TEST_FUNCTION_START(arb_mul, state)
         arb_clear(y);
         arb_clear(z);
         arb_clear(v);
+    }
+
+    /* one-pass rounding: the exact products of the endpoints lie in the
+       result, which is not much wider than the ball from a separately
+       rounded midpoint */
+    for (iter = 0; iter < 20000 * 0.1 * flint_test_multiplier(); iter++)
+    {
+        arb_t x, y, r, w;
+        arf_t xe[2], ye[2], p;
+        mag_t xm, ym, zr;
+        slong prec, a, b;
+        int ok, inexact;
+
+        arb_init(x); arb_init(y); arb_init(r); arb_init(w);
+        for (a = 0; a < 2; a++) { arf_init(xe[a]); arf_init(ye[a]); }
+        arf_init(p);
+        mag_init(xm); mag_init(ym); mag_init(zr);
+
+        prec = (n_randint(state, 8) == 0) ? 2 + n_randint(state, 3000) : 2 + n_randint(state, 300);
+        if (n_randint(state, 50) == 0)
+            prec = ARF_PREC_EXACT;
+        _randball_mul(x, state, NULL);
+        _randball_mul(y, state, NULL);
+        if (n_randint(state, 4) == 0)
+            arb_set(y, x);
+
+        if (n_randint(state, 2))
+        {
+            arb_set(r, x);
+            arb_mul(r, r, y, prec);
+        }
+        else
+            arb_mul(r, x, y, prec);
+
+        /* the reference: midpoint rounded by arf, radius bumped by an ulp */
+        arf_get_mag(xm, arb_midref(x));
+        arf_get_mag(ym, arb_midref(y));
+        mag_mul(zr, xm, arb_radref(y));
+        mag_addmul(zr, ym, arb_radref(x));
+        mag_addmul(zr, arb_radref(x), arb_radref(y));
+        inexact = arf_mul(arb_midref(w), arb_midref(x), arb_midref(y), prec, ARF_RND_DOWN);
+        if (inexact)
+            arf_mag_add_ulp(arb_radref(w), zr, arb_midref(w), prec);
+        else
+            mag_set(arb_radref(w), zr);
+
+        _corners_mul(xe[0], xe[1], x);
+        _corners_mul(ye[0], ye[1], y);
+        ok = 1;
+        for (a = 0; a < 2; a++)
+            for (b = 0; b < 2; b++)
+            {
+                arf_mul(p, xe[a], ye[b], ARF_PREC_EXACT, ARF_RND_DOWN);
+                ok = ok && arb_contains_arf(r, p);
+            }
+
+        if (ok)
+        {
+            mag_t m;
+            mag_init(m);
+            mag_mul_2exp_si(m, arb_radref(w), 2);
+            ok = (mag_cmp(arb_radref(r), m) <= 0) || (prec != ARF_PREC_EXACT && arb_rel_accuracy_bits(r) >= prec - 2);
+            mag_clear(m);
+        }
+
+        if (ok && prec == ARF_PREC_EXACT)
+            ok = arf_equal(arb_midref(r), arb_midref(w));
+
+        if (!ok)
+        {
+            flint_printf("FAIL: one-pass rounding\n");
+            flint_printf("prec = %wd\n\n", prec);
+            flint_printf("x = "); arb_print(x); flint_printf("\n\n");
+            flint_printf("y = "); arb_print(y); flint_printf("\n\n");
+            flint_printf("r = "); arb_print(r); flint_printf("\n\n");
+            flint_printf("w = "); arb_print(w); flint_printf("\n\n");
+            flint_abort();
+        }
+
+        arb_clear(x); arb_clear(y); arb_clear(r); arb_clear(w);
+        for (a = 0; a < 2; a++) { arf_clear(xe[a]); arf_clear(ye[a]); }
+        arf_clear(p);
+        mag_clear(xm); mag_clear(ym); mag_clear(zr);
     }
 
     TEST_FUNCTION_END(state);

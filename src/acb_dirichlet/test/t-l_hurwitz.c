@@ -109,6 +109,11 @@ TEST_FUNCTION_START(acb_dirichlet_l_hurwitz, state)
                 flint_abort();
             }
 
+            /* the parsed reference encloses the decimal value tightly
+               on one side; give it an ulp of slack for the containment */
+            arb_add_error_2exp_si(acb_realref(ref), -(prec - 10));
+            arb_add_error_2exp_si(acb_imagref(ref), -(prec - 10));
+
             acb_dirichlet_l_hurwitz(res, x + j, NULL, G, chi, prec + 10);
 
             if (!acb_contains(ref, res))

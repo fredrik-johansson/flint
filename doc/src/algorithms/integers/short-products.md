@@ -138,7 +138,7 @@ Hence $E < (2n - 3) B^{n-1}$, and since $C$ is a multiple of $B^{n-1}$,
 $\lfloor uv/B^{n-1} \rfloor - h = \lfloor E / B^{n-1} \rfloor \le 2n - 4$.
 :::
 
-All algorithms used by `flint_mpn_mulhigh_n` and `flint_mpn_sqrhigh`
+All algorithms used by `flint_mpn_mulhigh_n` and `flint_mpn_sqrhigh_n`
 return an $h$ with the same bounds ([](#thm-recursive-high) below).
 
 ::: corollary {#cor-exact}
@@ -165,7 +165,7 @@ less than 2 units (when $2n < B$) [@AJ2025, Corollary 2].
 For floating-point multiplication, the mantissas are normalised (top bit
 set, $u, v \ge B^n/2$), so that $B^{2n}/4 \le uv < B^{2n}$ and the
 product has its top bit in one of two positions.
-`flint_mpn_mulhigh_normalised` and `flint_mpn_sqrhigh_normalised`
+`flint_mpn_mulhigh_n_normalised` and `flint_mpn_sqrhigh_n_normalised`
 compute the high product and, when the top bit of the result is zero,
 shift the $n + 1$ limbs left by one bit; they return the low limb and the
 shift (0 or 1), which the caller subtracts from the exponent. The shift
@@ -275,7 +275,7 @@ exactly their contributions to $C$ and at most $u_i v_j B^{n-2}$.
 Summing gives $C \le B^{n-1} \tilde h \le uv$.
 :::
 
-`flint_mpn_sqrhigh` uses the same recursion for squares, where the two
+`flint_mpn_sqrhigh_n` uses the same recursion for squares, where the two
 cross terms coincide: $\tilde h = F + 2 h_1 + 2\,\mathrm{hi}(u_{k-1}
 u_{\ell-1})$, with a full square of the top $k$ limbs and a single high
 product, and the theorem holds unchanged. FLINT tunes $k$ for each
@@ -392,7 +392,7 @@ ADX, `flint_mpn_mulhigh_n` uses
 - above, the window $[n - 2, 2n)$ of a middle product by `fft_small`
   ([](#window)).
 
-`flint_mpn_sqrhigh` has assembly kernels up to 8 limbs, assembly loops
+`flint_mpn_sqrhigh_n` has assembly kernels up to 8 limbs, assembly loops
 (for even and odd $n$) up to 90 limbs, Mulders' recursion for squares up
 to 580 limbs and `fft_small` above. `flint_mpn_mullow_n` has assembly
 kernels up to 8 limbs, an assembly loop up to 50 limbs, then Mulders'
@@ -411,7 +411,7 @@ up to 40 limbs and Mulders' recursion above. At 9 limbs the high
 product was about 1.8 times as fast as the full product. Compared with
 MPFR's `mpfr_mulhigh_n`, it was 2 to 3 times as fast at 1, 2 and 9 limbs
 and 1.1 times at 64 limbs; floating-point multiplication in `nfloat`,
-built on `flint_mpn_mulhigh_normalised`, was 2.7 to 4.4 times as fast as
+built on `flint_mpn_mulhigh_n_normalised`, was 2.7 to 4.4 times as fast as
 `mpfr_mul` at 1, 2 and 9 limbs and 1.2 times at 64 limbs.
 
 ## Use in FLINT {#use}

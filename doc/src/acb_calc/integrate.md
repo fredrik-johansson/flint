@@ -177,9 +177,9 @@ int main(void)
 }
 ```
 ```output
-int_0^8 sin(x + exp(x)) dx = [0.34740017265725 +/- 3.34e-15]
+int_0^8 sin(x + exp(x)) dx = [0.347400172657248 +/- 4.92e-16]
 2 int_-1^1 sqrt(1 - x^2) dx = [3.14159265358979 +/- 3.25e-15] + [+/- 1.54e-19]*I
-int_0^10.5 floor(x) dx = [50.0000000000000 +/- 1.10e-15]
+int_0^10.5 floor(x) dx = [50.0000000000000 +/- 6.12e-16]
 ```
 
 The second result has a small imaginary radius: near the endpoints the

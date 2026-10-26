@@ -151,12 +151,12 @@ int main(void)
 ```output
 x^5 - x - 1: 5 isolated
 [1.16730397826142 +/- 1.32e-15]
-[-0.764884433600585 +/- 2.75e-16] + [0.352471546031726 +/- 2.51e-16]*I
-[-0.764884433600585 +/- 2.75e-16] + [-0.352471546031726 +/- 2.51e-16]*I
-[0.181232444469875 +/- 3.85e-16] + [-1.08395410131771 +/- 6.70e-16]*I
-[0.181232444469875 +/- 3.86e-16] + [1.08395410131771 +/- 6.70e-16]*I
+[-0.764884433600585 +/- 2.75e-16] + [0.352471546031726 +/- 2.50e-16]*I
+[-0.764884433600585 +/- 2.75e-16] + [-0.352471546031726 +/- 2.50e-16]*I
+[0.181232444469875 +/- 3.85e-16] + [-1.08395410131771 +/- 6.69e-16]*I
+[0.181232444469875 +/- 3.85e-16] + [1.08395410131771 +/- 6.69e-16]*I
 x^3 - 3x + 2: 1 isolated
-[-2.00000000000000 +/- 1.30e-18] + [+/- 1.08e-18]*I
+[-2.00000000000000 +/- 8.68e-19] + [+/- 6.51e-19]*I
 [1.00000 +/- 9.87e-6] + [+/- 1.17e-5]*I
 [1.0000 +/- 6.10e-6] + [+/- 7.18e-6]*I
 ```
@@ -209,16 +209,17 @@ int main(void)
 ```output radius-tol
 prec 32: 0 isolated
 prec 64: 20 isolated
-[1.000000000 +/- 7.32e-16] + [+/- 7.24e-16]*I
-[20.00000 +/- 4.55e-6] + [+/- 4.49e-6]*I
+[1.000000000 +/- 4.51e-25] + [+/- 4.51e-25]*I
+[20.00000 +/- 2.26e-6] + [+/- 2.20e-6]*I
 ```
 
 No root can be isolated at 32 bits. At 64 bits all of them are, but the
-enclosure of the root 20 has radius $5 \cdot 10^{-6}$ while that of the
-root 1 has radius $10^{-15}$: a relative perturbation $\varepsilon$ of
-the coefficients can move the root 20 by about $3 \cdot 10^{12} \varepsilon$
-(and the root 1 by about $420 \varepsilon$), and
-the validation sees the corresponding rounding errors in $f(m)$.
+enclosure of the root 20 has radius about $2 \cdot 10^{-6}$ while that
+of the root 1 is many orders of magnitude tighter: a relative
+perturbation $\varepsilon$ of the coefficients can move the root 20 by
+about $3 \cdot 10^{12} \varepsilon$ (and the root 1 by about $420
+\varepsilon$), and the validation sees the corresponding rounding errors
+in $f(m)$.
 
 The radii, and the last digits of the midpoints, can differ slightly
 between platforms, since the starting values come from the

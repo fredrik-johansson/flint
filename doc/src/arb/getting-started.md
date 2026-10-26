@@ -57,13 +57,13 @@ int main(void)
 }
 ```
 ```output
-prec  32: [2.625374e+17 +/- 1.70e+10]
-prec  64: [2.6253741264076874e+17 +/- 5.40]
-prec 128: [262537412640768743.99999999999925007 +/- 2.65e-18]
+prec  32: [2.6253741e+17 +/- 4.08e+9]
+prec  64: [2.62537412640768744e+17 +/- 0.626]
+prec 128: [262537412640768743.99999999999925007 +/- 2.62e-18]
 x does not contain a unique integer
 n = 262537412640768744
-x - n = [-7.49927e-13 +/- 5.70e-19]
-as a double: -7.4992746048967683e-13
+x - n = [-7.499274e-13 +/- 3.65e-20]
+as a double: -7.4992741051473294e-13
 ```
 
 With FLINT installed under a prefix such as `/usr/local`, the program is
@@ -103,7 +103,7 @@ The interface follows the conventions of FLINT and GMP.
   optional.
 
 Reading the output: at 128 bits the ball is
-$[262537412640768743.99999999999925007 \pm 2.65 \cdot 10^{-18}]$, which
+$[262537412640768743.99999999999925007 \pm 2.62 \cdot 10^{-18}]$, which
 proves that $e^{\pi \sqrt{163}}$ is not an integer and that it lies
 within $7.5 \cdot 10^{-13}$ of one. `arb_get_unique_fmpz` returns an
 integer only if the ball contains exactly one, which is the standard way

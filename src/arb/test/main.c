@@ -20,6 +20,8 @@
 #include "t-add_fmpz.c"
 #include "t-addmul_arf.c"
 #include "t-addmul.c"
+#include "t-fmma.c"
+#include "t-sosq.c"
 #include "t-addmul_fmpz.c"
 #include "t-addmul_si.c"
 #include "t-addmul_ui.c"
@@ -81,6 +83,7 @@
 #include "t-div_newton.c"
 #include "t-div.c"
 #include "t-div_fmpz.c"
+#include "t-fmpz_div_fmpz.c"
 #include "t-div_si.c"
 #include "t-div_ui.c"
 #include "t-dot.c"
@@ -167,6 +170,7 @@
 #include "t-set_interval_mag.c"
 #include "t-set_interval_mpfr.c"
 #include "t-set_interval_neg_pos_mag.c"
+#include "t-set_round.c"
 #include "t-set_str.c"
 #include "t-sgn.c"
 #include "t-sin.c"
@@ -228,6 +232,8 @@ test_struct tests[] =
     TEST_FUNCTION(arb_add_fmpz),
     TEST_FUNCTION(arb_addmul_arf),
     TEST_FUNCTION(arb_addmul),
+    TEST_FUNCTION(arb_fmma),
+    TEST_FUNCTION(arb_sosq),
     TEST_FUNCTION(arb_addmul_fmpz),
     TEST_FUNCTION(arb_addmul_si),
     TEST_FUNCTION(arb_addmul_ui),
@@ -289,6 +295,7 @@ test_struct tests[] =
     TEST_FUNCTION(arb_div_newton),
     TEST_FUNCTION(arb_div),
     TEST_FUNCTION(arb_div_fmpz),
+    TEST_FUNCTION(arb_fmpz_div_fmpz),
     TEST_FUNCTION(arb_div_si),
     TEST_FUNCTION(arb_div_ui),
     TEST_FUNCTION(arb_dot),
@@ -375,6 +382,7 @@ test_struct tests[] =
     TEST_FUNCTION(arb_set_interval_mag),
     TEST_FUNCTION(arb_set_interval_mpfr),
     TEST_FUNCTION(arb_set_interval_neg_pos_mag),
+    TEST_FUNCTION(arb_set_round),
     TEST_FUNCTION(arb_set_str),
     TEST_FUNCTION(arb_sgn),
     TEST_FUNCTION(arb_sin),

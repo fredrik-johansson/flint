@@ -10,6 +10,7 @@
 */
 
 #include "acb.h"
+#include "acb/impl.h"
 
 #define a acb_realref(x)
 #define b acb_imagref(x)
@@ -203,6 +204,9 @@ _acb_mul_slow(acb_t z, const acb_t x, const acb_t y, slong prec)
 void
 acb_mul(acb_t z, const acb_t x, const acb_t y, slong prec)
 {
+    if (_acb_mul_onepass(z, NULL, x, y, 0, prec))
+        return;
+
     if (arb_is_zero(b))
     {
         arb_mul(f, d, a, prec);

@@ -1,5 +1,5 @@
 /*
-    Copyright (C) 2012-2014 Fredrik Johansson
+    Copyright (C) 2012-2014, 2026 Fredrik Johansson
 
     This file is part of FLINT.
 
@@ -10,59 +10,56 @@
 */
 
 #include "arb.h"
+#include "arb/impl.h"
 
 void
 arb_sub(arb_t z, const arb_t x, const arb_t y, slong prec)
 {
-    int inexact;
-
-    inexact = arf_sub(arb_midref(z), arb_midref(x), arb_midref(y), prec, ARB_RND);
-
-    mag_add(arb_radref(z), arb_radref(x), arb_radref(y));
-    if (inexact)
-        arf_mag_add_ulp(arb_radref(z), arb_radref(z), arb_midref(z), prec);
+    _arb_add_sub(z, x, y, 1, prec);
 }
 
 void
 arb_sub_arf(arb_t z, const arb_t x, const arf_t y, slong prec)
 {
-    int inexact;
-    inexact = arf_sub(arb_midref(z), arb_midref(x), y, prec, ARB_RND);
-    if (inexact)
-        arf_mag_add_ulp(arb_radref(z), arb_radref(x), arb_midref(z), prec);
-    else
-        mag_set(arb_radref(z), arb_radref(x));
+    /* view y as an exact ball (shallow copy, never cleared) */
+    arb_struct yb;
+    *arb_midref(&yb) = *y;
+    MAG_MAN(arb_radref(&yb)) = 0;
+    MAG_EXP(arb_radref(&yb)) = 0;
+    _arb_add_sub(z, x, &yb, 1, prec);
 }
 
 void
 arb_sub_ui(arb_t z, const arb_t x, ulong y, slong prec)
 {
-    int inexact;
-    inexact = arf_sub_ui(arb_midref(z), arb_midref(x), y, prec, ARB_RND);
-    if (inexact)
-        arf_mag_add_ulp(arb_radref(z), arb_radref(x), arb_midref(z), prec);
-    else
-        mag_set(arb_radref(z), arb_radref(x));
+    arf_t t;
+    arf_init_set_ui(t, y); /* no need to free */
+    arb_sub_arf(z, x, t, prec);
 }
 
 void
 arb_sub_si(arb_t z, const arb_t x, slong y, slong prec)
 {
-    int inexact;
-    inexact = arf_sub_si(arb_midref(z), arb_midref(x), y, prec, ARB_RND);
-    if (inexact)
-        arf_mag_add_ulp(arb_radref(z), arb_radref(x), arb_midref(z), prec);
-    else
-        mag_set(arb_radref(z), arb_radref(x));
+    arf_t t;
+    arf_init_set_si(t, y); /* no need to free */
+    arb_sub_arf(z, x, t, prec);
 }
 
 void
 arb_sub_fmpz(arb_t z, const arb_t x, const fmpz_t y, slong prec)
 {
-    int inexact;
-    inexact = arf_sub_fmpz(arb_midref(z), arb_midref(x), y, prec, ARB_RND);
-    if (inexact)
-        arf_mag_add_ulp(arb_radref(z), arb_radref(x), arb_midref(z), prec);
+    arf_t t;
+
+    if (!COEFF_IS_MPZ(*y))
+    {
+        arf_init_set_si(t, *y); /* no need to free */
+        arb_sub_arf(z, x, t, prec);
+    }
     else
-        mag_set(arb_radref(z), arb_radref(x));
+    {
+        arf_init(t);
+        arf_set_fmpz(t, y);
+        arb_sub_arf(z, x, t, prec);
+        arf_clear(t);
+    }
 }

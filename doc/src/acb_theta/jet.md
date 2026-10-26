@@ -160,12 +160,12 @@ theta_1000 = 0.913579138133896 + 0e-37*I
 theta_1001 = 0.913579138133896 + 0e-37*I
 theta_1010 = odd, contains zero: 1
 theta_1011 = odd, contains zero: 1
-theta_1100 = 0.267577401846795 + 0e-37*I
+theta_1100 = 0.267577401846795 + 0e-38*I
 theta_1101 = odd, contains zero: 1
 theta_1110 = odd, contains zero: 1
-theta_1111 = 0e-37 - 0.267577401846795*I
+theta_1111 = 0e-38 - 0.267577401846795*I
 jet of theta_1010: 0e-37 + 0e-37*I, -2.84869460392 + 0e-36*I, 0e-37 - 0.0214389410501*I
-theta_11 + theta_1 = [+/- 6.09e-38] + [+/- 8.80e-38]*I
+theta_11 + theta_1 = [+/- 1.43e-38] + [+/- 2.11e-38]*I
 ```
 
 The three entries of the jet are $\theta$, $\partial\theta/\partial z_0$

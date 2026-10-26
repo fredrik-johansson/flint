@@ -30,53 +30,15 @@ arf_sosq(arf_t res, const arf_t a, const arf_t b, slong prec, arf_rnd_t rnd)
 
         return 0;
     }
+    else if (a == b)
+    {
+        /* 2 a^2: the squaring, then one more in the exponent */
+        int inexact = arf_mul(res, a, a, prec, rnd);
+        fmpz_add_ui(ARF_EXPREF(res), ARF_EXPREF(res), 1);
+        return inexact;
+    }
     else
     {
-        nn_srcptr ap, bp;
-        int inexact;
-        nn_ptr tmp, aap, bbp;
-        slong an, bn, aan, bbn, alloc;
-        slong shift;
-        fmpz_t texp, uexp;
-        ARF_MUL_TMP_DECL
-
-        ARF_GET_MPN_READONLY(ap, an, a);
-        ARF_GET_MPN_READONLY(bp, bn, b);
-
-        fmpz_init(texp);
-        fmpz_init(uexp);
-
-        _fmpz_add2_fast(texp, ARF_EXPREF(a), ARF_EXPREF(a), 0);
-        _fmpz_add2_fast(uexp, ARF_EXPREF(b), ARF_EXPREF(b), 0);
-        shift = _fmpz_sub_small(texp, uexp);
-
-        aan = 2 * an;
-        bbn = 2 * bn;
-        alloc = aan + bbn;
-
-        ARF_MUL_TMP_ALLOC(tmp, alloc)
-        aap = tmp;
-        bbp = tmp + aan;
-
-        FLINT_MPN_MUL_WITH_SPECIAL_CASES(aap, ap, an, ap, an)
-        aan -= (aap[0] == 0);
-        aap += (aap[0] == 0);
-
-        FLINT_MPN_MUL_WITH_SPECIAL_CASES(bbp, bp, bn, bp, bn)
-        bbn -= (bbp[0] == 0);
-        bbp += (bbp[0] == 0);
-
-        if (shift >= 0)
-            inexact = _arf_add_mpn(res, aap, aan, 0, texp,
-                                        bbp, bbn, 0, shift, prec, rnd);
-        else
-            inexact = _arf_add_mpn(res, bbp, bbn, 0, uexp,
-                                        aap, aan, 0, -shift, prec, rnd);
-
-        ARF_MUL_TMP_FREE(tmp, alloc)
-        fmpz_clear(texp);
-        fmpz_clear(uexp);
-
-        return inexact;
+        return _arf_fmma_mpn(res, a, a, 0, b, b, 0, prec, rnd);
     }
 }

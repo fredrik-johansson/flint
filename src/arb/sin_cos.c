@@ -81,7 +81,7 @@ _arb_sin_cos(arb_t zsin, arb_t zcos, const arf_t x, const mag_t xrad, slong prec
     nn_ptr tmp, w, sina, cosa, sinb, cosb, ta, tb;
     nn_ptr sinptr, cosptr;
     ulong p1, q1bits, p2, q2bits, error, error2, p1_tab1, radman;
-    int negative, inexact, octant;
+    int negative, octant;
     int sinnegative, cosnegative, swapsincos;
     TMP_INIT;
 
@@ -500,20 +500,24 @@ _arb_sin_cos(arb_t zsin, arb_t zcos, const arf_t x, const mag_t xrad, slong prec
     /* Set the midpoints. */
     if (want_sin)
     {
-        inexact = _arf_set_mpn_fixed(arb_midref(zsin), sinptr,
-            wn, wn, sinnegative, prec, ARB_RND);
-        if (inexact)
-            arf_mag_add_ulp(arb_radref(zsin),
-                arb_radref(zsin), arb_midref(zsin), prec);
+        {
+            mag_t acc_err;
+            MAG_MAN(acc_err) = MAG_MAN(arb_radref(zsin));
+            MAG_EXP(acc_err) = MAG_EXP(arb_radref(zsin));
+            arb_set_round_mpn_2exp_si(zsin, sinptr, wn, sinnegative, -(wn) * FLINT_BITS, prec);
+            mag_add(arb_radref(zsin), arb_radref(zsin), acc_err);
+        }
     }
 
     if (want_cos)
     {
-        inexact = _arf_set_mpn_fixed(arb_midref(zcos), cosptr,
-            wn, wn, cosnegative, prec, ARB_RND);
-        if (inexact)
-            arf_mag_add_ulp(arb_radref(zcos),
-                arb_radref(zcos), arb_midref(zcos), prec);
+        {
+            mag_t acc_err;
+            MAG_MAN(acc_err) = MAG_MAN(arb_radref(zcos));
+            MAG_EXP(acc_err) = MAG_EXP(arb_radref(zcos));
+            arb_set_round_mpn_2exp_si(zcos, cosptr, wn, cosnegative, -(wn) * FLINT_BITS, prec);
+            mag_add(arb_radref(zcos), arb_radref(zcos), acc_err);
+        }
     }
 
     TMP_END;

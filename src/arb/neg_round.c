@@ -10,10 +10,14 @@
 */
 
 #include "arb.h"
+#include "arb/impl.h"
 
 void
 arb_neg_round(arb_t y, const arb_t x, slong prec)
 {
+    if (_arb_set_round_arf_err(y, arb_midref(x), 1, prec, arb_radref(x)))
+        return;
+
     arb_set_round(y, x, prec);
     arb_neg(y, y);
 }

@@ -395,9 +395,13 @@ arb_exp_arf(arb_t z, const arf_t x, slong prec, int minus_one, slong maglim)
         /* Set the midpoint */
         if (!minus_one)
         {
-            inexact = _arf_set_mpn_fixed(arb_midref(z), finalvalue, finaln, wn, 0, prec, ARB_RND);
-            if (inexact)
-                arf_mag_add_ulp(arb_radref(z), arb_radref(z), arb_midref(z), prec);
+            {
+            mag_t acc_err;
+            MAG_MAN(acc_err) = MAG_MAN(arb_radref(z));
+            MAG_EXP(acc_err) = MAG_EXP(arb_radref(z));
+            arb_set_round_mpn_2exp_si(z, finalvalue, finaln, 0, -(wn) * FLINT_BITS, prec);
+            mag_add(arb_radref(z), arb_radref(z), acc_err);
+        }
         }
         else
         {
