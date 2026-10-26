@@ -500,12 +500,15 @@ comes out normalised; the remainder gives the exact rounding
 information. These use hardware division where it is fast
 (`FLINT_PREINVERT_LIMB_USE_NATIVE`) and a precomputed inverse otherwise
 [@GraMol2010]. Divisors with a single nonzero word (such as small
-integers) use a chain of $2/1$ divisions, $O(n)$. Otherwise a
-schoolbook approximate division (`_flint_mpn_divapprox_basecase_preinv1`)
-computes the quotient or the quotient plus one at the target precision.
-With directed rounding, one guard word is computed and the truncation is
-certified unless the guard word is 0 or 1, in which case (for example
-for exact quotients) the exact quotient and remainder are computed.
+integers) use a chain of $2/1$ divisions, $O(n)$, and divisors of two words use the exact
+register-based division. Otherwise a schoolbook approximate division
+(`_flint_mpn_divapprox_basecase_preinv1`) computes the quotient or the
+quotient plus one at the target precision. With directed rounding, the
+shared `flint_mpn_divhigh` computes one guard word and the truncation is
+certified unless the guard word is within the error bound of 0 or
+$B - 1$, in which case (for example for exact quotients) the exact
+quotient and remainder are computed (`flint_mpn_divhigh_exact`); see
+[](mpn_extras#fphigh).
 :::
 :::
 
@@ -521,8 +524,9 @@ arguments give NaN.
 
 ::: details
 The square root is the truncated integer square root of the mantissa
-padded to $2n$ words, with an exactness flag (`flint_mpn_sqrtrem`). At
-one word on 64-bit machines it is computed in registers: a
+padded to $2n$ words, with an exactness flag (`flint_mpn_sqrthigh_exact`,
+see [](mpn_extras#fphigh)). At one word on 64-bit machines it is
+computed in registers: a
 double-precision root (within $2^{12}$ of the exact root), one
 correction from the exact residual evaluated in double precision, and a
 final exact residual, which gives the floor and the exactness flag. At
@@ -535,14 +539,14 @@ The reciprocal square root refines a double-precision approximation by
 one Newton step at 128 bits (one word), or a two-word starting value
 by one Newton step with the residual evaluated exactly from the
 six-word product of the mantissa and the square of the starting value
-(two words). For $n \ge 3$ words, a fixed-point Newton iteration with
-an added third-order term yields the result with one guard word and an
-error of about one unit in the guard word. With directed rounding the
-truncation is certified from these error bounds, and in the rare
-uncertain cases the exact result
-$\lfloor \sqrt{\lfloor z \rfloor} \rfloor$ is computed for
-$z = 2^{3nw}/(4a)$ or $2^{3nw}/(2a)$, in terms of the $n$-word mantissa
-$a$ and the word size $w$.
+(two words). For $n \ge 3$ words, the shared `flint_mpn_rsqrthigh`
+yields the result with one guard word, within
+`FLINT_MPN_RSQRTHIGH_GUARD_ERR_BOUND` units of the guard word. With
+directed rounding the truncation is certified from these error bounds,
+and in the rare uncertain cases the exact result
+$\lfloor \sqrt{\lfloor z \rfloor} \rfloor$ is computed
+(`flint_mpn_rsqrthigh_exact`) for $z = 2^{3nw}/(4a)$ or $2^{3nw}/(2a)$,
+in terms of the $n$-word mantissa $a$ and the word size $w$.
 :::
 :::
 

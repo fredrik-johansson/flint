@@ -10,6 +10,110 @@
 */
 
 #include "arb.h"
+#include "arb/impl.h"
+#include "mpn_extras/fp_small.h"
+
+/* Roots of up to this many limbs plus guard limb are formed on the stack. */
+#define ARB_SQRT_STACK_LIMBS 64
+
+/*
+    The square root or reciprocal square root of the positive LAGOM
+    midpoint x with a guard limb: n + 1 limbs (n >= 1, top bit set)
+    written to q, with the value q 2^e for the returned e, within one
+    unit of the exact value (*extra = 1) or exact (*extra = 0):
+    flint_mpn_sqrthigh / rsqrthigh, or the exact truncation when the
+    guard limb cannot rule out an exact result (which is then found
+    exactly). A power of two with an odd exponent is exact as a power of
+    two. If u != NULL, it is set to an upper bound for the value.
+*/
+static slong
+_arb_sqrt_root(nn_ptr q, int * extra, mag_ptr u, arf_srcptr xm, slong n, int rsqrt)
+{
+    nn_srcptr xptr;
+    slong xn, e, exp;
+    int t;
+
+    ARF_GET_MPN_READONLY(xptr, xn, xm);
+    e = ARF_EXP(xm);
+    t = e & 1;
+
+    if (xn == 1 && xptr[0] == LIMB_TOP && t)
+    {
+        /* x = 2^(e-1), e - 1 even: sqrt(x) = 2^((e-1)/2), 1/sqrt(x) = 2^(-(e-1)/2) */
+        flint_mpn_zero(q, n);
+        q[n] = LIMB_TOP;
+        *extra = 0;
+        exp = rsqrt ? 1 - (e - 1) / 2 : 1 + (e - 1) / 2;
+    }
+#if FLINT_BITS == 64
+    else if (!rsqrt && xn == 1 && n == 1)
+    {
+        /* the exact floor s of sqrt(a B / 2^t) with its remainder r <= 2 s:
+           the fraction f = sqrt - s lies in (r / (2 s + 2), r / (2 s)], so
+           r / (2 y) for the double precision root y is within 2^13 units
+           of the guard limb, far inside the 2^(FLINT_BITS - MAG_BITS)
+           units that *extra = 1 allows */
+        ulong r1, r0;
+        double f, inv;
+
+        if (_flint_mpn_isqrt_2_rem_inv(q + 1, &r1, &r0, &inv, xptr[0] >> t, (xptr[0] << (FLINT_BITS - 1)) & (-(ulong) t)))
+        {
+            f = ((double) r1 * 0x1p64 + (double) r0) * inv;
+            q[0] = (f >= 1.0) ? UWORD_MAX : (ulong) (f * 0x1p64);
+            *extra = 1;
+        }
+        else
+        {
+            q[0] = 0;
+            *extra = 0;
+        }
+        exp = (e + t) / 2;
+    }
+#endif
+    else if (!rsqrt)
+    {
+        flint_mpn_sqrthigh(q, xptr, xn, t, n);
+        *extra = 1;
+        if (q[0] <= FLINT_MPN_SQRTHIGH_GUARD_ERR_BOUND || q[0] >= UWORD_MAX - FLINT_MPN_SQRTHIGH_GUARD_ERR_BOUND)
+            *extra = flint_mpn_sqrthigh_exact(q, xptr, xn, t, n);
+        exp = (e + t) / 2;
+    }
+    else
+    {
+        flint_mpn_rsqrthigh(q, xptr, xn, t, n);
+        *extra = 1;
+        if (q[0] <= FLINT_MPN_RSQRTHIGH_GUARD_ERR_BOUND || q[0] >= UWORD_MAX - FLINT_MPN_RSQRTHIGH_GUARD_ERR_BOUND)
+            *extra = flint_mpn_rsqrthigh_exact(q, xptr, xn, t, n);
+        exp = (1 - t) - (e - t) / 2;
+    }
+
+    if (u != NULL)
+    {
+        MAG_MAN(u) = (q[n] >> (FLINT_BITS - MAG_BITS)) + 1;
+        MAG_EXP(u) = exp;
+        MAG_FAST_ADJUST_ONE_TOO_LARGE(u);
+    }
+
+    return exp - (n + 1) * FLINT_BITS;
+}
+
+/* res = sqrt(x) or 1/sqrt(x) for a positive LAGOM x, radius err (NULL for
+   none) plus the measured rounding error; prec >= 2 */
+static void
+_arb_sqrt_mid(arb_t res, arf_srcptr xm, slong prec, mag_srcptr err, int rsqrt)
+{
+    ulong q_stack[ARB_SQRT_STACK_LIMBS + 1];
+    nn_ptr q;
+    slong n, exp;
+    int extra;
+
+    n = (prec + FLINT_BITS - 1) / FLINT_BITS + ARB_GUARD_EXTRA;
+    q = (n <= ARB_SQRT_STACK_LIMBS) ? q_stack : flint_malloc((n + 1) * sizeof(ulong));
+    exp = _arb_sqrt_root(q, &extra, NULL, xm, n, rsqrt);
+    _arb_set_round_guarded(res, q, n, 0, exp, prec, extra, err, NULL);
+    if (q != q_stack)
+        flint_free(q);
+}
 
 static void
 arb_rsqrt_arf(arb_t res, const arf_t x, slong prec)
@@ -23,6 +127,11 @@ arb_rsqrt_arf(arb_t res, const arf_t x, slong prec)
         return;
     }
 
+    if (ARF_IS_LAGOM(x) && prec >= 2 && prec != ARF_PREC_EXACT)
+    {
+        _arb_sqrt_mid(res, x, prec, NULL, 1);
+    }
+    else
     {
         int inexact;
 
@@ -92,8 +201,15 @@ arb_rsqrt(arb_t z, const arb_t x, slong prec)
             mag_mul(t, t, arb_radref(x));
             mag_mul_2exp_si(t, t, -1);
 
-            arb_rsqrt_arf(z, arb_midref(x), prec);
-            mag_add(arb_radref(z), arb_radref(z), t);
+            if (ARF_IS_LAGOM(arb_midref(x)) && MAG_IS_LAGOM(t))
+            {
+                _arb_sqrt_mid(z, arb_midref(x), prec, t, 1);
+            }
+            else
+            {
+                arb_rsqrt_arf(z, arb_midref(x), prec);
+                mag_add(arb_radref(z), arb_radref(z), t);
+            }
 
             mag_clear(u);
         }
@@ -116,6 +232,11 @@ arb_sqrt_arf(arb_t res, const arf_t x, slong prec)
         return;
     }
 
+    if (ARF_IS_LAGOM(x) && prec >= 2 && prec != ARF_PREC_EXACT)
+    {
+        _arb_sqrt_mid(res, x, prec, NULL, 0);
+    }
+    else
     {
         if (arf_sqrt(arb_midref(res), x, prec, ARF_RND_FAST))
             arf_mag_set_ulp(arb_radref(res), arb_midref(res), prec);
@@ -182,26 +303,40 @@ arb_sqrt(arb_t z, const arb_t x, slong prec)
         }
         else if (ARB_IS_LAGOM(x)) /* small exponents, acc *and* prec >= 20 */
         {
-            mag_t t;
+            mag_t t, err;
+            ulong q_stack[ARB_SQRT_STACK_LIMBS + 1];
+            nn_ptr q;
+            slong n, exp;
+            int extra;
+
             mag_init(t); /* no need to free */
+            mag_init(err);
 
-            inexact = arf_sqrt(arb_midref(z), arb_midref(x), prec, ARF_RND_FAST);
+            /* propagated error sqrt(x) - sqrt(x - r) <= r / (2 sqrt(x - r)),
+               from the input alone so that it does not wait for the root:
+               with acc >= 20, r < 2^-19 x, so x (1 - 2^-19) is a lower
+               bound for x - r (t is a lower bound of x, so the subtraction
+               keeps it one) */
+            {
+                nn_srcptr xptr;
+                slong xn;
+                ARF_GET_MPN_READONLY(xptr, xn, arb_midref(x));
+                MAG_MAN(t) = (xptr[xn - 1] >> (FLINT_BITS - MAG_BITS)) - (xptr[xn - 1] >> (FLINT_BITS - MAG_BITS + 19)) - 1;
+                MAG_EXP(t) = ARF_EXP(arb_midref(x));
+            }
+            mag_rsqrt(t, t);
+            mag_fast_mul(err, arb_radref(x), t);
+            MAG_EXP(err)--;
 
-            /* sqrt(x) - sqrt(x-r) <= 0.5 * r * rsqrt(x-r)  */
-            /* we have rsqrt(x-r) ~= 1/sqrt(x) */
-            arf_get_mag_lower(t, arb_midref(z));
+            /* the root with a guard limb */
+            n = (prec + FLINT_BITS - 1) / FLINT_BITS + ARB_GUARD_EXTRA;
+            q = (n <= ARB_SQRT_STACK_LIMBS) ? q_stack : flint_malloc((n + 1) * sizeof(ulong));
+            exp = _arb_sqrt_root(q, &extra, NULL, arb_midref(x), n, 0);
 
-            /* note: we need to write rad(z) first to use fast_mul later */
-            mag_div(arb_radref(z), arb_radref(x), t);
+            _arb_set_round_guarded(z, q, n, 0, exp, prec, extra, err, NULL);
 
-            /* We are guaranteed to have acc and prec >= 20. */
-            /* 0.5 + eps corrects for errors */
-            MAG_MAN(t) = MAG_ONE_HALF + (MAG_ONE_HALF >> 16);
-            MAG_EXP(t) = 0;
-            mag_fast_mul(arb_radref(z), arb_radref(z), t);
-
-            if (inexact)
-                arf_mag_fast_add_ulp(arb_radref(z), arb_radref(z), arb_midref(z), prec);
+            if (q != q_stack)
+                flint_free(q);
         }
         else
         {

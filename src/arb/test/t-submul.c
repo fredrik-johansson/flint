@@ -70,6 +70,36 @@ arb_submul_naive(arb_t z, const arb_t x, const arb_t y, slong prec)
     arb_clear(t);
 }
 
+/* the same value enclosed with a comparable radius (the fused operation
+   and the exact product followed by an addition round the midpoint at
+   slightly different points; a truncated product adds its deficit) */
+static int
+_close_balls_submul(const arb_t a, const arb_t b, slong prec)
+{
+    mag_t t, u;
+    int ok;
+
+    if (!arb_is_finite(a) || !arb_is_finite(b))
+        return arb_equal_mid_close_mag(a, b);
+
+    if (!arb_overlaps(a, b))
+        return 0;
+
+    mag_init(t);
+    mag_init(u);
+    arf_get_mag(u, arb_midref(a));
+    mag_mul_2exp_si(u, u, 2 - prec);
+    mag_mul_2exp_si(t, arb_radref(b), 2);
+    mag_add(t, t, u);
+    ok = (mag_cmp(arb_radref(a), t) <= 0);
+    mag_mul_2exp_si(t, arb_radref(a), 2);
+    mag_add(t, t, u);
+    ok = ok && (mag_cmp(arb_radref(b), t) <= 0);
+    mag_clear(t);
+    mag_clear(u);
+    return ok;
+}
+
 TEST_FUNCTION_START(arb_submul, state)
 {
     slong iter, iter2;
@@ -229,7 +259,7 @@ TEST_FUNCTION_START(arb_submul, state)
                 arb_submul(z, x, y, prec);
                 arb_submul_naive(v, x, y, prec);
 
-                if (!arb_equal_mid_close_mag(z, v))
+                if (!_close_balls_submul(z, v, prec))
                 {
                     flint_printf("FAIL!\n");
                     flint_printf("x = "); arb_print(x); flint_printf("\n\n");

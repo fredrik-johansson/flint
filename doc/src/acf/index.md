@@ -173,6 +173,8 @@ void acf_approx_dot(acf_t res, const acf_t initial, int subtract, acf_srcptr x, 
 
 Sets `res` to an approximation of $s + (-1)^{\mathit{subtract}}
 \sum_{i=0}^{\mathit{len}-1} x_i y_i$, where $s$ is `initial` (0 if
-`NULL`), with the conventions of `arb_dot`, using a fixed-point
-accumulation like that of `acb_approx_dot`.
+`NULL`), with the conventions of `arb_dot`, using the fixed-point
+accumulation of `acb_dot` with the final rounding in the direction `rnd`;
+with `ARF_RND_NEAR` the result is exactly the midpoint of `acb_dot` for
+the same (exact) inputs.
 :::

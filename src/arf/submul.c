@@ -25,6 +25,9 @@ arf_submul(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd)
 
     if (arf_is_special(x) || arf_is_special(y) || arf_is_special(z))
     {
+        if (rnd >= ARF_RND_FAST)
+            rnd = arf_rnd_relaxed_to_strict(rnd);
+
         if (arf_is_zero(z))
         {
             return arf_neg_mul(z, x, y, prec, rnd);
@@ -44,6 +47,26 @@ arf_submul(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd)
             return inexact;
         }
     }
+
+    /* outputs of up to 16 limbs where the product is not small: high
+       product of the (truncated) operands with the addition and certified
+       rounding done on the stack */
+    if (ARF_SIZE(x) * ARF_SIZE(y) >= ARF_FMA_HIGH_SMALL_MIN_PRODUCT &&
+        prec <= ARF_MUL_HIGH_SMALL_MAX * FLINT_BITS)
+    {
+        int r = _arf_fma_high_small(z, x, y, z, ARF_SGNBIT(x) ^ ARF_SGNBIT(y) ^ 1, prec, rnd);
+        if (r != -1)
+            return r;
+    }
+
+    /* long products: truncated product with certification after the
+       addition (see _arf_fma_mpn); small ones are computed in full below */
+    if (ARF_SIZE(x) * ARF_SIZE(y) > ARF_FMA_SMALL_PRODUCT || (prec != ARF_PREC_EXACT &&
+        ARF_SIZE(x) + ARF_SIZE(y) > 2 + 2 * ((prec + FLINT_BITS - 1) / FLINT_BITS)))
+        return _arf_fma_mpn(z, x, y, z, ARF_SGNBIT(x) ^ ARF_SGNBIT(y) ^ 1, prec, rnd);
+
+    if (rnd >= ARF_RND_FAST)
+        rnd = arf_rnd_relaxed_to_strict(rnd);
 
     tsgnbit = ARF_SGNBIT(x) ^ ARF_SGNBIT(y) ^ 1;
     ARF_GET_MPN_READONLY(xptr, xn, x);

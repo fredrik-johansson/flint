@@ -224,8 +224,10 @@ Sets `x` to $y \cdot 2^{\mathit{exp}}$ exactly.
 ::: function
 void arb_set_round(arb_t z, const arb_t x, slong prec)
 
-Sets `z` to `x` with the midpoint rounded to `prec` bits, adding the
-rounding error to the radius.
+Sets `z` to `x` with the midpoint rounded to nearest at `prec` bits,
+adding the measured rounding error to the radius (when the radius of `x`
+exceeds that error by more than `MAG_BITS` bits, the midpoint is rounded
+at a correspondingly lower precision, as in the arithmetic functions).
 :::
 
 ::: function
@@ -233,7 +235,8 @@ void arb_set_round_fmpz(arb_t y, const fmpz_t x, slong prec)
 void arb_set_round_fmpz_2exp(arb_t y, const fmpz_t x, const fmpz_t exp, slong prec)
 
 Set `y` to a ball containing $x$, respectively $x \cdot 2^{\mathit{exp}}$,
-with the midpoint rounded to `prec` bits.
+with the midpoint rounded to nearest at `prec` bits and the measured
+rounding error as radius.
 :::
 
 ::: function
@@ -266,7 +269,11 @@ forms are a decimal literal (`"25"`, `"0.001"`, `"7e+141"`,
 ::: details
 The conversion is rigorous: the error of the binary approximation of the
 decimal midpoint and radius is added to the radius, so the result contains
-the exact decimal value. A NaN midpoint gives an indeterminate ball. On a
+the exact decimal value. A decimal literal $m \cdot 10^e$ is converted
+with one rounding to nearest: an integer by `arb_set_round_fmpz`, otherwise
+$m$ times or divided by $10^{|e|}$ (exact, or with a few guard bits) by
+`arb_mul` or `arb_div`, so the radius is the measured rounding error, at
+most about half an ulp. A NaN midpoint gives an indeterminate ball. On a
 parse error the function returns nonzero and sets `res` to an
 indeterminate ball. The output of `arb_get_str` with default flags can be
 read back with this function.
@@ -862,7 +869,45 @@ void arb_fma_ui(arb_t res, const arb_t x, ulong y, const arb_t z, slong prec)
 void arb_fma_fmpz(arb_t res, const arb_t x, const fmpz_t y, const arb_t z, slong prec)
 
 Set `res` to $xy + z$ with a single rounding of the midpoint; unlike
-`arb_addmul`, the output may be a different object from `z`.
+`arb_addmul`, the output may be a different object from `z`. The
+computation is that of `arb_addmul` (bit for bit the same result).
+:::
+
+::: function
+void arb_set_round_mpn_2exp_si(arb_t res, nn_srcptr x, slong xn, int sgnbit, slong exp, slong prec)
+void _arb_set_round_mpn_2exp_si_inplace(arb_t res, slong xn, int sgnbit, slong exp, slong prec)
+
+Sets `res` to the nonzero value $\pm \{x, xn\} \cdot 2^{exp}$ (leading zero
+limbs allowed) rounded to nearest at `prec` bits, with the radius set to
+an upper bound for the rounding error that is tight to about
+$2^{-prec-\mathrm{MAG\_BITS}}$ relative to the value. With the mantissa
+split as (`prec` bits, `MAG_BITS` more bits $B$, a tail), the midpoint is
+incremented if the top bit of $B$ is set (an exact tie, $B$ one half and
+an empty tail, rounds to even, as `ARF_RND_NEAR`), and the error is then
+$2^{\mathrm{MAG\_BITS}} - B$ or $B + [\text{tail} \ne 0]$ in units of
+$2^{-\mathrm{MAG\_BITS}}$ ulp. The exponents must be small (`LAGOM`) and
+`prec` at least 2. The in-place variant takes the `xn`-limb buffer of the
+midpoint of `res` itself (from `ARF_GET_MPN_WRITE`) as input.
+:::
+
+::: function
+void arb_fmma(arb_t res, const arb_t a, const arb_t b, const arb_t c, const arb_t d, slong prec)
+void arb_sosq(arb_t res, const arb_t a, const arb_t b, slong prec)
+
+Sets `res` to $ab + cd$, respectively $a^2 + b^2$. This is faster and gives
+a slightly tighter enclosure than computing the products separately, since
+the products are truncated jointly and rounded only once.
+
+::: details
+For finite operands with small exponents the computation is one part of
+the one-pass complex multiplication (`acb_mul`): the propagated error
+$|a| r_b + |b| r_a + r_a r_b + |c| r_d + |d| r_c + r_c r_d$ as one
+aligned sum, the two products exact (in registers for operands of up to
+two limbs at `prec` up to 128 bits) or truncated to `prec` bits plus a
+guard limb (exact when they nearly cancel), added exactly and rounded
+once to nearest with the measured rounding error and the deficits of the
+truncated products. Other inputs use `arf_fmma` with one ulp of error.
+:::
 :::
 
 ::: function
@@ -884,9 +929,10 @@ Set `z` to $x / y$. If `y` contains zero, the result is indeterminate
 ($[\operatorname{NaN} \pm \infty]$), even when $x = 0$.
 
 ::: details
-The midpoint is computed with `arf_div` in the relaxed mode
-`ARF_RND_FAST`, which allows an error of one unit in the last place and
-uses Newton division at high precision. For balls $[m_x \pm r_x]$ and
+The midpoint is the quotient with a guard limb (`flint_mpn_divhigh`)
+rounded once to nearest, the measured rounding error going into the
+radius; an exact quotient is detected and returned with radius 0. This
+includes `arb_fmpz_div_fmpz`, and so `arb_set_fmpq`. For balls $[m_x \pm r_x]$ and
 $[m_y \pm r_y]$ with $r_y < |m_y|$, the propagated error is bounded by
 
 $$
@@ -929,7 +975,8 @@ entries are read with strides `xstep` and `ystep`.
 may be negative. `res` may alias `initial` but not an entry of `x` or `y`.
 
 `arb_dot` is the function to use. It accumulates all products in one
-fixed-point sum with a single final rounding and computes all radius
+fixed-point sum with a single final rounding to nearest (ties to even)
+whose error is measured and added to the radius, and computes all radius
 contributions with `mag` arithmetic in one pass, so it is both faster and
 more accurate than a loop of `arb_addmul`: the internal sum carries
 $4 + \log_2 \mathit{len}$ guard bits, so the midpoint error is close to
@@ -947,9 +994,12 @@ can be very slow; it is meant for testing. The algorithm is described in
 void arb_approx_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong xstep, arb_srcptr y, slong ystep, slong len, slong prec)
 
 Computes the same dot product without error bounds: only the midpoints
-of the inputs are read and only the midpoint of `res` is written, using
-`arf_approx_dot`. Useful for approximate (floating-point) algorithms such
-as iterative refinement.
+of the inputs are read and only the midpoint of `res` is written. The
+result is exactly the midpoint `arb_dot` would compute from the midpoints
+alone (the same accumulation and the same rounding to nearest), so a
+floating-point algorithm built on it reproduces the ball computation
+bit for bit. Useful for approximate algorithms such as iterative
+refinement.
 :::
 
 ::: function

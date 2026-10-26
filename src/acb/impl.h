@@ -16,4 +16,9 @@
 
 void acb_gamma_stirling_eval(acb_t s, const acb_t z, slong nterms, int digamma, slong prec);
 
+/* res = z + (-1)^neg x y (z = NULL: res = x y) in one pass per part for LAGOM balls
+   with nonzero finite midpoints and finite radii; returns 0 (without
+   touching res) when the operands are not of that shape */
+int _acb_mul_onepass(acb_t res, const acb_t z, const acb_t x, const acb_t y, int neg, slong prec);
+
 #endif

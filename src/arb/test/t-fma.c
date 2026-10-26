@@ -94,7 +94,8 @@ TEST_FUNCTION_START(arb_fma, state)
                 break;
         }
 
-        if (!arb_equal(res1, res2))
+        /* the same one-pass computation: bit for bit equal */
+        if (!(arb_equal(res1, res2) || (arf_is_nan(arb_midref(res1)) && arf_is_nan(arb_midref(res2)))))
         {
             flint_printf("FAIL!\n");
             flint_printf("prec = %wd, aliasing = %d\n\n", prec, aliasing);

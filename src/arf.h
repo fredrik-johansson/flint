@@ -723,14 +723,6 @@ void arf_randtest_special(arf_t x, flint_rand_t state, slong bits, slong mag_bit
 
 void arf_urandom(arf_t x, flint_rand_t state, slong bits, arf_rnd_t rnd);
 
-#define MUL_MPFR_MIN_LIMBS 25
-
-#if FLINT_HAVE_FFT_SMALL
-#define MUL_MPFR_MAX_LIMBS 800
-#else
-#define MUL_MPFR_MAX_LIMBS 10000
-#endif
-
 #define ARF_MUL_STACK_ALLOC 40
 #define ARF_MUL_TLS_ALLOC 1000
 
@@ -769,18 +761,79 @@ extern void _arf_mul_tmp_cleanup(void);
     if (alloc > ARF_MUL_TLS_ALLOC) \
         flint_free(tmp);
 
+/* the thread-local multiplication scratch of at least alloc <=
+   ARF_MUL_TLS_ALLOC limbs (the buffer of ARF_MUL_TMP_ALLOC: not for
+   nested use) */
+ARF_INLINE nn_ptr
+_arf_mul_tls_tmp(slong alloc)
+{
+    if (__arf_mul_alloc < alloc)
+    {
+        if (__arf_mul_alloc == 0)
+            flint_register_cleanup_function(_arf_mul_tmp_cleanup);
+        __arf_mul_tmp = flint_realloc(__arf_mul_tmp, sizeof(ulong) * alloc);
+        __arf_mul_alloc = alloc;
+    }
+    return __arf_mul_tmp;
+}
+
 void arf_mul_special(arf_t z, const arf_t x, const arf_t y);
 
-int arf_mul_via_mpfr(arf_t z, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd);
+int arf_mul(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd);
 
-int arf_mul_rnd_any(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd);
+/* compatibility: all rounding modes are equally fast now */
+#define arf_mul_rnd_down(z, x, y, prec) arf_mul(z, x, y, prec, ARF_RND_DOWN)
+#define arf_mul_rnd_any(z, x, y, prec, rnd) arf_mul(z, x, y, prec, rnd)
 
-int arf_mul_rnd_down(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec);
+/* Products with at most this many limbs in total are computed in full
+   unless the small high product applies (the hardcoded full products
+   are as fast as the high products there). */
+#define ARF_MUL_SMALL_LIMBS 14
 
-#define arf_mul(z, x, y, prec, rnd)              \
-    ((rnd == ARF_RND_DOWN)                      \
-        ? arf_mul_rnd_down(z, x, y, prec)        \
-        : arf_mul_rnd_any(z, x, y, prec, rnd))
+/* Products of up to this many limb-by-limb multiplications are computed
+   in full in the fused multiply-add, where the truncated path has more
+   bookkeeping (approximate product, exact addition, certification). */
+#define ARF_FMA_SMALL_PRODUCT 100
+
+/* x, y finite and nonzero with xn >= yn limbs; supports the relaxed rounding
+   modes; handles aliasing */
+int _arf_mul_mpn(arf_ptr z, arf_srcptr x, arf_srcptr y, slong xn, slong yn,
+    int sgnbit, slong prec, arf_rnd_t rnd);
+/* largest output length handled by _arf_mul_high_small, and a constant
+   bound for the bits of deficit of the normalised high product there:
+   FLINT_MPN_MULHIGH_NORMALISED_GUARD_ERR_BOUND(16) + 1 = 74 < 2^7 */
+#define ARF_MUL_HIGH_SMALL_MAX 16
+#define ARF_MUL_HIGH_SMALL_ERR_BITS 7
+
+/* scratch limbs required by _arf_mul_approx: the high product with its
+   guard limb, or the full product it declines in favour of (which is then
+   at most 2 outn limbs long) */
+#define ARF_MUL_APPROX_ALLOC(outn, xn, yn) \
+    FLINT_MAX((outn) + 2, FLINT_MIN((xn) + (yn), 2 * (outn) + 2))
+int _arf_set_round_small_certified(arf_ptr z, nn_ptr res, slong n, ulong g,
+    int sgnbit, slong prec, arf_rnd_t rnd);
+int _arf_mul_high_small(arf_ptr z, arf_srcptr x, arf_srcptr y, slong n,
+    int sgnbit, slong prec, arf_rnd_t rnd);
+slong _arf_mul_approx(nn_ptr dst, slong * e, slong * expfix,
+    nn_srcptr xptr, slong xn, nn_srcptr yptr, slong yn, slong outn, int squaring);
+int _arf_mul_rounding_certain(nn_srcptr a, slong an, slong e, slong prec);
+int _arf_fma_mpn(arf_ptr res, arf_srcptr x, arf_srcptr y, arf_srcptr z,
+    int tsgnbit, slong prec, arf_rnd_t rnd);
+/* smallest product (in limb products) for which _arf_fma_high_small
+   pays off */
+#define ARF_FMA_HIGH_SMALL_MIN_PRODUCT 81
+int _arf_fma_high_small(arf_ptr res, arf_srcptr x, arf_srcptr y, arf_srcptr z,
+    int tsgnbit, slong prec, arf_rnd_t rnd);
+int _arf_fma_exact(arf_ptr res, arf_srcptr x, arf_srcptr y, arf_srcptr z,
+    int tsgnbit, slong prec, arf_rnd_t rnd);
+
+
+int _arf_fmma_mpn(arf_ptr res, arf_srcptr a, arf_srcptr b, int sgn1,
+    arf_srcptr c, arf_srcptr d, int sgn2, slong prec, arf_rnd_t rnd);
+int arf_fmma(arf_ptr res, arf_srcptr a, arf_srcptr b, arf_srcptr c, arf_srcptr d, slong prec, arf_rnd_t rnd);
+void _arf_complex_mul_exact(arf_t e, arf_t f, const arf_t a, const arf_t b, const arf_t c, const arf_t d);
+void _arf_complex_part(nn_ptr dst, nn_srcptr xp, slong xn, slong n, slong shift, nn_ptr scratch);
+int _arf_complex_mul_high_approx(arf_t e, arf_t f, const arf_t a, const arf_t b, const arf_t c, const arf_t d, slong bottom);
 
 ARF_INLINE int
 arf_neg_mul(arf_t z, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd)
@@ -865,6 +918,29 @@ extern void _arf_add_tmp_cleanup(void);
     if (alloc > ARF_ADD_TLS_ALLOC) \
         flint_free(tmp);
 
+/* the thread-local addition scratch of at least alloc <= ARF_ADD_TLS_ALLOC
+   limbs (the same buffer ARF_ADD_TMP_ALLOC uses: not for nested use) */
+ARF_INLINE nn_ptr
+_arf_add_tls_tmp(slong alloc)
+{
+    if (__arf_add_alloc < alloc)
+    {
+        if (__arf_add_alloc == 0)
+            flint_register_cleanup_function(_arf_add_tmp_cleanup);
+        __arf_add_tmp = flint_realloc(__arf_add_tmp, sizeof(ulong) * alloc);
+        __arf_add_alloc = alloc;
+    }
+    return __arf_add_tmp;
+}
+
+/* limbs needed by _arf_add_mpn_raw */
+#define _ARF_ADD_MPN_SIZE(xn, yn, shift) \
+    (FLINT_MAX((xn), (yn) + ((shift) % FLINT_BITS != 0) + (slong) ((shift) / FLINT_BITS)) + 1)
+
+slong _arf_add_mpn_raw(nn_ptr tmp, slong * zn_original, int * sgnbit,
+    nn_srcptr xp, slong xn, int xsgnbit,
+    nn_srcptr yp, slong yn, int ysgnbit, flint_bitcnt_t shift);
+
 int _arf_add_mpn(arf_t z, nn_srcptr xp, slong xn, int xsgnbit,
     const fmpz_t xexp, nn_srcptr yp, slong yn, int ysgnbit,
     flint_bitcnt_t shift, slong prec, arf_rnd_t rnd);
@@ -945,39 +1021,15 @@ int arf_sosq(arf_t z, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd);
 
 int arf_div(arf_ptr z, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd);
 
-#define ARF_INV_NEWTON_CUTOFF 5000
-#define ARF_DIV_NEWTON_CUTOFF 12000
-#define ARF_SQRT_NEWTON_CUTOFF 100000
-#define ARF_RSQRT_NEWTON_CUTOFF 4000
-
-/* Newton iteration backends for the relaxed rounding modes (rnd must be
-   ARF_RND_FAST or ARF_RND_ACCURATE). */
-int _arf_want_newton_inv_large(const arf_t x, slong prec);
-int _arf_want_newton_div_large(const arf_t x, const arf_t y, slong prec);
-
-ARF_INLINE int _arf_want_newton_inv(const arf_t x, slong prec)
-{
-    return prec >= ARF_INV_NEWTON_CUTOFF && _arf_want_newton_inv_large(x, prec);
-}
-
-ARF_INLINE int _arf_want_newton_div(const arf_t x, const arf_t y, slong prec)
-{
-    return prec >= ARF_INV_NEWTON_CUTOFF && _arf_want_newton_div_large(x, y, prec);
-}
-
-ARF_INLINE int _arf_want_newton_sqrt(const arf_t x, slong prec)
-{
-    return prec >= ARF_SQRT_NEWTON_CUTOFF && !arf_is_special(x) && arf_sgn(x) > 0;
-}
-
-ARF_INLINE int _arf_want_newton_rsqrt(const arf_t x, slong prec)
-{
-    return prec >= ARF_RSQRT_NEWTON_CUTOFF && !arf_is_special(x) && arf_sgn(x) > 0;
-}
-int _arf_inv_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd);
-int _arf_div_newton(arf_t res, const arf_t x, const arf_t y, slong prec, arf_rnd_t rnd);
-int _arf_sqrt_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd);
-int _arf_rsqrt_newton(arf_t res, const arf_t x, slong prec, arf_rnd_t rnd);
+/* Rounding of an approximation with a guard limb (div.c): the n + 1
+   limbs q (top bit set) with exponent exp, within 2^e units of the
+   exact result, rounded to nearest for a relaxed mode, or for a strict
+   mode only when the guard bits certify the rounding (returns 0 if not). */
+int _arf_set_round_approx(arf_ptr z, nn_ptr q, slong n, slong e, const fmpz_t exp, int sgnbit, slong prec, arf_rnd_t rnd);
+/* whether q != x / y resp. q != sqrt(x), decided by an exact multiplication
+   when the bit lengths and the low bits allow an exact result */
+int _arf_div_inexact(const arf_t q, const arf_t x, const arf_t y);
+int _arf_sqrt_inexact(const arf_t q, const arf_t x);
 
 /* strict mode with which the standard algorithms realise a relaxed mode */
 ARF_INLINE arf_rnd_t arf_rnd_relaxed_to_strict(arf_rnd_t rnd)

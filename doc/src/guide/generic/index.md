@@ -265,7 +265,7 @@ fmpz_poly:    9 * x^4 + 12 * x^3 + 10 * x^2 + 4 * x + 2
 gr_poly, ZZ:  2 + 4*x + 10*x^2 + 12*x^3 + 9*x^4  (status 0)
 gr_poly, ZZ:  status 2 for 1 + x/2
 gr_poly, Z7:  2 + 4*x + 3*x^2 + 5*x^3 + 2*x^4  (status 0)
-gr_poly, RR:  [1.111111111111111 +/- 3.35e-16] + [0.666666666666667 +/- 4.82e-16]*x + x^2  (status 0)
+gr_poly, RR:  [1.111111111111111 +/- 2.35e-16] + [0.6666666666666666 +/- 6.67e-17]*x + x^2  (status 0)
 _gr_poly_mul: 9 * x^4 + 12 * x^3 + 10 * x^2 + 4 * x + 1  (status 0)
 ```
 

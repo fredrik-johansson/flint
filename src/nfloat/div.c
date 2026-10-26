@@ -14,6 +14,7 @@
 #include "gr.h"
 #include "nfloat.h"
 #include "impl.h"
+#include "../mpn_extras/fp_small.h"
 
 /*
     Division.
@@ -35,18 +36,18 @@
     * Divisors with a single nonzero limb (e.g. integers): a chain of 2/1
       divisions, O(n).
 
-    * Up to FLINT_MPN_DIV_SMALL_BN limbs: the exact register-based
-      division _flint_mpn_tdiv_qr_small, with remainder.
+    * Divisors of two limbs: the exact register-based division
+      (flint_mpn_divhigh_exact), with remainder.
 
-    * Longer: flint_mpn_divapprox_fraction, which gives floor(q) or
-      floor(q) + 1 of the exact (scaled) quotient q. Without directed
-      rounding n fraction limbs are computed, which already gives an
-      error below 1 ulp. With directed rounding one guard limb is
-      computed: if the truncated guard bits D satisfy D >= 2, then
-      q > Q - 1 >= floor(Q / 2^k) 2^k + 1 and q < Q + 1 <= (floor(Q / 2^k) + 1) 2^k,
-      so the truncation is certified and inexact. Otherwise (probability
-      about 2^(1 - FLINT_BITS) for random input, but always for exact quotients) the
-      exact division is done.
+    * Longer: without directed rounding, the schoolbook approximate
+      division _flint_mpn_divapprox_basecase_preinv1 at n limbs, which
+      gives floor(q) or floor(q) + 1 of the exact (scaled) quotient q,
+      i.e. an error below 1 ulp. With directed rounding, the shared
+      flint_mpn_divhigh computes one guard limb; its truncation is
+      certified (and inexact) when the guard limb is more than the error
+      bound away from 0 and B - 1, and otherwise (probability about
+      2^(5 - FLINT_BITS) for random input, but always for exact quotients)
+      flint_mpn_divhigh_exact gives the exact truncation and remainder.
 */
 
 /* Special values; x or y is special. Division by zero gives NaN. */
@@ -116,48 +117,8 @@ _nfloat_div_1_finish(nfloat_ptr res, ulong q, ulong r, slong exp, int sgnbit, gr
 /*  Two limbs                                                                 */
 /******************************************************************************/
 
-/* (n2, n1, n0) = (a1, a0, 0) >> s with s = [a >= b], branch-free. */
-#define NFLOAT_DIV_2_NUMERATOR(n2, n1, n0, s, a1, a0, b1, b0) \
-    do { \
-        (s) = ((a1) > (b1)) | (((a1) == (b1)) & ((a0) >= (b0))); \
-        (n2) = (a1) >> (s); \
-        (n1) = ((a0) >> (s)) | (((a1) << (FLINT_BITS - 1)) & (-(s))); \
-        (n0) = ((a0) << (FLINT_BITS - 1)) & (-(s)); \
-    } while (0)
-
-/* (q1, q0) = floor((a1, a0, 0, 0) / (2^s (b1, b0))); returns nonzero iff
-   inexact. */
-FLINT_FORCE_INLINE int
-_nfloat_div_2_kernel_preinv(ulong * q1p, ulong * q0p, ulong * sp, ulong a1, ulong a0, ulong b1, ulong b0, ulong dinv)
-{
-    ulong s, n2, n1, n0, q1, q0, r1, r0, t1, t0;
-
-    NFLOAT_DIV_2_NUMERATOR(n2, n1, n0, s, a1, a0, b1, b0);
-    FLINT_MPN_UDIV_QR_3BY2(q1, r1, r0, n2, n1, n0, b1, b0, dinv);
-    FLINT_MPN_UDIV_QR_3BY2(q0, t1, t0, r1, r0, UWORD(0), b1, b0, dinv);
-    *q1p = q1;
-    *q0p = q0;
-    *sp = s;
-    return (t1 | t0) != 0;
-}
-
-FLINT_FORCE_INLINE int
-_nfloat_div_2_kernel(ulong * q1p, ulong * q0p, ulong * sp, ulong a1, ulong a0, ulong b1, ulong b0)
-{
-#if FLINT_PREINVERT_LIMB_USE_NATIVE
-    ulong s, n2, n1, n0, q1, q0, r1, r0, t1, t0;
-
-    NFLOAT_DIV_2_NUMERATOR(n2, n1, n0, s, a1, a0, b1, b0);
-    FLINT_MPN_UDIV_QR_3BY2_HW(q1, r1, r0, n2, n1, n0, b1, b0);
-    FLINT_MPN_UDIV_QR_3BY2_HW(q0, t1, t0, r1, r0, UWORD(0), b1, b0);
-    *q1p = q1;
-    *q0p = q0;
-    *sp = s;
-    return (t1 | t0) != 0;
-#else
-    return _nfloat_div_2_kernel_preinv(q1p, q0p, sp, a1, a0, b1, b0, flint_mpn_preinv1(b1, b0));
-#endif
-}
+#define _nfloat_div_2_kernel _flint_mpn_fdiv_2_kernel
+#define _nfloat_div_2_kernel_preinv _flint_mpn_fdiv_2_kernel_preinv
 
 FLINT_FORCE_INLINE int
 _nfloat_div_2_finish(nfloat_ptr res, ulong q1, ulong q0, int inexact, slong exp, int sgnbit, gr_ctx_t ctx)
@@ -244,31 +205,6 @@ _nfloat_shifted_numerator(nn_ptr t, nn_srcptr a, slong n, slong off, ulong s)
     t[off + n - 1] = a[n - 1] >> s;
 }
 
-/* Exact quotient (q, n + g) = floor(t / b) with (t, n + bn + g) a shifted
-   numerator; returns inexactness. */
-FLINT_FORCE_INLINE int
-_nfloat_div_mpn_exact(nn_ptr q, nn_srcptr t, nn_srcptr b, slong bn, slong n, slong g)
-{
-    ulong qt[NFLOAT_MAX_LIMBS + 3];
-    ulong r[NFLOAT_MAX_LIMBS];
-
-    if (bn <= FLINT_MPN_DIV_SMALL_BN)
-        _flint_mpn_tdiv_qr_small(qt, r, t, n + bn + g, b, bn);
-    else
-        flint_mpn_tdiv_qr(qt, r, t, n + bn + g, b, bn);
-
-    FLINT_ASSERT(qt[n + g] == 0);
-    _nfloat_copy_limbs(q, qt, n + g);
-
-    {
-        ulong z = 0;
-        slong i;
-        for (i = 0; i < bn; i++)
-            z |= r[i];
-        return z != 0;
-    }
-}
-
 /* s = [a >= b], b of length bn <= n with b[bn - 1] != 0 compared as the
    top limbs of an n-limb number */
 FLINT_FORCE_INLINE ulong
@@ -296,11 +232,11 @@ _nfloat_div_mpn_basecase(nfloat_ptr res, nn_srcptr a, nn_srcptr b, slong bn, slo
 
     s = _nfloat_div_cmp(a, b, bn, n);
     exp += s;
-    dinv = flint_mpn_preinv1(b[bn - 1], b[bn - 2]);
 
     if (!NFLOAT_CTX_HAS_DIRECTED_ROUNDING(ctx))
     {
         /* Error < 1 ulp; inexactness is irrelevant. */
+        dinv = flint_mpn_preinv1(b[bn - 1], b[bn - 2]);
         _nfloat_shifted_numerator(t, a, n, bn, s);
 
         /* the output must not overlap the divisor */
@@ -319,22 +255,21 @@ _nfloat_div_mpn_basecase(nfloat_ptr res, nn_srcptr a, nn_srcptr b, slong bn, slo
     }
     else
     {
-        /* One guard limb: (q, n + 1); certified unless q[0] <= 1. */
-        _nfloat_shifted_numerator(t, a, n, bn + 1, s);
-        qh = _flint_mpn_divapprox_basecase_preinv1(q, t, n + bn + 1, b, bn, dinv);
-        FLINT_ASSERT(qh == 0);
+        /* One guard limb: (q, n + 1), the truncation certified unless the
+           guard limb is within the error bound of 0 or B - 1. */
+        ulong se;
 
-        if (FLINT_LIKELY(q[0] >= 2))
+        flint_mpn_divhigh(q, a, n, b, bn, n);
+
+        if (FLINT_LIKELY(q[0] > FLINT_MPN_DIVHIGH_GUARD_ERR_BOUND &&
+                         q[0] < UWORD_MAX - FLINT_MPN_DIVHIGH_GUARD_ERR_BOUND))
         {
             _nfloat_copy_limbs(NFLOAT_D(res), q + 1, n);
             return _nfloat_div_finish(res, exp, sgnbit, 1, n, ctx);
         }
 
-        /* the numerator was destroyed */
-        _nfloat_shifted_numerator(t, a, n, bn + 1, s);
-        inexact = _nfloat_div_mpn_exact(q, t, b, bn, n, 1);
-        inexact |= (q[0] != 0);
-        _nfloat_copy_limbs(NFLOAT_D(res), q + 1, n);
+        inexact = flint_mpn_divhigh_exact(NFLOAT_D(res), &se, a, n, b, bn, n - 1);
+        FLINT_ASSERT(se == s);
         return _nfloat_div_finish(res, exp, sgnbit, inexact, n, ctx);
     }
 }
@@ -343,13 +278,10 @@ _nfloat_div_mpn_basecase(nfloat_ptr res, nn_srcptr a, nn_srcptr b, slong bn, slo
 FLINT_STATIC_NOINLINE int
 _nfloat_div_mpn_bn2(nfloat_ptr res, nn_srcptr a, nn_srcptr b, slong exp, int sgnbit, slong n, gr_ctx_t ctx)
 {
-    ulong t[NFLOAT_MAX_LIMBS + 2];
     ulong s;
     int inexact;
 
-    s = _nfloat_div_cmp(a, b, 2, n);
-    _nfloat_shifted_numerator(t, a, n, 2, s);
-    inexact = _nfloat_div_mpn_exact(NFLOAT_D(res), t, b, 2, n, 0);
+    inexact = flint_mpn_divhigh_exact(NFLOAT_D(res), &s, a, n, b, 2, n - 1);
     return _nfloat_div_finish(res, exp + s, sgnbit, inexact, n, ctx);
 }
 

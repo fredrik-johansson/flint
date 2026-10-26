@@ -98,10 +98,10 @@ int main(void)
 }
 ```
 ```output
-gamma(1/3) in Real numbers (arb, prec = 64): [2.678938534707747634 +/- 9.48e-19]
-gamma(1+i) in Complex numbers (acb, prec = 64): ([0.4980156681183560427 +/- 6.61e-20] + [-0.1549498283018106851 +/- 4.87e-20]*I)
+gamma(1/3) in Real numbers (arb, prec = 64): [2.67893853470774763 +/- 4.02e-18]
+gamma(1+i) in Complex numbers (acb, prec = 64): ([0.49801566811835604271 +/- 3.91e-21] + [-0.15494982830181068512 +/- 5.15e-21]*I)
 gamma(-2) in Real numbers (arb, prec = 64): status 1
-gamma(1+x) in Power series over Real numbers (arb, prec = 64) with precision O(x^4): 1 + [-0.5772156649015328606 +/- 9.24e-20]*x + [0.9890559953279725554 +/- 6.79e-20]*x^2 + [-0.9074790760808862890 +/- 6.24e-20]*x^3 + O(x^4)
+gamma(1+x) in Power series over Real numbers (arb, prec = 64) with precision O(x^4): 1 + [-0.5772156649015328606 +/- 2.63e-20]*x + [0.9890559953279725554 +/- 2.09e-20]*x^2 + [-0.9074790760808862890 +/- 3.06e-20]*x^3 + O(x^4)
 30! = 265252859812191058636308480000000
 30! mod 101 = 74
 100! mod 101 = 100

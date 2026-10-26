@@ -28,14 +28,12 @@ arb_const_log2(arb_t res, slong prec)
     {
         slong exp;
 
-        /* just reading the table is known to give the correct rounding */
-        _arf_set_round_mpn(arb_midref(res), &exp, arb_log_log2_tab,
-            ARB_LOG_TAB2_LIMBS, 0, prec, ARF_RND_NEAR);
-        _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp);
-
-        /* 1/2 ulp error */
-        _fmpz_set_si_small(MAG_EXPREF(arb_radref(res)), exp - prec);
-        MAG_MAN(arb_radref(res)) = MAG_ONE_HALF;
+        /* the table is a truncation (error below one unit of its last
+           limb): round it to nearest with the error measured, then add the
+           table's own error */
+        arb_set_round_mpn_2exp_si(res, arb_log_log2_tab, ARB_LOG_TAB2_LIMBS, 0, 0 - ARB_LOG_TAB2_LIMBS * FLINT_BITS, prec);
+        mag_fast_add_2exp_si(arb_radref(res), arb_radref(res), 0 - ARB_LOG_TAB2_LIMBS * FLINT_BITS);
+        (void) exp;
     }
     else
     {

@@ -83,9 +83,9 @@ int main(void)
 }
 ```
 ```output
-[0.1415926535897932 +/- 5.48e-17]
-0.14159265358979322702 +/- 2.7756e-17
-(1275353243890785 * 2^-53) +/- (536870913 * 2^-84)
+[0.1415926535897932 +/- 3.85e-17]
+0.14159265358979322702 +/- 1.1442e-17
+(1275353243890785 * 2^-53) +/- (885311077 * 2^-86)
 ```
 
 `arb_printn` prints a decimal ball that is guaranteed to contain the
@@ -265,8 +265,8 @@ int main(void)
 }
 ```
 ```output
-prec =   63: accuracy   8 bits, f = [-1.36e-15 +/- 2.24e-18]
-prec =  126: accuracy  71 bits, f = [-1.359140914229521e-15 +/- 3.72e-31]
+prec =   63: accuracy   9 bits, f = [-1.36e-15 +/- 1.95e-18]
+prec =  126: accuracy  74 bits, f = [-1.359140914229521e-15 +/- 3.72e-31]
 ```
 
 (Computing $1 + 1/n$ first and then its logarithm, instead of using
@@ -373,14 +373,14 @@ int main(void)
 }
 ```
 ```output
-Using    64 bits, sin(x) = [+/- 4.49e+859]
-Using   128 bits, sin(x) = [+/- 2.44e+840]
-Using   256 bits, sin(x) = [+/- 7.15e+801]
-Using   512 bits, sin(x) = [+/- 6.18e+724]
-Using  1024 bits, sin(x) = [+/- 4.61e+570]
-Using  2048 bits, sin(x) = [+/- 2.57e+262]
+Using    64 bits, sin(x) = [+/- 1.65e+859]
+Using   128 bits, sin(x) = [+/- 6.53e+839]
+Using   256 bits, sin(x) = [+/- 2.27e+801]
+Using   512 bits, sin(x) = [+/- 2.14e+724]
+Using  1024 bits, sin(x) = [+/- 1.70e+570]
+Using  2048 bits, sin(x) = [+/- 7.03e+261]
 Using  4096 bits, sin(x) = [-0.7190842207 +/- 1.20e-11]
-arb_sin, 64 bits:  [-0.7190842207119598 +/- 5.36e-17]
+arb_sin, 64 bits:  [-0.7190842207119598 +/- 5.35e-17]
 ```
 
 At 4096 bits the sign is known (the radius printed there is the error of
@@ -423,10 +423,10 @@ int main(void)
 }
 ```
 ```output
-   64 bits: sin(pi)   = [+/- 1.59e-19]
-  256 bits: sin(pi)   = [+/- 2.83e-77]
- 1024 bits: sin(pi)   = [+/- 2.03e-308]
- 4096 bits: sin(pi)   = [+/- 2.74e-1233]
+   64 bits: sin(pi)   = [+/- 1.01e-19]
+  256 bits: sin(pi)   = [+/- 2.20e-77]
+ 1024 bits: sin(pi)   = [+/- 1.83e-308]
+ 4096 bits: sin(pi)   = [+/- 1.64e-1233]
   64 bits: sin(pi*1) = 0
 ```
 

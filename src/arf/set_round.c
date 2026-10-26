@@ -70,6 +70,11 @@ _arf_set_round_mpn(arf_t y, slong * exp_shift, nn_srcptr x, slong xn,
     ulong t;
     int increment, inexact;
 
+    /* A nonpositive precision would place the truncation point above the
+       top limb (reading past x); treat it as 1 bit. */
+    if (prec < 1)
+        prec = 1;
+
     /* Compute the total bit length of x. */
     leading = flint_clz(x[xn - 1]);
     exp = xn * FLINT_BITS - leading;

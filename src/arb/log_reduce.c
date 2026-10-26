@@ -200,12 +200,13 @@ _arb_exp_arf_precomp(arb_t res, const arf_t x, slong prec, int minus_one,
     arb_dot_si(t, t, 1, logs, 1, rel, 1, num_logs, wp);
     arb_exp_arf_generic(res, arb_midref(t), wp, 0);
 
-    /* exp(a+b) - exp(a) = exp(a) * (exp(b)-1) */
+    /* exp(a+b) - exp(a) = exp(a) * (exp(b)-1), added to the error of
+       exp(a) itself */
     mag_init(err);
     mag_init(err2);
     arb_get_mag(err, res);
     mag_expm1(err2, arb_radref(t));
-    mag_mul(arb_radref(res), err, err2);
+    mag_addmul(arb_radref(res), err, err2);
     mag_clear(err);
     mag_clear(err2);
 

@@ -12,6 +12,88 @@
 #include "arb.h"
 #include "arb/impl.h"
 
+/* Quotients of up to this many limbs plus guard limb are formed on the
+   stack. */
+#define ARB_DIV_STACK_LIMBS 64
+
+/*
+    The quotient of the finite nonzero LAGOM midpoints x and y with a
+    guard limb: n + 1 limbs (n >= 1, top bit set) written to q, with the
+    value q 2^e for the returned e, within one unit of the exact quotient
+    (*extra = 1) or exact (*extra = 0): flint_mpn_divhigh, or the exact
+    quotient when the guard limb cannot rule out an exact result (which
+    is then found exactly); a divisor that is a power of two gives the
+    top limbs of x. If u != NULL, it is set to an upper bound for |x / y|.
+*/
+static slong
+_arb_div_quotient(nn_ptr q, int * extra, mag_ptr u, arf_srcptr xm, arf_srcptr ym, slong n)
+{
+    nn_srcptr xptr, yptr;
+    slong xn, yn, exp;
+    ulong s;
+
+    ARF_GET_MPN_READONLY(xptr, xn, xm);
+    ARF_GET_MPN_READONLY(yptr, yn, ym);
+
+    if (yn == 1 && yptr[0] == LIMB_TOP)
+    {
+        /* x / 2^k: the top n + 1 limbs of x */
+        if (xn <= n + 1)
+        {
+            flint_mpn_zero(q, n + 1 - xn);
+            flint_mpn_copyi(q + n + 1 - xn, xptr, xn);
+            *extra = 0;
+        }
+        else
+        {
+            flint_mpn_copyi(q, xptr + xn - n - 1, n + 1);
+            *extra = !flint_mpn_zero_p(xptr, xn - n - 1);
+        }
+        exp = ARF_EXP(xm) - ARF_EXP(ym) + 1;
+    }
+    else
+    {
+        s = flint_mpn_divhigh(q, xptr, xn, yptr, yn, n);
+        *extra = 1;
+
+        if (q[0] <= FLINT_MPN_DIVHIGH_GUARD_ERR_BOUND || q[0] >= UWORD_MAX - FLINT_MPN_DIVHIGH_GUARD_ERR_BOUND)
+        {
+            /* the exact truncation: a lower approximation with deficit
+               below one unit unless exact */
+            *extra = flint_mpn_divhigh_exact(q, &s, xptr, xn, yptr, yn, n);
+        }
+
+        exp = ARF_EXP(xm) - ARF_EXP(ym) + (slong) s;
+    }
+
+    if (u != NULL)
+    {
+        MAG_MAN(u) = (q[n] >> (FLINT_BITS - MAG_BITS)) + 1;
+        MAG_EXP(u) = exp;
+        MAG_FAST_ADJUST_ONE_TOO_LARGE(u);
+    }
+
+    return exp - (n + 1) * FLINT_BITS;
+}
+
+/* res = x / y for LAGOM x, y (y nonzero), radius err plus the measured
+   rounding error; prec >= 2 (see arb/impl.h) */
+void
+_arb_div_mid(arb_t res, arf_srcptr xm, arf_srcptr ym, slong prec, mag_srcptr err)
+{
+    ulong q_stack[ARB_DIV_STACK_LIMBS + 1];
+    nn_ptr q;
+    slong n, exp;
+    int extra;
+
+    n = (prec + FLINT_BITS - 1) / FLINT_BITS + ARB_GUARD_EXTRA;
+    q = (n <= ARB_DIV_STACK_LIMBS) ? q_stack : flint_malloc((n + 1) * sizeof(ulong));
+    exp = _arb_div_quotient(q, &extra, NULL, xm, ym, n);
+    _arb_set_round_guarded(res, q, n, ARF_SGNBIT(xm) ^ ARF_SGNBIT(ym), exp, prec, extra, err, NULL);
+    if (q != q_stack)
+        flint_free(q);
+}
+
 void
 arb_div_arf(arb_t z, const arb_t x, const arf_t y, slong prec)
 {
@@ -45,6 +127,12 @@ arb_div_arf(arb_t z, const arb_t x, const arf_t y, slong prec)
     }
     else if (mag_is_zero(arb_radref(x)))
     {
+        if (!arf_is_zero(arb_midref(x)) && ARF_IS_LAGOM(arb_midref(x)) && ARF_IS_LAGOM(y) && prec >= 2 && prec != ARF_PREC_EXACT)
+        {
+            _arb_div_mid(z, arb_midref(x), y, prec, NULL);
+            return;
+        }
+
         inexact = arf_div(arb_midref(z), arb_midref(x), y, prec, ARF_RND_FAST);
 
         if (inexact)
@@ -68,6 +156,17 @@ arb_div_arf(arb_t z, const arb_t x, const arf_t y, slong prec)
 
         arf_get_mag_lower(ym, y);
         mag_div(zr, arb_radref(x), ym);
+
+        if (ARB_IS_LAGOM(x) && ARF_IS_LAGOM(y) && MAG_IS_LAGOM(zr) && prec >= 2 && prec != ARF_PREC_EXACT)
+        {
+            /* the precision clamped to the accuracy of x */
+            slong acc = ARF_EXP(arb_midref(x)) - MAG_EXP(arb_radref(x));
+            prec = FLINT_MAX(2, FLINT_MIN(prec, acc + MAG_BITS));
+            _arb_div_mid(z, arb_midref(x), y, prec, zr);
+            mag_clear(ym);
+            mag_clear(zr);
+            return;
+        }
 
         inexact = arf_div(arb_midref(z), arb_midref(x), y, prec, ARF_RND_FAST);
 
@@ -192,10 +291,16 @@ arb_div(arb_t z, const arb_t x, const arb_t y, slong prec)
         }
         else
         {
-            mag_t t, u, v;
+            mag_t t, u, v, err;
+            ulong q_stack[ARB_DIV_STACK_LIMBS + 1];
+            nn_ptr q;
+            slong n, exp;
+            int extra;
+
             mag_init(t);  /* no need to free */
             mag_init(u);
             mag_init(v);
+            mag_init(err);
 
             /*               (x*yrad + y*xrad)/(y*(y-yrad))
                  <=  (1+eps) (x*yrad + y*xrad)/y^2
@@ -207,25 +312,27 @@ arb_div(arb_t z, const arb_t x, const arb_t y, slong prec)
             /* t = y */
             arf_get_mag_lower(t, arb_midref(y));
 
-            inexact = arf_div(arb_midref(z), arb_midref(x), arb_midref(y), prec, ARF_RND_FAST);
-
-            /* u = x/y */
-            arf_get_mag(u, arb_midref(z));
+            /* the quotient with a guard limb, and u = x/y from it */
+            n = (prec + FLINT_BITS - 1) / FLINT_BITS + ARB_GUARD_EXTRA;
+            q = (n <= ARB_DIV_STACK_LIMBS) ? q_stack : flint_malloc((n + 1) * sizeof(ulong));
+            exp = _arb_div_quotient(q, &extra, u, arb_midref(x), arb_midref(y), n);
 
             /* v = (x/y)*yrad + xrad */
             MAG_MAN(v) = MAG_MAN(arb_radref(x));
             MAG_EXP(v) = MAG_EXP(arb_radref(x));
             mag_fast_addmul(v, arb_radref(y), u);
             /* v = v / y */
-            mag_div(arb_radref(z), v, t);
+            mag_div(err, v, t);
 
             /* correct for errors */
             MAG_MAN(t) = MAG_ONE_HALF + (MAG_ONE_HALF >> 16);
             MAG_EXP(t) = 1;
-            mag_fast_mul(arb_radref(z), arb_radref(z), t);
+            mag_fast_mul(err, err, t);
 
-            if (inexact)
-                arf_mag_fast_add_ulp(arb_radref(z), arb_radref(z), arb_midref(z), prec);
+            _arb_set_round_guarded(z, q, n, ARF_SGNBIT(arb_midref(x)) ^ ARF_SGNBIT(arb_midref(y)), exp, prec, extra, err, NULL);
+
+            if (q != q_stack)
+                flint_free(q);
         }
     }
     else if (!arb_is_finite(y))
@@ -346,17 +453,57 @@ arb_div_fmpz(arb_t z, const arb_t x, const fmpz_t y, slong prec)
     }
 }
 
+/* an exact arf view of a nonzero fmpz: shallow for a small one, else a
+   copy of the limbs (to be cleared) */
+static int
+_arb_fmpz_view(arf_t t, const fmpz_t x)
+{
+    if (!COEFF_IS_MPZ(*x))
+    {
+        arf_init_set_si(t, *x);   /* no need to free */
+        return 0;
+    }
+    else
+    {
+        arf_init(t);
+        arf_set_fmpz(t, x);
+        return 1;
+    }
+}
+
+/*
+    z = x / y rounded to nearest with the measured error, through the
+    guard-limb quotient of arb_div (exact quotients, e.g. 3 / 4, get
+    radius 0). This is also arb_set_fmpq.
+*/
 void
 arb_fmpz_div_fmpz(arb_t z, const fmpz_t x, const fmpz_t y, slong prec)
 {
-    {
-        int inexact = arf_fmpz_div_fmpz(arb_midref(z), x, y, prec, ARF_RND_FAST);
+    int inexact;
 
-        if (inexact)
-            arf_mag_set_ulp(arb_radref(z), arb_midref(z), prec);
-        else
-            mag_zero(arb_radref(z));
+    if (!fmpz_is_zero(x) && !fmpz_is_zero(y) && prec >= 2 && prec != ARF_PREC_EXACT &&
+        fmpz_size(x) < ARF_MAX_LAGOM_EXP / (4 * FLINT_BITS) &&
+        fmpz_size(y) < ARF_MAX_LAGOM_EXP / (4 * FLINT_BITS))
+    {
+        arf_t t, u;
+        int ct, cu;
+
+        ct = _arb_fmpz_view(t, x);
+        cu = _arb_fmpz_view(u, y);
+        _arb_div_mid(z, t, u, prec, NULL);
+        if (ct)
+            arf_clear(t);
+        if (cu)
+            arf_clear(u);
+        return;
     }
+
+    inexact = arf_fmpz_div_fmpz(arb_midref(z), x, y, prec, ARF_RND_FAST);
+
+    if (inexact)
+        arf_mag_set_ulp(arb_radref(z), arb_midref(z), prec);
+    else
+        mag_zero(arb_radref(z));
 }
 
 void

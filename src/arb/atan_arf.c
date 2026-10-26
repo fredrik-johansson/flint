@@ -92,7 +92,7 @@ arb_atan_arf(arb_t z, const arf_t x, slong prec)
         slong xn, tn;
         nn_ptr tmp, w, t, u;
         ulong p1, q1bits, p2, q2bits, error, error2;
-        int negative, inexact, reciprocal;
+        int negative, reciprocal;
         TMP_INIT;
 
         exp = ARF_EXP(x);
@@ -291,9 +291,13 @@ arb_atan_arf(arb_t z, const arf_t x, slong prec)
         mag_add_ui_2exp_si(arb_radref(z), arb_radref(z), 1, -r*(2*N+1));
 
         /* Set the midpoint */
-        inexact = _arf_set_mpn_fixed(arb_midref(z), t, tn, wn, negative, prec, ARB_RND);
-        if (inexact)
-            arf_mag_add_ulp(arb_radref(z), arb_radref(z), arb_midref(z), prec);
+        {
+            mag_t acc_err;
+            MAG_MAN(acc_err) = MAG_MAN(arb_radref(z));
+            MAG_EXP(acc_err) = MAG_EXP(arb_radref(z));
+            arb_set_round_mpn_2exp_si(z, t, tn, negative, -(wn) * FLINT_BITS, prec);
+            mag_add(arb_radref(z), arb_radref(z), acc_err);
+        }
 
         TMP_END;
     }
