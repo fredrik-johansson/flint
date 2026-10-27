@@ -12,6 +12,8 @@
 #include "test_helpers.h"
 #include <stdlib.h>
 #include <string.h>
+#include "fmpz.h"
+#include "fmpq.h"
 #include "arb.h"
 
 const char * testdata_floats[] = {
@@ -405,6 +407,72 @@ TEST_FUNCTION_START(arb_set_str, state)
             arb_printd(u, 19); flint_printf("\n");
             flint_abort();
         }
+    }
+
+    /* random decimal literals: the result contains the exact value and
+       its radius is within half an ulp plus 2^-6 ulp (one rounding, the
+       power of ten with a few guard bits) */
+    for (i = 0; i < 1000 * flint_test_multiplier(); i++)
+    {
+        fmpz_t m, p;
+        fmpq_t q;
+        slong k, prec;
+        char * ms;
+        char * str;
+        mag_t w;
+        int ok;
+
+        fmpz_init(m);
+        fmpz_init(p);
+        fmpq_init(q);
+        mag_init(w);
+
+        fmpz_randtest(m, state, 1 + n_randint(state, 600));
+        k = (slong) n_randint(state, 601) - 300;
+        prec = 2 + n_randint(state, 300);
+
+        ms = fmpz_get_str(NULL, 10, m);
+        str = flint_malloc(strlen(ms) + 30);
+        flint_sprintf(str, "%se%wd", ms, k);
+
+        error = arb_set_str(t, str, prec);
+
+        fmpz_set_ui(p, 10);
+        fmpz_pow_ui(p, p, FLINT_ABS(k));
+        if (k >= 0)
+        {
+            fmpz_mul(fmpq_numref(q), m, p);
+            fmpz_one(fmpq_denref(q));
+        }
+        else
+        {
+            fmpz_set(fmpq_numref(q), m);
+            fmpz_set(fmpq_denref(q), p);
+            fmpq_canonicalise(q);
+        }
+
+        ok = (error == 0) && arb_contains_fmpq(t, q);
+        if (ok && !fmpz_is_zero(m))
+        {
+            arf_mag_set_ulp(w, arb_midref(t), prec);
+            mag_mul_ui(w, w, 33);
+            mag_mul_2exp_si(w, w, -6);
+            ok = mag_cmp(arb_radref(t), w) <= 0;
+        }
+
+        if (!ok)
+        {
+            flint_printf("FAIL (random literal): %s, prec = %wd\n", str, prec);
+            arb_printd(t, 30); flint_printf("\n");
+            flint_abort();
+        }
+
+        flint_free(ms);
+        flint_free(str);
+        fmpz_clear(m);
+        fmpz_clear(p);
+        fmpq_clear(q);
+        mag_clear(w);
     }
 
     arb_clear(t);

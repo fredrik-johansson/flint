@@ -32,127 +32,10 @@
     } while (0)
 
 static void
-add_errors(mag_t rad, uint64_t Aerr, slong Aexp, uint64_t Berr, slong Bexp, uint64_t Cerr, slong Cexp)
-{
-    slong shift;
-
-    if (Aerr && Berr)
-    {
-        if (Aexp >= Bexp)
-        {
-            shift = Aexp - Bexp;
-            if (shift < 64)
-                Aerr = Aerr + (Berr >> shift) + 1;
-            else
-                Aerr = Aerr + 1;
-        }
-        else
-        {
-            shift = Bexp - Aexp;
-            if (shift < 64)
-                Aerr = Berr + (Aerr >> shift) + 1;
-            else
-                Aerr = Berr + 1;
-            Aexp = Bexp;
-        }
-    }
-    else if (Berr)
-    {
-        Aerr = Berr;
-        Aexp = Bexp;
-    }
-
-    if (Aerr && Cerr)
-    {
-        if (Aexp >= Cexp)
-        {
-            shift = Aexp - Cexp;
-            if (shift < 64)
-                Aerr = Aerr + (Cerr >> shift) + 1;
-            else
-                Aerr = Aerr + 1;
-        }
-        else
-        {
-            shift = Cexp - Aexp;
-            if (shift < 64)
-                Aerr = Cerr + (Aerr >> shift) + 1;
-            else
-                Aerr = Cerr + 1;
-            Aexp = Cexp;
-        }
-    }
-    else if (Cerr)
-    {
-        Aerr = Cerr;
-        Aexp = Cexp;
-    }
-
-#if FLINT_BITS == 64
-    mag_set_ui_2exp_small(rad, Aerr, Aexp - MAG_BITS);
-#else
-    mag_set_d(rad, Aerr * (1.0 + 1e-14));
-    mag_mul_2exp_si(rad, rad, Aexp - MAG_BITS);
-#endif
-}
-
-static void
 _arb_dot_output(arb_t res, nn_ptr sum, slong sn, int negative,
     uint64_t serr, slong sum_exp, uint64_t srad, slong srad_exp, slong prec)
 {
-    slong exp_fix;
-    int inexact;
-
-    if (sum[sn - 1] >= LIMB_TOP)
-    {
-        mpn_neg(sum, sum, sn);
-        negative ^= 1;
-    }
-
-    exp_fix = 0;
-
-    if (sum[sn - 1] == 0)
-    {
-        slong sum_exp2;
-        slong sn2;
-
-        sn2 = sn;
-        sum_exp2 = sum_exp;
-
-        while (sn2 > 0 && sum[sn2 - 1] == 0)
-        {
-            sum_exp2 -= FLINT_BITS;
-            sn2--;
-        }
-
-        if (sn2 == 0)
-        {
-            arf_zero(arb_midref(res));
-            inexact = 0;
-        }
-        else
-        {
-            inexact = _arf_set_round_mpn(arb_midref(res), &exp_fix, sum, sn2, negative, prec, ARF_RND_DOWN);
-            _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp_fix + sum_exp2);
-        }
-    }
-    else
-    {
-        if (sn == 2)  /* unnecessary? */
-            inexact = _arf_set_round_uiui(arb_midref(res), &exp_fix, sum[1], sum[0], negative, prec, ARF_RND_DOWN);
-        else
-            inexact = _arf_set_round_mpn(arb_midref(res), &exp_fix, sum, sn, negative, prec, ARF_RND_DOWN);
-
-        _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp_fix + sum_exp);
-    }
-
-    add_errors(arb_radref(res),
-        inexact << MAG_BITS,
-        exp_fix + sum_exp - prec,
-        ((uint64_t) serr) << MAG_BITS,
-        sum_exp - sn * FLINT_BITS,
-        srad,
-        srad_exp);
+    _arb_dot_round(res, sum, sn, negative, sum_exp, prec, serr, srad, srad_exp);
 }
 
 /* xxx: don't use surrounding variables */
@@ -188,81 +71,7 @@ _arb_dot_output(arb_t res, nn_ptr sum, slong sn, int negative,
             s_srad++; \
     }
 
-static void
-_arf_complex_mul_gauss(arf_t e, arf_t f, const arf_t a, const arf_t b,
-                                         const arf_t c, const arf_t d)
-{
-    nn_srcptr ap, bp, cp, dp;
-    int asgn, bsgn, csgn, dsgn;
-    slong an, bn, cn, dn;
-    slong aexp, bexp, cexp, dexp;
-    fmpz texp, uexp;
 
-    fmpz_t za, zb, zc, zd, t, u, v;
-    slong abot, bbot, cbot, dbot;
-
-    ARF_GET_MPN_READONLY(ap, an, a);
-    asgn = ARF_SGNBIT(a);
-    aexp = ARF_EXP(a);
-
-    ARF_GET_MPN_READONLY(bp, bn, b);
-    bsgn = ARF_SGNBIT(b);
-    bexp = ARF_EXP(b);
-
-    ARF_GET_MPN_READONLY(cp, cn, c);
-    csgn = ARF_SGNBIT(c);
-    cexp = ARF_EXP(c);
-
-    ARF_GET_MPN_READONLY(dp, dn, d);
-    dsgn = ARF_SGNBIT(d);
-    dexp = ARF_EXP(d);
-
-    /* Gauss multiplication
-        e = ac - bd
-        f = (a+b)(c+d) - ac - bd */
-
-    abot = aexp - an * FLINT_BITS;
-    bbot = bexp - bn * FLINT_BITS;
-    cbot = cexp - cn * FLINT_BITS;
-    dbot = dexp - dn * FLINT_BITS;
-
-    texp = FLINT_MIN(abot, bbot);
-    uexp = FLINT_MIN(cbot, dbot);
-
-    fmpz_init(za);
-    fmpz_init(zb);
-    fmpz_init(zc);
-    fmpz_init(zd);
-    fmpz_init(t);
-    fmpz_init(u);
-    fmpz_init(v);
-
-    fmpz_lshift_mpn(za, ap, an, asgn, abot - texp);
-    fmpz_lshift_mpn(zb, bp, bn, bsgn, bbot - texp);
-    fmpz_lshift_mpn(zc, cp, cn, csgn, cbot - uexp);
-    fmpz_lshift_mpn(zd, dp, dn, dsgn, dbot - uexp);
-
-    fmpz_add(t, za, zb);
-    fmpz_add(v, zc, zd);
-    fmpz_mul(u, t, v);
-    fmpz_mul(t, za, zc);
-    fmpz_mul(v, zb, zd);
-    fmpz_sub(u, u, t);
-    fmpz_sub(u, u, v);
-    fmpz_sub(t, t, v);
-
-    texp += uexp;
-    arf_set_fmpz_2exp(e, t, &texp);
-    arf_set_fmpz_2exp(f, u, &texp);
-
-    fmpz_clear(za);
-    fmpz_clear(zb);
-    fmpz_clear(zc);
-    fmpz_clear(zd);
-    fmpz_clear(t);
-    fmpz_clear(u);
-    fmpz_clear(v);
-}
 
 /* TODO: this could be much lower, but it's currently competing
    against mulhigh in the Karatsuba range. */
@@ -556,11 +365,9 @@ acb_dot(acb_t res, const acb_t initial, int subtract, acb_srcptr x, slong xstep,
     im_sum_exp = im_max_exp + extend;
 
     /* We need sn + 1 limb for the sum (sn limbs + 1 dummy limb
-       for carry or borrow that avoids an extra branch). We need
-       2 * (sn + 2) limbs to store the product of two numbers
-       with up to (sn + 2) limbs, plus 1 extra limb for shifting
-       the product. */
-    alloc = (re_sn + 1) + (im_sn + 1) + 2 * (FLINT_MAX(re_sn, im_sn) + 2) + 1;
+       for carry or borrow that avoids an extra branch). The
+       scratch space for the terms is given by ARB_DOT_TMP_LIMBS. */
+    alloc = (re_sn + 1) + (im_sn + 1) + ARB_DOT_TMP_LIMBS(FLINT_MAX(re_sn, im_sn));
     ARF_ADD_TMP_ALLOC(re_sum, alloc)
     im_sum = re_sum + (re_sn + 1);
     tmp = im_sum + (im_sn + 1);
@@ -609,8 +416,9 @@ acb_dot(acb_t res, const acb_t initial, int subtract, acb_srcptr x, slong xstep,
     */
     use_gauss = NULL;
 
-    if (re_prec >= GAUSS_CUTOFF * FLINT_BITS &&
-        im_prec >= GAUSS_CUTOFF * FLINT_BITS)
+    /* The high complex product needs at least 8 limbs; the accumulators
+       then have at least 8 limbs, so the fast case below is not hit. */
+    if (re_prec >= 8 * FLINT_BITS && im_prec >= 8 * FLINT_BITS)
     {
         arf_t e, f;
 
@@ -635,6 +443,32 @@ acb_dot(acb_t res, const acb_t initial, int subtract, acb_srcptr x, slong xstep,
             cexp = ARF_EXP(arb_midref(ci));
             dexp = ARF_EXP(arb_midref(di));
 
+            /* long balanced terms: complex high product to the precision
+               that can affect the accumulators */
+            if (an >= re_sn && bn >= re_sn && cn >= re_sn && dn >= re_sn &&
+                an >= 8 && FLINT_ABS(aexp - bexp) < FLINT_BITS &&
+                FLINT_ABS(cexp - dexp) < FLINT_BITS)
+            {
+                if (use_gauss == NULL)
+                {
+                    use_gauss = flint_calloc(len, sizeof(char));
+                    arf_init(e);
+                    arf_init(f);
+                }
+
+                if (_arf_complex_mul_high_approx(e, f, arb_midref(ai), arb_midref(bi),
+                        arb_midref(ci), arb_midref(di),
+                        FLINT_MIN(re_sum_exp - re_sn * FLINT_BITS, im_sum_exp - im_sn * FLINT_BITS)))
+                {
+                    use_gauss[i] = 1;
+                    ARB_DOT_ADD(re_sum, re_serr, re_sn, re_sum_exp, 0, e);
+                    ARB_DOT_ADD(im_sum, im_serr, im_sn, im_sum_exp, 0, f);
+                    re_serr++;
+                    im_serr++;
+                    continue;
+                }
+            }
+
             if (an >= GAUSS_CUTOFF && bn >= GAUSS_CUTOFF &&
                 bn >= GAUSS_CUTOFF && cn >= GAUSS_CUTOFF &&
                 FLINT_ABS(an - bn) <= 2 &&
@@ -653,7 +487,7 @@ acb_dot(acb_t res, const acb_t initial, int subtract, acb_srcptr x, slong xstep,
                 }
 
                 use_gauss[i] = 1;
-                _arf_complex_mul_gauss(e, f, arb_midref(ai), arb_midref(bi), arb_midref(ci), arb_midref(di));
+                _arf_complex_mul_exact(e, f, arb_midref(ai), arb_midref(bi), arb_midref(ci), arb_midref(di));
                 ARB_DOT_ADD(re_sum, re_serr, re_sn, re_sum_exp, 0, e);
                 ARB_DOT_ADD(im_sum, im_serr, im_sn, im_sum_exp, 0, f);
             }

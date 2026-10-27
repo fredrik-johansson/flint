@@ -109,12 +109,12 @@ int main(void)
 
 ```output
 step   accurate bits at prec = 128
-  10    118    121
-  20     99    115
-  30     79    109
-  40     59    100
-  50     40     94
-prec = 64: lost accuracy at step 18
+  10    119    122
+  20    100    116
+  30     81    110
+  40     61    102
+  50     42     95
+prec = 64: lost accuracy at step 19
 prec = 128: lost accuracy at step 53
 prec = 256: success
 x_100 = [0.8882939923 +/- 1.60e-11]
@@ -239,9 +239,9 @@ int main(void)
 ```
 
 ```output
-prec =  32: [+/- 1.53e-128]
-prec =  64: [+/- 1.19e-256]
-prec = 128: [+/- 3.42e-492]
+prec =  32: [+/- 6.76e-139]
+prec =  64: [+/- 3.72e-235]
+prec = 128: [+/- 4.60e-496]
 prec = 256: [1.097111417e-932 +/- 3.27e-944]
 contains the exact value: 1
 ```

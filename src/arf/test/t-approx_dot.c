@@ -168,6 +168,21 @@ TEST_FUNCTION_START(arf_approx_dot, state)
                 revy ? (ay + len - 1) : ay, revy ? -1 : 1,
                 len, prec);
 
+            /* with rounding to nearest, exactly the midpoint of arb_dot */
+            arf_approx_dot(s2, initial ? z : NULL, subtract,
+                revx ? (x + len - 1) : x, revx ? -1 : 1,
+                revy ? (y + len - 1) : y, revy ? -1 : 1,
+                len, prec, ARF_RND_NEAR);
+
+            if (!arf_equal(s2, arb_midref(as2)))
+            {
+                flint_printf("FAIL (midpoint)\n\n");
+                flint_printf("iter = %wd, len = %wd, prec = %wd, ebits = %wd\n\n", iter, len, prec, ebits);
+                flint_printf("s2 = "); arf_printd(s2, 100); flint_printf("\n\n");
+                flint_printf("as2 = "); arb_printn(as2, 100, ARB_STR_MORE); flint_printf("\n\n");
+                flint_abort();
+            }
+
             {
                 mag_t err, xx, yy;
 
@@ -181,12 +196,27 @@ TEST_FUNCTION_START(arf_approx_dot, state)
                 for (i = 0; i < len; i++)
                 {
                     arf_get_mag(xx, revx ? x + len - 1 - i : x + i);
-                    arf_get_mag(yy, revx ? y + len - 1 - i : y + i);
+                    arf_get_mag(yy, revy ? y + len - 1 - i : y + i);
                     mag_addmul(err, xx, yy);
                 }
 
                 mag_mul_2exp_si(err, err, -prec + 2);
                 arb_add_error_mag(as2, err);
+
+                /* arb_dot rounds the same accumulator to nearest (possibly
+                   at a reduced precision when the terms span few bits),
+                   while arf_approx_dot truncates it: allow one ulp of the
+                   rounded midpoint on top of the ball */
+                if (!arf_is_special(arb_midref(as2)))
+                {
+                    mag_t ulp;
+                    mag_init(ulp);
+                    mag_set_ui_2exp_si(ulp, 1, 0);
+                    mag_mul_2exp_fmpz(ulp, ulp, ARF_EXPREF(arb_midref(as2)));
+                    mag_mul_2exp_si(ulp, ulp, 1 - arf_bits(arb_midref(as2)));
+                    arb_add_error_mag(as2, ulp);
+                    mag_clear(ulp);
+                }
 
                 if (!arb_contains_arf(as2, s1))
                 {

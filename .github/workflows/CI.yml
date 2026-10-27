@@ -84,6 +84,30 @@ jobs:
             -e 's/ntdivrem(ZZ(+6), ZZ(-4)) == (-1, +2)/ntdivrem(ZZ(+6), ZZ(-4)) == (-2, -2)/' \
             -e 's/ntdivrem(ZZ(-6), ZZ(-4)) == (+1, -2)/ntdivrem(ZZ(-6), ZZ(-4)) == (+2, +2)/' \
             Nemo.jl/test/flint/fmpz-test.jl
+          # Temporary workaround: constants such as pi now carry their
+          # measured rounding error (|pi_mid - pi| = 6.31e-122 at 400 bits)
+          # instead of a full ulp, so sin(pi) = [6.31e-122 +/- 6.46e-122]
+          # contains 0 but not [0 +/- 8.40e-122], which Nemo's test asserts.
+          # Check that the result contains 0 instead. Likewise pi at 64 bits
+          # is now [pi_mid +/- 0.23 ulp] rather than [pi_mid +/- 1 ulp], and the
+          # simplest rational inside it is 14885392687/4738167652 (the old
+          # answer 8717442233/2774848045 lies outside the tighter ball).
+          # The same tests exist for ArbField/AcbField and RealField/ComplexField.
+          # Remove once Nemo is updated.
+          sed -i \
+            -e 's/@test contains(x, \(RR\|CC\)("0.0 +\/- 8.40e-122"))/@test contains(x, \1(0))/' \
+            -e 's/simplest_rational_inside(const_pi(R)) == 8717442233\/\/2774848045/simplest_rational_inside(const_pi(R)) == 14885392687\/\/4738167652/' \
+            Nemo.jl/test/arb/arb-test.jl Nemo.jl/test/arb/Real-test.jl \
+            Nemo.jl/test/arb/acb-test.jl Nemo.jl/test/arb/Complex-test.jl
+          # Temporary workaround: the qqbar conversion test checks that the
+          # 50-bit enclosure of a contains the 50-bit ball of b = ComplexF64(a).
+          # With measured rounding errors the radius of the enclosure is no
+          # longer a full ulp, so it need not cover b (|a - b| ~ 2^-52 |a|) or
+          # the rounding of b. Widen the enclosure by 2^-48 |a| instead; remove
+          # once Nemo is updated.
+          sed -i \
+            -e 's|^\( *\)@test contains(complex_field()(a), complex_field()(b))$|\1za = complex_field()(a)\n\1ea = abs(za) / 2^48\n\1xa = real(za); add_error!(xa, ea)\n\1ya = imag(za); add_error!(ya, ea)\n\1@test contains(complex_field()(xa, ya), complex_field()(b))|' \
+            Nemo.jl/test/calcium/qqbar-test.jl
           mkdir -p ~/.julia/artifacts
           echo -e "[e134572f-a0d5-539d-bddf-3cad8db41a82]\nFLINT = \"$(pwd)\"" > ~/.julia/artifacts/Overrides.toml
           julia -e "import Pkg; Pkg.develop(path=\"./Nemo.jl\"); Pkg.test(\"Nemo\")"

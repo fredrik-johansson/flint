@@ -29,14 +29,12 @@ arb_const_pi(arb_t res, slong prec)
     {
         slong exp;
 
-        /* just reading the table is known to give the correct rounding */
-        _arf_set_round_mpn(arb_midref(res), &exp, arb_pi4_tab,
-            ARB_PI4_TAB_LIMBS, 0, prec, ARF_RND_NEAR);
-        _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), 2 + exp);
-
-        /* 1/2 ulp error */
-        _fmpz_set_si_small(MAG_EXPREF(arb_radref(res)), 2 + exp - prec);
-        MAG_MAN(arb_radref(res)) = MAG_ONE_HALF;
+        /* the table is a truncation (error below one unit of its last
+           limb): round it to nearest with the error measured, then add the
+           table's own error */
+        arb_set_round_mpn_2exp_si(res, arb_pi4_tab, ARB_PI4_TAB_LIMBS, 0, 2 - ARB_PI4_TAB_LIMBS * FLINT_BITS, prec);
+        mag_fast_add_2exp_si(arb_radref(res), arb_radref(res), 2 - ARB_PI4_TAB_LIMBS * FLINT_BITS);
+        (void) exp;
     }
     else
     {

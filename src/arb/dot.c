@@ -14,10 +14,8 @@
 #include <stdint.h>
 #include "mpn_extras.h"
 #include "arb.h"
+#include "acb.h"
 #include "arb/impl.h"
-
-void mpfr_mulhigh_n(nn_ptr rp, nn_srcptr np, nn_srcptr mp, slong n);
-void mpfr_sqrhigh_n(nn_ptr rp, nn_srcptr np, slong n);
 
 /* Add ((a * b) / 2^MAG_BITS) * 2^exp into srad*2^srad_exp.
    Assumes that srad_exp >= exp and that overflow cannot occur.  */
@@ -137,33 +135,368 @@ add_errors(mag_t rad, uint64_t Aerr, slong Aexp, uint64_t Berr, slong Bexp, uint
 #endif
 }
 
-static void
-mulhigh(nn_ptr res, nn_srcptr xptr, slong xn, nn_srcptr yptr, slong yn, slong nn)
+/*
+    The two's complement accumulator {sum, sn} 2^(sum_exp - sn FLINT_BITS)
+    (with the sign bit still in place; the overall sign is flipped if
+    negative) as a magnitude: negated if needed, leading zero limbs
+    stripped. Returns the number of limbs (0 for zero) and sets *negative
+    and *sum_exp.
+*/
+FLINT_FORCE_INLINE slong
+_arb_dot_normalise(nn_ptr sum, slong sn, int * negative, slong * sum_exp)
 {
-    nn_ptr tmp, xxx, yyy;
-    slong k;
-    ARF_MUL_TMP_DECL;
+    slong sn0 = sn;
 
-    ARF_MUL_TMP_ALLOC(tmp, 2 * nn);
-    xxx = tmp;
-    yyy = tmp + nn;
+    if (sum[sn - 1] >= LIMB_TOP)
+    {
+        mpn_neg(sum, sum, sn);
+        *negative ^= 1;
+    }
 
-    mpn_copyi(xxx + nn - FLINT_MIN(xn, nn), xptr + xn - FLINT_MIN(xn, nn), FLINT_MIN(xn, nn));
-    mpn_copyi(yyy + nn - FLINT_MIN(yn, nn), yptr + yn - FLINT_MIN(yn, nn), FLINT_MIN(yn, nn));
+    while (sn > 0 && sum[sn - 1] == 0)
+        sn--;
 
-    for (k = 0; k < nn - xn; k++)
-        xxx[k] = 0;
-    for (k = 0; k < nn - yn; k++)
-        yyy[k] = 0;
+    /* (for a zero sum, sum_exp may be a sentinel near WORD_MIN: it is
+       not used, and must not be decremented) */
+    if (sn > 0)
+        *sum_exp -= (slong) (sn0 - sn) * FLINT_BITS;
 
-    if (xptr == yptr && xn == yn)
-        mpfr_sqrhigh_n(res, xxx, nn);
-    else
-        mpfr_mulhigh_n(res, xxx, yyy, nn);
-
-    ARF_MUL_TMP_FREE(tmp, 2 * nn);
+    return sn;
 }
 
+/*
+    The midpoint rounded to nearest (ties to even) at prec bits, through
+    the core rounding of arb/impl.h, with the rounding error in *rerr (in
+    units of 2^(e - prec - MAG_BITS) for the exponent e of the result; 0
+    if exact). The accumulator is destroyed.
+*/
+FLINT_FORCE_INLINE void
+_arb_dot_round_core(arf_t res, nn_ptr sum, slong sn, int negative, slong sum_exp, slong prec, ulong * rerr)
+{
+    /* the core functions write the midpoint of an arb; the radius is
+       untouched with rerr != NULL, so a shallow ball around res will do */
+    arb_struct t;
+    *arb_midref(&t) = *res;
+
+    sn = _arb_dot_normalise(sum, sn, &negative, &sum_exp);
+
+    if (sn == 0)
+    {
+        arf_zero(res);
+        *rerr = 0;
+        return;
+    }
+    else if (sn == 2 && prec <= 2 * FLINT_BITS)
+    {
+        /* two limbs, rounded in registers */
+        _arb_set_round_3limbs(&t, sum[1], sum[0], 0, 0, negative, sum_exp - 3 * FLINT_BITS, prec, NULL, rerr);
+    }
+    else if (sn == 3 && prec <= 2 * FLINT_BITS)
+    {
+        /* three limbs (the usual accumulator up to two limbs of
+           precision), rounded in registers */
+        _arb_set_round_3limbs(&t, sum[2], sum[1], sum[0], 0, negative, sum_exp - 3 * FLINT_BITS, prec, NULL, rerr);
+    }
+    else
+    {
+        _arb_set_round_mpn_2exp_si_long(&t, sum, sn, negative, sum_exp - sn * FLINT_BITS, prec, NULL, rerr);
+    }
+
+    *res = *arb_midref(&t);
+}
+
+/*
+    res = the accumulator rounded to nearest (ties to even) at prec bits
+    with the radius bounding the three sources of error: the final step of
+    arb_dot and acb_dot. The accumulator is destroyed.
+
+    Final rounding error   = rerr    * 2^(exp - prec - MAG_BITS)
+                             0 <= rerr <= 2^MAG_BITS
+    Arithmetic error       = serr    * 2^(sum_exp - sn * FLINT_BITS)
+                             0 <= serr <= 3 * n
+    Propagated error       = srad    * 2^(srad_exp - MAG_BITS)
+                             0 <= srad <= 3 * n * MAG_BITS
+
+    The second is shifted by MAG_BITS so that the magnitudes become
+    similar and a reasonably accurate addition can be done by comparing
+    exponents without normalizing first.
+*/
+void
+_arb_dot_round(arb_t res, nn_ptr sum, slong sn, int negative, slong sum_exp, slong prec,
+    uint64_t serr, uint64_t srad, slong srad_exp)
+{
+    ulong rerr;
+    slong exp;
+
+    _arb_dot_round_core(arb_midref(res), sum, sn, negative, sum_exp, prec, &rerr);
+    exp = (rerr != 0) ? ARF_EXP(arb_midref(res)) : 0;
+
+    add_errors(arb_radref(res),
+        rerr, exp - prec,
+        serr << MAG_BITS, sum_exp - sn * FLINT_BITS,
+        srad, srad_exp);
+}
+
+/*
+    The midpoint alone, rounded in the direction rnd: the final step of
+    the approx variants. With ARF_RND_NEAR (and ARF_RND_ACCURATE) the
+    result is bit for bit the midpoint _arb_dot_round would give, through
+    the same code; ARF_RND_FAST rounds down.
+*/
+void
+_arb_dot_round_mid(arf_t res, nn_ptr sum, slong sn, int negative, slong sum_exp, slong prec, arf_rnd_t rnd)
+{
+    if (rnd == ARF_RND_NEAR || rnd == ARF_RND_ACCURATE)
+    {
+        ulong rerr;
+        _arb_dot_round_core(res, sum, sn, negative, sum_exp, prec, &rerr);
+    }
+    else
+    {
+        slong exp_fix = 0;
+
+        if (rnd == ARF_RND_FAST)
+            rnd = ARF_RND_DOWN;
+
+        sn = _arb_dot_normalise(sum, sn, &negative, &sum_exp);
+
+        if (sn == 0)
+        {
+            arf_zero(res);
+        }
+        else
+        {
+            if (sn == 2)
+                _arf_set_round_uiui(res, &exp_fix, sum[1], sum[0], negative, prec, rnd);
+            else
+                _arf_set_round_mpn(res, &exp_fix, sum, sn, negative, prec, rnd);
+            _fmpz_set_si_small(ARF_EXPREF(res), exp_fix + sum_exp);
+        }
+    }
+}
+
+/*
+    The midpoint of arb_dot for len <= 1 (arb_mul or arb_set_round of the
+    exact operands), for the approx variants: res = (-1)^subtract x y,
+    or initial (len <= 0; zero if initial is NULL), rounded as the ball
+    functions round. x, y, initial are arf midpoints (initial may be NULL).
+*/
+void
+_arb_dot_mid_short(arf_t res, arf_srcptr initial, int subtract, arf_srcptr x, arf_srcptr y, slong len, slong prec)
+{
+    arb_t t, tx, ty;
+
+    arb_init(t);
+
+    if (initial == NULL)
+    {
+        if (len <= 0)
+        {
+            arf_zero(res);
+            arb_clear(t);
+            return;
+        }
+
+        /* exact operands sharing the midpoints (read only) */
+        *arb_midref(tx) = *x;
+        mag_init(arb_radref(tx));
+        *arb_midref(ty) = *y;
+        mag_init(arb_radref(ty));
+        arb_mul(t, tx, ty, prec);
+        if (subtract)
+            arf_neg(arb_midref(t), arb_midref(t));
+    }
+    else
+    {
+        /* len <= 0 */
+        *arb_midref(tx) = *initial;
+        mag_init(arb_radref(tx));
+        arb_set_round(t, tx, prec);
+    }
+
+    arf_swap(res, arb_midref(t));
+    arb_clear(t);
+}
+
+/*
+    The midpoint of arb_dot_simple of the exact operands (the fallback of
+    arb_dot for exponents outside the fast range), for the approx variants:
+    the same sequence of ball operations on exact copies, so that the
+    midpoints agree bit for bit, the rounding errors accumulating in the
+    radius of the temporary exactly as in arb_dot_simple.
+*/
+void
+_arb_dot_mid_simple(arf_t res, arf_srcptr initial, int subtract, arf_srcptr x, slong xstep, arf_srcptr y, slong ystep, slong len, slong prec)
+{
+    arb_t t, tx, ty;
+    slong i;
+
+    if (len <= 0)
+    {
+        _arb_dot_mid_short(res, initial, subtract, NULL, NULL, 0, prec);
+        return;
+    }
+
+    arb_init(t);
+    mag_init(arb_radref(tx));
+    mag_init(arb_radref(ty));
+
+    *arb_midref(tx) = *x;
+    *arb_midref(ty) = *y;
+
+    if (initial == NULL)
+    {
+        arb_mul(t, tx, ty, prec);
+    }
+    else
+    {
+        arf_set(arb_midref(t), initial);
+        if (subtract)
+            arf_neg(arb_midref(t), arb_midref(t));
+        arb_addmul(t, tx, ty, prec);
+    }
+
+    for (i = 1; i < len; i++)
+    {
+        *arb_midref(tx) = x[i * xstep];
+        *arb_midref(ty) = y[i * ystep];
+        arb_addmul(t, tx, ty, prec);
+    }
+
+    if (subtract)
+        arf_neg(arb_midref(t), arb_midref(t));
+
+    arf_swap(res, arb_midref(t));
+    arb_clear(t);
+}
+
+/* the same for acb_dot_simple; the parts of the entries at xstep, ystep
+   (in acb or acf units: the pointers to the real parts, with the distance
+   between the real and imaginary part of an entry as imoff) */
+void
+_acb_dot_mid_simple(arf_t rre, arf_t rim, arf_srcptr ire, arf_srcptr iim, int subtract,
+    arf_srcptr xre, slong xstep, slong ximoff, arf_srcptr yre, slong ystep, slong yimoff, slong len, slong prec)
+{
+    acb_t t, tx, ty;
+    slong i;
+
+    if (len <= 0)
+    {
+        _acb_dot_mid_short(rre, rim, ire, iim, subtract, NULL, NULL, NULL, NULL, 0, prec);
+        return;
+    }
+
+    acb_init(t);
+    mag_init(arb_radref(acb_realref(tx)));
+    mag_init(arb_radref(acb_imagref(tx)));
+    mag_init(arb_radref(acb_realref(ty)));
+    mag_init(arb_radref(acb_imagref(ty)));
+
+    *arb_midref(acb_realref(tx)) = xre[0];
+    *arb_midref(acb_imagref(tx)) = xre[ximoff];
+    *arb_midref(acb_realref(ty)) = yre[0];
+    *arb_midref(acb_imagref(ty)) = yre[yimoff];
+
+    if (ire == NULL)
+    {
+        acb_mul(t, tx, ty, prec);
+    }
+    else
+    {
+        arf_set(arb_midref(acb_realref(t)), ire);
+        arf_set(arb_midref(acb_imagref(t)), iim);
+        if (subtract)
+            acb_neg(t, t);
+        acb_addmul(t, tx, ty, prec);
+    }
+
+    for (i = 1; i < len; i++)
+    {
+        *arb_midref(acb_realref(tx)) = xre[i * xstep];
+        *arb_midref(acb_imagref(tx)) = xre[i * xstep + ximoff];
+        *arb_midref(acb_realref(ty)) = yre[i * ystep];
+        *arb_midref(acb_imagref(ty)) = yre[i * ystep + yimoff];
+        acb_addmul(t, tx, ty, prec);
+    }
+
+    if (subtract)
+        acb_neg(t, t);
+
+    arf_swap(rre, arb_midref(acb_realref(t)));
+    arf_swap(rim, arb_midref(acb_imagref(t)));
+    acb_clear(t);
+}
+
+/* the same for acb_dot (acb_mul or acb_set_round), parts given as arf
+   midpoints; ire may be NULL for no initial term */
+void
+_acb_dot_mid_short(arf_t rre, arf_t rim, arf_srcptr ire, arf_srcptr iim, int subtract,
+    arf_srcptr xre, arf_srcptr xim, arf_srcptr yre, arf_srcptr yim, slong len, slong prec)
+{
+    acb_t t, tx, ty;
+
+    acb_init(t);
+
+    if (ire == NULL)
+    {
+        if (len <= 0)
+        {
+            arf_zero(rre);
+            arf_zero(rim);
+            acb_clear(t);
+            return;
+        }
+
+        *arb_midref(acb_realref(tx)) = *xre; mag_init(arb_radref(acb_realref(tx)));
+        *arb_midref(acb_imagref(tx)) = *xim; mag_init(arb_radref(acb_imagref(tx)));
+        *arb_midref(acb_realref(ty)) = *yre; mag_init(arb_radref(acb_realref(ty)));
+        *arb_midref(acb_imagref(ty)) = *yim; mag_init(arb_radref(acb_imagref(ty)));
+        acb_mul(t, tx, ty, prec);
+        if (subtract)
+            acb_neg(t, t);
+    }
+    else
+    {
+        *arb_midref(acb_realref(tx)) = *ire; mag_init(arb_radref(acb_realref(tx)));
+        *arb_midref(acb_imagref(tx)) = *iim; mag_init(arb_radref(acb_imagref(tx)));
+        acb_set_round(t, tx, prec);
+    }
+
+    arf_swap(rre, arb_midref(acb_realref(t)));
+    arf_swap(rim, arb_midref(acb_imagref(t)));
+    acb_clear(t);
+}
+
+/* Sizes below this have dedicated code in the callers anyway; the
+   comparison is cheap to skip for them. */
+#define DOT_MULHIGH_MIN 3
+
+/* Bits of the term below the accumulator required beyond the guard limb
+   of a high product used as data (see _arb_dot_addmul_generic); the
+   exact requirement depends on the length and is checked there. */
+#define DOT_GUARD_SLACK 59
+
+/*
+    Adds the product of x (xn limbs) and y (yn limbs), shifted right by
+    shift bits, to the sn-limb accumulator (which has one extra dummy limb
+    on top). The product is formed in tmp, which has ARB_DOT_TMP_LIMBS(sn)
+    limbs.
+
+    Only the top term_prec = 64 sn - shift bits of the term can land in the
+    accumulator. We compute the term with an extra limb, nn = ceil((term_prec
+    + 64) / 64) limbs from the top, so that everything approximate happens
+    at least 64 bits below the bottom of the accumulator: truncating an
+    operand to its top nn limbs perturbs the term by less than 2^-64 ulp
+    of the accumulator, and a high product of nh output limbs with its
+    guard limb used as data (flint_mpn_mulhigh, which truncates the
+    operands itself) has a deficit below FLINT_MPN_MULHIGH_GUARD_ERR_BOUND(nh)
+    = 2 nh + 4 units of the guard limb, less than one accumulator ulp, which
+    is charged to serr. Products that would be computed in full by the high
+    product anyway, or that fit in the window or nearly so, are computed
+    exactly: they then cost nothing in the error bound (the bits falling
+    below the accumulator are accounted for by the caller's truncation
+    charge).
+*/
 void
 _arb_dot_addmul_generic(nn_ptr sum, nn_ptr serr, nn_ptr tmp, slong sn,
     nn_srcptr xptr, slong xn, nn_srcptr yptr, slong yn,
@@ -172,7 +505,7 @@ _arb_dot_addmul_generic(nn_ptr sum, nn_ptr serr, nn_ptr tmp, slong sn,
     slong shift_bits, shift_limbs, term_prec;
     ulong cy;
     nn_ptr sstart, tstart;
-    slong tn, nn;
+    slong tn, nn, nh;
 
     shift_bits = shift % FLINT_BITS;
     shift_limbs = shift / FLINT_BITS;
@@ -190,11 +523,8 @@ _arb_dot_addmul_generic(nn_ptr sum, nn_ptr serr, nn_ptr tmp, slong sn,
        the way down to s. */
     term_prec = sn * FLINT_BITS - shift;
 
-    /* The mulhigh error relative to the top of the sum will
-       be bounded by nn * 2^(-shift) * 2^(-FLINT_BITS*nn).
-       One extra limb ensures that this is <1 sum-ulp. */
-    term_prec += FLINT_BITS;
-    nn = (term_prec + FLINT_BITS - 1) / FLINT_BITS;
+    /* One extra limb: all approximations are then < 1 sum-ulp in total. */
+    nn = (term_prec + 2 * FLINT_BITS - 1) / FLINT_BITS;
 
     /* Sanity check; must conform to the pre-allocated memory! */
     if (nn > sn + 2)
@@ -202,41 +532,67 @@ _arb_dot_addmul_generic(nn_ptr sum, nn_ptr serr, nn_ptr tmp, slong sn,
         flint_throw(FLINT_ERROR, "nn > sn + 2\n");
     }
 
-    /* Use mulhigh? */
-    if (term_prec >= MUL_MPFR_MIN_LIMBS * FLINT_BITS &&
-        term_prec <= MUL_MPFR_MAX_LIMBS * FLINT_BITS &&
-        xn * FLINT_BITS > 0.9 * term_prec &&
-        yn * FLINT_BITS > 0.9 * term_prec)
+    /* The product is written at tmp + 1, leaving one limb for the shift. */
+    tstart = tmp + 1;
+
+    /* High product with its guard limb used as data: nh output limbs plus
+       the guard limb cover the term_prec bits that can land in the
+       accumulator with at least DOT_GUARD_SLACK bits to spare, so that the
+       deficit is below one accumulator ulp. This is the common case of
+       operands with about the working precision; operands both shorter
+       than nh limbs take the full product (at the tabulated sizes), as
+       _flint_mpn_mulhigh_prefer_full decides. */
+    nh = (ulong) (term_prec + FLINT_BITS - 1 - DOT_GUARD_SLACK) / FLINT_BITS;
+
+    if (nh >= DOT_MULHIGH_MIN && (xn >= nh || yn >= nh || nh > FLINT_MPN_MULHIGH_FUNC_TAB_WIDTH))
     {
-        mulhigh(tmp, xptr, xn, yptr, yn, nn);
-        tstart = tmp + nn;
-        tn = nn;
-        serr[0]++;
-    }
-    else
-    {
-        if (xn > nn || yn > nn)
+        /* the deficit is at most 2 nh + 4 units of the guard limb, so the
+           slack must exceed log2(2 nh + 4) bits */
+        if (term_prec > (nh + 1) * FLINT_BITS - (slong) FLINT_BIT_COUNT(FLINT_MPN_MULHIGH_GUARD_ERR_BOUND(nh)) - 1)
+            nh++;
+
+        if (xn == nh && yn == nh)
         {
-            if (xn > nn)
-            {
-                xptr += (xn - nn);
-                xn = nn;
-            }
-
-            if (yn > nn)
-            {
-                yptr += (yn - nn);
-                yn = nn;
-            }
-
+            /* the balanced shape has its own kernels */
+            tstart[0] = (xptr == yptr) ? flint_mpn_sqrhigh_n(tstart + 1, xptr, nh)
+                                       : flint_mpn_mulhigh_n(tstart + 1, xptr, yptr, nh);
+            tn = nh + 1;
             serr[0]++;
+            goto have_product;
+        }
+        else if (!_flint_mpn_mulhigh_prefer_full(xn, yn, nh))
+        {
+            tstart[0] = (xptr == yptr && xn == yn) ? flint_mpn_sqrhigh(tstart + 1, xptr, xn, nh)
+                                                   : flint_mpn_mulhigh(tstart + 1, xptr, xn, yptr, yn, nh);
+            tn = nh + 1;
+            serr[0]++;
+            goto have_product;
+        }
+    }
+
+    /* Short term (the common case at moderate precision): as before, the
+       full product, of operands truncated to nn limbs if longer. */
+    if (xn > nn || yn > nn)
+    {
+        if (xn > nn)
+        {
+            xptr += xn - nn;
+            xn = nn;
         }
 
-        tn = xn + yn;
-        FLINT_MPN_MUL_WITH_SPECIAL_CASES(tmp + 1, xptr, xn, yptr, yn);
-        tstart = tmp + 1;
+        if (yn > nn)
+        {
+            yptr += yn - nn;
+            yn = nn;
+        }
+
+        serr[0]++;
     }
 
+    tn = xn + yn;
+    FLINT_MPN_MUL_WITH_SPECIAL_CASES(tstart, xptr, xn, yptr, yn);
+
+have_product:
     if (shift_bits != 0)
     {
         tstart[-1] = mpn_rshift(tstart, tstart, tn, shift_bits);
@@ -382,7 +738,7 @@ arb_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong xstep,
     slong i, j, nonzero, padding, extend;
     slong xexp, yexp, exp, max_exp, min_exp, sum_exp;
     slong xrexp, yrexp, srad_exp, max_rad_exp;
-    int xnegative, ynegative, inexact;
+    int xnegative, ynegative;
     slong xn, yn, sn, alloc;
     flint_bitcnt_t shift;
     arb_srcptr xi, yi;
@@ -589,11 +945,9 @@ arb_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong xstep,
     sum_exp = max_exp + extend;
 
     /* We need sn + 1 limb for the sum (sn limbs + 1 dummy limb
-       for carry or borrow that avoids an extra branch). We need
-       2 * (sn + 2) limbs to store the product of two numbers
-       with up to (sn + 2) limbs, plus 1 extra limb for shifting
-       the product. */
-    alloc = (sn + 1) + 2 * (sn + 2) + 1;
+       for carry or borrow that avoids an extra branch), plus the
+       scratch space for the terms (see ARB_DOT_TMP_LIMBS). */
+    alloc = (sn + 1) + ARB_DOT_TMP_LIMBS(sn);
     ARF_ADD_TMP_ALLOC(sum, alloc)
     tmp = sum + (sn + 1);
 
@@ -913,73 +1267,7 @@ arb_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong xstep,
         }
     }
 
-    xnegative = 0;
-    if (sum[sn - 1] >= LIMB_TOP)
-    {
-        mpn_neg(sum, sum, sn);
-        xnegative = 1;
-    }
-
-    if (sum[sn - 1] == 0)
-    {
-        slong sum_exp2;
-        slong sn2;
-
-        sn2 = sn;
-        sum_exp2 = sum_exp;
-
-        while (sn2 > 0 && sum[sn2 - 1] == 0)
-        {
-            sum_exp2 -= FLINT_BITS;
-            sn2--;
-        }
-
-        if (sn2 == 0)
-        {
-            arf_zero(arb_midref(res));
-            inexact = 0;
-        }
-        else
-        {
-            inexact = _arf_set_round_mpn(arb_midref(res), &exp, sum, sn2, xnegative ^ subtract, prec, ARF_RND_DOWN);
-            _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp + sum_exp2);
-        }
-    }
-    else
-    {
-
-        if (sn == 2)
-            inexact = _arf_set_round_uiui(arb_midref(res), &exp, sum[1], sum[0], xnegative ^ subtract, prec, ARF_RND_DOWN);
-        else
-            inexact = _arf_set_round_mpn(arb_midref(res), &exp, sum, sn, xnegative ^ subtract, prec, ARF_RND_DOWN);
-
-        _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp + sum_exp);
-    }
-
-    /*
-    Add the three sources of error.
-
-    Final rounding error   = inexact * 2^(exp + sum_exp - prec)
-                             0 <= inexact <= 1
-
-    Arithmetic error       = serr    * 2^(sum_exp - sn * FLINT_BITS)
-                             0 <= serr <= 3 * n
-
-    Propagated error       = srad    * 2^(srad_exp - MAG_BITS)
-                             0 <= srad <= 3 * n * MAG_BITS
-
-    We shift the first two by MAG_BITS so that the magnitudes
-    become similar and a reasonably accurate addition can be done
-    by comparing exponents without normalizing first.
-    */
-
-    add_errors(arb_radref(res),
-        inexact << MAG_BITS,
-        exp + sum_exp - prec,
-        ((uint64_t) serr) << MAG_BITS,
-        sum_exp - sn * FLINT_BITS,
-        srad,
-        srad_exp);
+    _arb_dot_round(res, sum, sn, subtract, sum_exp, prec, serr, srad, srad_exp);
 
     ARF_ADD_TMP_FREE(sum, alloc);
 }

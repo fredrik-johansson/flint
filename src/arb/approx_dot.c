@@ -13,39 +13,54 @@
 #include "arb.h"
 #include "arb/impl.h"
 
+/* the midpoint of arb_dot_simple of the exact operands: the same sequence
+   of ball operations on exact copies, so that the midpoints agree bit for
+   bit (the rounding errors accumulate in the radius of the temporary
+   exactly as in arb_dot_simple) */
 static void
 arb_approx_dot_simple(arb_t res, const arb_t initial, int subtract,
     arb_srcptr x, slong xstep, arb_srcptr y, slong ystep, slong len, slong prec)
 {
+    arb_t t, tx, ty;
     slong i;
 
     if (len <= 0)
     {
-        if (initial == NULL)
-            arf_zero(arb_midref(res));
-        else
-            arf_set_round(arb_midref(res), arb_midref(initial), prec, ARB_RND);
+        _arb_dot_mid_short(arb_midref(res), initial == NULL ? NULL : arb_midref(initial), subtract, NULL, NULL, 0, prec);
         return;
     }
 
+    arb_init(t);
+    mag_init(arb_radref(tx));
+    mag_init(arb_radref(ty));
+
+    *arb_midref(tx) = *arb_midref(x);
+    *arb_midref(ty) = *arb_midref(y);
+
     if (initial == NULL)
     {
-        arf_mul(arb_midref(res), arb_midref(x), arb_midref(y), prec, ARB_RND);
+        arb_mul(t, tx, ty, prec);
     }
     else
     {
+        arf_set(arb_midref(t), arb_midref(initial));
         if (subtract)
-            arf_neg(arb_midref(res), arb_midref(initial));
-        else
-            arf_set(arb_midref(res), arb_midref(initial));
-        arf_addmul(arb_midref(res), arb_midref(x), arb_midref(y), prec, ARB_RND);
+            arf_neg(arb_midref(t), arb_midref(t));
+        arb_addmul(t, tx, ty, prec);
     }
 
     for (i = 1; i < len; i++)
-        arf_addmul(arb_midref(res), arb_midref(x + i * xstep), arb_midref(y + i * ystep), prec, ARB_RND);
+    {
+        *arb_midref(tx) = *arb_midref(x + i * xstep);
+        *arb_midref(ty) = *arb_midref(y + i * ystep);
+        arb_addmul(t, tx, ty, prec);
+    }
 
     if (subtract)
-        arf_neg(arb_midref(res), arb_midref(res));
+        arf_neg(arb_midref(t), arb_midref(t));
+
+    arf_swap(arb_midref(res), arb_midref(t));
+    arb_clear(t);
 }
 
 void
@@ -65,22 +80,11 @@ arb_approx_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong
     /* todo: fast fma and fmma (len=2) code */
     if (len <= 1)
     {
-        if (initial == NULL)
+        if (initial == NULL || len <= 0)
         {
-            if (len <= 0)
-                arf_zero(arb_midref(res));
-            else
-            {
-                if (subtract)
-                    arf_neg_mul(arb_midref(res), arb_midref(x), arb_midref(y), prec, ARB_RND);
-                else
-                    arf_mul(arb_midref(res), arb_midref(x), arb_midref(y), prec, ARB_RND);
-            }
-            return;
-        }
-        else if (len <= 0)
-        {
-            arf_set_round(arb_midref(res), arb_midref(initial), prec, ARB_RND);
+            /* as arb_dot: arb_mul or arb_set_round */
+            _arb_dot_mid_short(arb_midref(res), initial == NULL ? NULL : arb_midref(initial), subtract,
+                len > 0 ? arb_midref(x) : NULL, len > 0 ? arb_midref(y) : NULL, len, prec);
             return;
         }
     }
@@ -183,11 +187,9 @@ arb_approx_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong
     sum_exp = max_exp + extend;
 
     /* We need sn + 1 limb for the sum (sn limbs + 1 dummy limb
-       for carry or borrow that avoids an extra branch). We need
-       2 * (sn + 2) limbs to store the product of two numbers
-       with up to (sn + 2) limbs, plus 1 extra limb for shifting
-       the product. */
-    alloc = (sn + 1) + 2 * (sn + 2) + 1;
+       for carry or borrow that avoids an extra branch). The
+       scratch space for the terms is given by ARB_DOT_TMP_LIMBS. */
+    alloc = (sn + 1) + ARB_DOT_TMP_LIMBS(sn);
     ARF_ADD_TMP_ALLOC(sum, alloc)
     tmp = sum + (sn + 1);
 
@@ -404,47 +406,7 @@ arb_approx_dot(arb_t res, const arb_t initial, int subtract, arb_srcptr x, slong
         }
     }
 
-    xnegative = 0;
-    if (sum[sn - 1] >= LIMB_TOP)
-    {
-        mpn_neg(sum, sum, sn);
-        xnegative = 1;
-    }
-
-    if (sum[sn - 1] == 0)
-    {
-        slong sum_exp2;
-        slong sn2;
-
-        sn2 = sn;
-        sum_exp2 = sum_exp;
-
-        while (sn2 > 0 && sum[sn2 - 1] == 0)
-        {
-            sum_exp2 -= FLINT_BITS;
-            sn2--;
-        }
-
-        if (sn2 == 0)
-        {
-            arf_zero(arb_midref(res));
-        }
-        else
-        {
-            _arf_set_round_mpn(arb_midref(res), &exp, sum, sn2, xnegative ^ subtract, prec, ARF_RND_DOWN);
-            _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp + sum_exp2);
-        }
-    }
-    else
-    {
-
-        if (sn == 2)
-            _arf_set_round_uiui(arb_midref(res), &exp, sum[1], sum[0], xnegative ^ subtract, prec, ARF_RND_DOWN);
-        else
-            _arf_set_round_mpn(arb_midref(res), &exp, sum, sn, xnegative ^ subtract, prec, ARF_RND_DOWN);
-
-        _fmpz_set_si_small(ARF_EXPREF(arb_midref(res)), exp + sum_exp);
-    }
+    _arb_dot_round_mid(arb_midref(res), sum, sn, subtract, sum_exp, prec, ARF_RND_NEAR);
 
     ARF_ADD_TMP_FREE(sum, alloc);
 }

@@ -226,9 +226,9 @@ int main(void)
 ```
 
 ```output
-prec = 32: 6 isolated roots, accuracy 25 bits
-prec = 64: 6 isolated roots, accuracy 57 bits
-prec = 128: 6 isolated roots, accuracy 121 bits
+prec = 32: 6 isolated roots, accuracy 27 bits
+prec = 64: 6 isolated roots, accuracy 59 bits
+prec = 128: 6 isolated roots, accuracy 123 bits
 [-1.62045603282535763 +/- 2.78e-18]
 [0.120598234331127720 +/- 9.67e-22]
 [-0.139021211652347645 +/- 3.33e-19] + [0.881122870929321444 +/- 4.89e-19]*I

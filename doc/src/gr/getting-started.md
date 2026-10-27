@@ -93,7 +93,7 @@ int main(void)
 ```output
 Integer ring (fmpz): status 1
 Rational field (fmpq): 1957/720
-Real numbers (arb, prec = 64): [2.718055555555555555 +/- 8.99e-19]
+Real numbers (arb, prec = 64): [2.718055555555555556 +/- 4.45e-19]
 Integers mod 7 (_gr_nmod): 3
 Integers mod 10 (_gr_nmod): status 1
 Ring of polynomials over Rational field (fmpq): 1 + x + (1/2)*x^2 + (1/6)*x^3 + (1/24)*x^4 + (1/120)*x^5 + (1/720)*x^6
@@ -218,7 +218,7 @@ int main(void)
 ```
 ```output
 3^100 = 515377520732011331036461129765621272702107522001
-log(3^100) = [109.8612288668109691 +/- 4.18e-17]
+log(3^100) = [109.86122886681096914 +/- 3.86e-18]
 (x + 1)^7 = 1 + x^7 in Ring of polynomials over Integers mod 7 (_gr_nmod)
 10*x^2 + 15*x - 1 = 6 + x + 3*x^2
 element sizes: 8 48 8 24

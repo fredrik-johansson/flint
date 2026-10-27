@@ -78,7 +78,9 @@ TEST_FUNCTION_START(arb_log_hypot, state)
         acc1 = arb_rel_accuracy_bits(r);
         acc2 = arb_rel_accuracy_bits(s);
 
-        if (prec2 <= prec1 && acc1 > 0 && acc2 > 0 && acc1 < acc2 - 2)
+        /* a lower working precision can come out slightly more accurate
+           when an intermediate rounding happens to be exact */
+        if (prec2 <= prec1 && acc1 > 0 && acc2 > 0 && acc1 < acc2 - 3)
         {
             flint_printf("FAIL: accuracy\n\n");
             flint_printf("prec1 = %wd, acc1 = %wd, acc2 = %wd\n\n", prec1, acc1, acc2);
