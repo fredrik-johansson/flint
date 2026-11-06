@@ -1094,6 +1094,174 @@ interleave.
 :::
 :::
 
+## Elementary functions of floating-point mantissas {#fp}
+
+The entry points of the kernels for a floating-point argument, shared
+by `arf`, `nfloat` and `arb` (see
+[](algorithms/special-functions/elementary)). An argument is given as
+an msb-aligned mantissa $(d, n)$ of $n$ limbs with the top bit set and a
+radix-2 exponent $e$, so that $|x| = (d, n) \, 2^{e - n \, \bits}$, and the
+sign where it matters. Each function performs the argument reduction of
+the floating-point number, runs the kernel at $\mathit{nk} =$
+`_mp_real_elem_limbs(pb)` limbs for the absolute accuracy of `pb` bits
+the caller asks for (its precision plus `MP_REAL_ELEM_GUARD_BITS`, the
+guard bits that cover the kernels' error counts), plus the leading zero
+bits of a result that needs relative accuracy, and returns a
+fixed-point *frame*: an array $Y$ of limbs and an error count `err` in
+units of the frame's lowest limb, with a binary shift or a radix-2
+exponent of the unit, so that the value is $Y$ times a power of two
+within `err` units. The error counts are small (at most a few hundred
+units, and usually tens) and depend on the bitwise parameter of the
+kernel as described in the comments of `mp_real.h`. Buffers are
+allocated by the caller, of the sizes stated below.
+
+::: function
+slong _mp_real_exp_fp(nn_ptr y, ulong * err, nn_srcptr d, slong n, slong e, int sgnbit, slong pb)
+int _mp_real_exp_fp_huge(nn_ptr y, ulong * err, nn_ptr q, slong * qn, nn_srcptr d, slong n, slong e, int sgnbit, slong pb)
+slong _mp_real_expm1_fp(nn_ptr y, ulong * elo, ulong * ehi, nn_srcptr d, slong n, slong e, int sgnbit, slong pb)
+slong _mp_real_exp2_fp(nn_ptr y, ulong * err, nn_srcptr d, slong n, slong e, int sgnbit, slong pb)
+
+The exponential of $x = (-1)^{\mathit{sgnbit}} (d, n) \, 2^{e - n \,
+\bits}$ with $e \le$ `MP_REAL_EXP_FP_MAX_EXP` $= \bits - 3$: sets
+$Y = (y, \mathit{nk} + 1)$ (`y` needs `nk + 2` limbs) and `err`, and
+returns $k$ with $e^x = Y \, 2^{k - \bits \cdot \mathit{nk}}$ within
+`err` units; $Y$ lies in $[B^{\mathit{nk}}, 2 B^{\mathit{nk}})$ except
+on the paths with $k = 0$ for $|x| < 1$. The reduction $|x| = q \log 2 +
+t$ uses the tabulated $\log 2$ at `nk + 1` limbs. For larger exponents,
+`_mp_real_exp_fp_huge` returns the binary shift as the bignum
+$K = (-1)^{\text{returned sign}} (q, \mathit{qn})$, `q` needing
+$\lceil e / \bits \rceil + 2$ limbs, at the cost of two products of about
+$e + \bits \cdot \mathit{nk}$ bits. `_mp_real_expm1_fp` returns
+$e^x - 1 = (-1)^{\mathit{sgnbit}} Y \, 2^{k - \bits \cdot \mathit{nk}}$ with
+separate lower and upper error counts, with $k = 0$ for $|x| < 1$, where
+the result keeps its relative accuracy when the caller adds $-e$ bits
+to `pb`. `_mp_real_exp2_fp` is $2^x$, exact for an integer $x$.
+:::
+
+::: function
+int _mp_real_log_fp(nn_ptr y, slong * len, slong * ue, ulong * err, nn_srcptr d, slong n, slong e, int base2, slong pb)
+int _mp_real_log_fp_huge(nn_ptr y, slong * len, slong * ue, ulong * err, nn_srcptr d, slong n, nn_srcptr c, slong cn, int cneg, slong pb)
+int _mp_real_log1p_fp(nn_ptr y, slong * len, slong * ue, ulong * err, nn_srcptr d, slong n, slong e, int sgnbit, slong pb)
+
+The logarithm (`base2` = 1: the binary logarithm) of $x = (d, n) \,
+2^{e - n \, \bits} > 0$ with $|e - 1| < 2^{\bits - 3}$: sets $Y = (y,
+\mathit{len})$ (`y` needs `nk + n + 5` limbs), the radix-2 exponent
+`ue` of its unit and `err`, and returns 1 when $\log x < 0$, so that
+$\log x = (-1)^{\text{sign}} Y \, 2^{\mathit{ue}}$ within `err` units
+($x = 1$ gives `len` = 0). Near 1 the kernel runs at as many more limbs
+as the cancellation costs (at most $n$ more), so the result keeps its
+relative accuracy. `_mp_real_log_fp_huge` takes a bignum $e - 1 =
+(-1)^{\mathit{cneg}} (c, \mathit{cn})$ (`y` needs `nk + cn + 3` limbs).
+`_mp_real_log1p_fp` is $\log(1 + x)$ for $x = (-1)^{\mathit{sgnbit}}
+(d, n) \, 2^{e - n \, \bits} > -1$: for $|x| < 1/2$ by the kernel of
+$\log(1 \pm s)$ at $-e$ more bits (`y` needs `nk + 3 - e / FLINT_BITS`
+limbs), otherwise on $1 + x$ formed exactly, or as $\log x$ plus a term
+below a unit for huge $x$.
+:::
+
+::: function
+int _mp_real_sin_cos_fp(nn_ptr ys, nn_ptr yc, slong * w, ulong * err, nn_srcptr d, slong n, slong e, slong pb, slong wmax, int rel)
+int _mp_real_tan_fp(nn_ptr y, slong * w, ulong * err, int * recip, nn_srcptr d, slong n, slong e, slong pb, slong wmax)
+int _mp_real_sin_cos_pi_fp(nn_ptr ys, nn_ptr yc, slong * w, slong * k, ulong * err, nn_srcptr d, slong n, slong e, slong pb, slong wmax, int rel)
+int _mp_real_tan_pi_fp(nn_ptr y, slong * w, slong * k, ulong * err, int * recip, nn_srcptr d, slong n, slong e, slong pb, slong wmax)
+
+The trigonometric functions of the magnitude $|x| = (d, n) \,
+2^{e - n \, \bits}$, $e \le 2^{\bits - 3}$, or of $\pi |x|$ (the `pi`
+versions); the caller applies the sign of $x$ to the odd functions.
+The outputs are fixed-point values $(y, w + 1)$ at $w$ fraction limbs
+within `err` units, with $\mathit{nk} \le w \le \mathit{wmax}$: the
+kernels add limbs beyond `nk` for the relative accuracy of a sine or
+tangent near its zeros as far as `wmax` allows ($w =$
+`_mp_real_elem_limbs(pb + z)` for $z$ leading zero bits); for the sine
+and cosine, `rel` says which outputs need that relative accuracy (bit 0
+the sine, bit 1 the cosine), so that an output wanted only for a bound
+costs no extra limbs. Buffers need `wmax + 2`
+limbs (the sine and tangent of the `pi` versions `max(n, nk) + 3` as
+well). The return value carries the signs (bit 0: the sine or tangent
+is negative, bit 1: the cosine is negative), or `MP_REAL_TRIG_EXACT`
+with the quadrant in bits 0--1 when the values are exact (0, 1 / 1, 0 /
+0, $-1$ / $-1$, 0; the tangent 0 or a pole, or $\pm 1$ with
+`MP_REAL_TRIG_ONE`), or `MP_REAL_TRIG_TINY` for a tiny $x$ of the
+`pi` versions, where the sine or tangent is $\pi x (1 \mp \delta)$
+returned as a product with a radix-2 exponent `k` and `err` = 6, within
+one-sided bounds. For the tangent, `recip` = 1 means that the value is
+$\pm 1 / Y$ rather than $\pm Y$; the kernel chooses the limbs so that
+$Y$ normalises with a left shift of at most
+`MP_REAL_TRIG_FP_NORM_SHIFT` bits.
+:::
+
+::: function
+void _mp_real_atan_fp(nn_ptr y, slong * w, ulong * err, nn_srcptr d, slong n, slong e, slong pb, slong wmax)
+void _mp_real_atan2_fp(nn_ptr y, slong * len, slong * ue, ulong * elo, ulong * ehi, nn_srcptr num, slong nn, nn_srcptr den, slong dn, slong d, int c, int sigma, slong pb, slong wmax)
+
+`_mp_real_atan_fp` sets $(y, w + 1)$ to $\operatorname{atan}|x| \cdot
+B^w$ within `err` units for $|x| = (d, n) \, 2^{e - n \, \bits}$, with
+$w = \min($`_mp_real_elem_limbs(pb - e)`$, \mathit{wmax})$ for
+$|x| < 1$ (the relative accuracy of small arguments; the caller handles
+tiny $x$) and $w = \mathit{nk}$ otherwise, where $|x| > 1$ is evaluated
+as $\pi/2 - \operatorname{atan}(1/|x|)$; `y` needs `wmax + 1` limbs.
+`_mp_real_atan2_fp` evaluates $\theta = c \pi/4 + \sigma
+\operatorname{atan}(t)$ for $t = (M_{\mathit{num}} / M_{\mathit{den}})
+2^{-d} < 1$ with the mantissas $(\mathit{num}, \mathit{nn})$ and
+$(\mathit{den}, \mathit{dn})$ in $[1/2, 1)$, $d \ge 0$, $c \in \{0, 2,
+4\}$ and $\sigma = \pm 1$ (the caller sorts $|x|$ and $|y|$ into the
+octants and applies the sign of $y$): the result is $(y, \mathit{len})
+\, 2^{\mathit{ue}}$ within `elo` units below and `ehi` units above. For
+$c = 0$ and a tiny $t$ (when $2(d - 1) \ge \bits \, (\mathit{nk} + 1) +
+4$) this is the exact floor of the ratio itself at `nk + 1` limbs, with
+$\theta = t(1 - \delta)$ and $\delta t$ below a unit, so that the bounds
+are one-sided; otherwise the arctangent at $w = \min($`_mp_real_elem_limbs(pb + d - 1)`$,
+\mathit{wmax})$ ($c = 0$) resp. `nk` limbs. `y` needs `wmax + 2` limbs (`wmax` $\ge$ `nk + 1`).
+:::
+
+::: function
+ulong _mp_real_fp_normalize(nn_ptr t, slong * te, nn_srcptr y, slong len, slong ue, ulong err, slong wn)
+
+For $(y, \mathit{len}) > 0$ known within `err` units of $2^{\mathit{ue}}$,
+sets $(t, \mathit{wn})$ to its leading limbs normalised (top bit set), so
+that $Y = T \, 2^{\mathit{te}}$ within the returned number of units of
+$2^{\mathit{te}}$ (shifted-out bits count as one more unit). Returns
+`UWORD_MAX` if the scaled bound would exceed $2^{\bits - 3}$.
+:::
+
+::: function
+slong _mp_real_sinh_cosh_fp(nn_ptr ys, nn_ptr yc, slong * w, ulong * err, nn_srcptr d, slong n, slong e, slong pb)
+void _mp_real_tanh_fp(nn_ptr q, slong * w, ulong * err, nn_srcptr d, slong n, slong e, slong pb)
+
+The hyperbolic functions of $|x| = (d, n) \, 2^{e - n \, \bits}$, $e
+\le$ `MP_REAL_EXP_FP_MAX_EXP`, not tiny: from $E = e^{|x|}$ and one
+approximate reciprocal, at $w = \mathit{nk}$ limbs for $|x| \ge 1$ and
+$w =$ `_mp_real_elem_limbs(pb + 1 - e)` for $|x| < 1$ (the
+cancellation in $E - 1/E$). `_mp_real_sinh_cosh_fp` sets $Y_s = (ys, w +
+1)$ and $Y_c = (yc, w + 1)$ (either `NULL`; `w + 2` limbs each) with
+$\sinh |x| = Y_s \, 2^{k - \bits \, w}$ and $\cosh x = Y_c \, 2^{k - \bits
+\, w}$ within `err` units, returning $k$ ($-1$ for $|x| < 1$);
+`_mp_real_tanh_fp` sets $\tanh |x| = (q, w + 1) \, B^{-w}$ within `err`
+units (`q` needs `w + 2` limbs). `err` is at most twice that of the
+exponential plus a few units; for $|x|$ so large that $2 e^{-2|x|}$ is
+below a unit, the result is $1$ within a unit without any evaluation.
+:::
+
+::: function
+int _mp_real_pow_fp(nn_ptr y, ulong * err, nn_ptr q, slong * qn, int * tsgn, nn_srcptr xd, slong xn, slong xe, nn_srcptr yd, slong yn, slong ye, int ysgn, slong pb, slong tbmax)
+
+$|x|^y = e^t$, $t = y \log |x|$, for the mantissas $x = (xd, xn) \,
+2^{xe - xn \, \bits}$ ($|xe| < 2^{\bits - 3}$) and $y = (-1)^{\mathit{ysgn}}
+(yd, yn) \, 2^{ye - yn \, \bits}$: sets $Y = (y, \mathit{nk} + 1)$ (`y`
+needs `nk + 2` limbs) and `err` such that $|x|^y = Y \, 2^{K - \bits \,
+\mathit{nk}}$ within `err` units, with the exponent $K = (-1)^{\text{returned
+sign}} (q, \mathit{qn})$, `q` needing $\lceil \mathit{tbmax} / \bits
+\rceil + 2$ limbs (`qn` = 0 for $K = 0$). Instead of the sign it returns
+`MP_REAL_POW_ONE` for $|x| = 1$, `MP_REAL_POW_TINY` when $|t| <
+2^{-(\bits \, \mathit{nk} + 4)}$, so that $|x|^y = 1 + \delta$ with $0 <
+|\delta| < 2^{-(\bits \, \mathit{nk} + 3)}$ and $\delta$ of the sign
+`tsgn` (1 for negative), or `MP_REAL_POW_HUGE` when $|t| \ge
+2^{\mathit{tbmax}}$ (`tbmax` $\ge \bits - 3$), with the sign of $t$ in
+`tsgn`. The logarithm runs at $\mathit{nk} + \lceil (\mathit{tb} + 12) /
+\bits \rceil$ limbs for the bound $2^{\mathit{tb}}$ on $|t|$; `err` is
+that of the exponential plus a few units.
+:::
+
 ## Fixed-point elementary functions {#fixed-elementary}
 
 The kernels on fixed-point numbers that the ball functions are built
@@ -1432,10 +1600,9 @@ Karp–Markstein iteration.
 ## Reduction tables {#tables}
 
 The integer relations and Machin-type formulas behind the diophantine
-argument reduction. `arb` uses the same tables
-(`arb_exp_arf_log_reduction`, `arb_sin_cos_arf_atan_reduction`,
-`arb_log_primes_vec_bsplit`, `arb_atan_gauss_primes_vec_bsplit`). See
-[](algorithms/floating-point/diophantine-reduction).
+argument reduction; the functions of `arb` (`arb_log_primes_vec_bsplit`,
+`arb_atan_gauss_primes_vec_bsplit`, `arb_atan_frac_bsplit`) wrap the
+ones here. See [](algorithms/floating-point/diophantine-reduction).
 
 ::: macro
 MP_REAL_REL_MAX
@@ -1543,10 +1710,12 @@ Gaussian primes in order of norm: $1 + i$, $1 + 2i$, $2 + 3i$, ...
 :::
 
 ::: function
+void _mp_real_log_primes_vec_arb(arb_ptr res, slong num, slong prec)
 void _mp_real_atan_gauss_vec_arb(arb_ptr res, slong num, slong prec)
 
-Set `res` to the angles $\pi/2$ and $2\arg \pi_j$, $j < \mathit{num}$,
-as `arb` balls of `prec` bits.
+Set `res` to the logarithms $\log p_j$ of the first `num` primes, resp.
+to the angles $\pi/2$ and $2\arg \pi_j$ of the first `num` nonreal
+Gaussian primes, $j < \mathit{num}$, as `arb` balls of `prec` bits.
 :::
 
 ## Multithreading {#threads}
@@ -1855,6 +2024,29 @@ Set `res` to the balls $\log p_j$, resp. $\pi/2$ followed by
 $2\arg \pi_j$, $j < \mathit{num}$, to about $n$ limbs, by the
 Machin-type sets of `_mp_real_machin_table` and followup series, the
 series running on the available threads.
+:::
+
+::: variable
+_mp_real_log_p_tab
+_mp_real_atan_gauss_tab
+
+Fixed-point floors to `MP_REAL_LOG_P_TAB_BITS` $= 4608$ bits of the
+logarithms of the first `MP_REAL_LOG_P_TAB_NUM` $= 13$ primes and of
+the arguments of the first 13 nonreal Gaussian primes, the initial
+caches (read directly below that precision).
+:::
+
+::: function
+void _mp_real_precompute_reductions(short * rel, double * eps, arb_srcptr alpha, slong n, slong max_rel, double C)
+
+Precomputes, by lattice reduction, short integer relations
+$\sum_j c_j \alpha_j = \varepsilon$ with small $|\varepsilon|$ between
+the constants $\alpha_0, \ldots, \alpha_{n-1}$ (logarithms of primes or
+arguments of Gaussian primes), as used by the reduction algorithm of
+[@HJ2024]: `rel` receives the coefficient vectors (each row terminated
+by `MP_REAL_REL_TERMINATOR`) and `eps` the values $\varepsilon$, for
+successively smaller $\varepsilon$ decreasing roughly by the factor `C`,
+up to `max_rel` relations. The source of the tables of `rel_tab_data.c`.
 :::
 
 ::: function

@@ -544,9 +544,10 @@ denominator is iterated and the other is $\sqrt{1 - x^{*2}}$.
   `_mp_real_neglog_agm` and `_mp_real_sin_cos_pi_ui_div_ui`; the
   table-free ball exponentials are `mp_real_exp_notab_squaring` and
   `mp_real_exp_agm`.
-- `nfloat` calls the kernels and the ball functions for its elementary
-  functions ([](nfloat)), and the partition function uses the table-free
-  exponentials. The `arb` elementary functions have their own
-  implementations of the same algorithms ([](algorithms/special-functions/elementary)).
+- `arf`, `nfloat` and `arb` evaluate their elementary functions through
+  the floating-point entry points of the kernels (`_mp_real_exp_fp`,
+  `_mp_real_log_fp`, `_mp_real_sin_cos_fp`, `_mp_real_atan_fp`, ...;
+  [](mp_real#fp) and [](algorithms/special-functions/elementary)), and the
+  partition function uses the table-free exponentials.
 
 ::: functions mp_real_exp_bits mp_real_sin_cos_bits _mp_real_exp_bitwise_rs _mp_real_exp_reduced _mp_real_neglog_newton _mp_real_neglog_agm _mp_real_sin_cos_pi_ui_div_ui :::

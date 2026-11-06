@@ -1111,7 +1111,9 @@ $\tan(a + bi) = (2E\sin 2a + i\operatorname{sgn}(b)(1 - E^2))/(1 + 2E\cos 2a + E
 for $|b| \ge 1/2$ (similarly for `cot`; `sec` and `csc` use the analog
 of the first formula); $\log|z| = \log(a^2 + b^2)/2$, or
 $\operatorname{log1p}(d)/2$ with $d = a^2 + b^2 - 1$ computed exactly in
-fixed point when $\max(|a|, |b|) \in [1/2, 2)$ (also used for
+fixed point when $\max(|a|, |b|) \in [1/2, 2)$ (at one and two limbs
+the logarithm takes the register path shared with `acf`, `acf/elem.h`,
+which composes the kernels of the real functions directly; also used for
 $1 - |z|^2$ in `atan`; in `log1p`, $|1 + z|^2 - 1 = a(2 + a) + b^2$ is
 computed in double precision when the terms cancel); `atan` by
 Kahan-type formulas with `atan2` and `log1p`; and `asin`, `acos` and

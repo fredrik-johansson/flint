@@ -99,7 +99,7 @@ also how limits at removable singularities are computed).
 
 | Functions | Main methods | Modules | Algorithm page |
 |---|---|---|---|
-| $\exp$, $\log$, trigonometric and hyperbolic functions and their inverses | argument reduction, tables, rectangular splitting on fixed-point numbers, bit-burst | [`arb`](arb), [`acb`](acb) | [](algorithms/special-functions/elementary) |
+| $\exp$, $\log$, trigonometric and hyperbolic functions and their inverses | the fixed-point kernels of `mp_real` (tables, bitwise reduction, rectangular splitting, bit-burst), rounded or enclosed from their error bounds | [`arf`](arf), [`arb`](arb), [`acb`](acb) | [](algorithms/special-functions/elementary) |
 | $\pi$, $e$, $\log 2$, $\gamma$, $\zeta(3)$, Catalan, ... | hypergeometric series by binary splitting, caching | [`arb`](arb), [`mp_real`](mp_real) | [](algorithms/special-functions/constants) |
 | $\Gamma$, $1/\Gamma$, $\log\Gamma$, rising factorials, digamma | Stirling series, Taylor series of $1/\Gamma$, rational arguments, rectangular and binary splitting | [`arb_hypgeom`](arb_hypgeom), [`acb_hypgeom`](acb_hypgeom), [`arb`](arb), [`acb`](acb) | [](algorithms/special-functions/gamma) |
 | ${}_pF_q$, ${}_0F_1$, ${}_1F_1$, $U$ | convergent series with tail bounds, asymptotic expansion of $U$, connection formulas, numerical integration | [`acb_hypgeom`](acb_hypgeom) | [](algorithms/special-functions/hypergeometric) |

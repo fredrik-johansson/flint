@@ -10,7 +10,7 @@
 */
 
 #include <math.h>
-#include "arb.h"
+#include "arb/elem.h"
 
 #define ONE_OVER_PI 0.31830988618379067154
 #define PI 3.1415926535897932385

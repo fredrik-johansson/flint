@@ -687,6 +687,216 @@ much memory for large $k$; `arb_root_ui` is usually a better choice.
 :::
 :::
 
+## Elementary functions {#elementary}
+
+The elementary functions of `arf` are correctly rounded in the strict
+modes and return the inexact flag, like the arithmetic operations; the
+relaxed modes `ARF_RND_FAST` and `ARF_RND_ACCURATE` give results within
+one resp. 0.51 units in the last place. Any exponents are supported: the
+arguments and the results may have bignum exponents. Exact precision
+(`ARF_PREC_EXACT`) is not supported.
+
+::: details
+The evaluation is done by the fixed-point kernels of `mp_real` on the
+mantissa (`_mp_real_exp_fp`, `_mp_real_log_fp`, `_mp_real_sin_cos_fp`,
+`_mp_real_atan_fp`, ..., shared with `nfloat` and `arb`), which return a
+fixed-point frame with an error count in units of its lowest limb. In
+the strict modes, the rounding is certified from the bits of the frame
+between the rounding point and the error bound (`_arf_set_mpn_err` in
+`arf/elem.c`): when a run of equal bits there leaves it undecided, the
+kernel is run again with more guard bits (a Ziv loop); the values of
+the elementary functions at dyadic arguments are transcendental except
+at the special values handled separately (and the exact cases of `arf_pow`),
+so the loop terminates. The relaxed modes round the first frame. Small
+arguments, for which two terms of the Taylor series give the precision
+(for instance $|x| < 2^{-p/4}$ with $\sin x = x - x^3/6$, the tail in
+the error bound), take the series in fixed point (`arf/elem.c`, shared
+with `arb`) when the register paths of one and two limbs do not apply.
+
+Arguments where the value is a dyadic number times $1 + \delta$ with a
+tiny $\delta$ of known sign (tiny arguments of the odd functions, $1 \pm$
+tiny for `exp`, `cos`, `cosh`, ..., huge arguments of the reciprocal
+functions) are rounded from that number and the sign of $\delta$ without
+evaluating the function, at any exponent. Mantissas of one and two limbs
+at up to one resp. two limbs of precision go through in-register fast
+paths (on 64-bit machines), shared with `nfloat` (`arf/elem.h`), so
+that the arf functions run at nearly the speed of the nfloat ones at low
+precision.
+:::
+
+::: function
+int arf_exp(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_expm1(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_exp2(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_exp10(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+Sets `res` to $e^x$, $e^x - 1$, $2^x$ resp. $10^x$. The results are
+exact at $x = 0$, and $2^x$ resp. $10^x$ for an integer $x$ are exact
+(and rounded once). Arguments beyond $2^{\max(128, 2 \, \mathit{prec})}$
+in absolute value (where `arb_exp` gives up as well) give NaN; within
+that range the exponent of the result may be a bignum.
+:::
+
+::: function
+int arf_log(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_log2(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_log10(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_log1p(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+Sets `res` to $\log x$, $\log_2 x$, $\log_{10} x$ resp. $\log(1 + x)$.
+The exact cases are $\log 1 = 0$, $\log_2$ of a power of two, $\log_{10}$
+of a power of ten and $\log(1 + 0) = 0$. A negative argument (below
+$-1$ for `log1p`) gives NaN, zero (resp. $-1$) gives $-\infty$.
+:::
+
+::: function
+int arf_sin(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_cos(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sin_cos(arf_ptr res1, arf_ptr res2, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_tan(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_cot(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sec(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_csc(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sinc(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+The trigonometric functions, their reciprocals and $\operatorname{sinc}
+x = \sin(x) / x$ (`sinc(0) = 1`). `arf_sin_cos` computes the sine and
+the cosine together (`res1` and `res2` must be distinct). The results
+at $x = 0$ are exact; infinite arguments, and arguments beyond
+$2^{\max(65536, 4 \, \mathit{prec})}$ in absolute value, give NaN
+(as do the poles of `cot` and `csc` at zero).
+
+::: details
+The arguments are reduced modulo $\pi/2$ by the fixed-point reduction
+of `mp_real` (`_mp_real_sin_cos_fp`, with the tabulated $2/\pi$); the
+reciprocal functions divide the kernels' frames (`_arf_set_mpn_err_quot`).
+:::
+:::
+
+::: function
+int arf_sin_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_cos_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sin_cos_pi(arf_ptr res1, arf_ptr res2, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_tan_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_cot_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sec_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_csc_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sinc_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+The trigonometric functions of $\pi x$ and $\operatorname{sinc}(\pi x) =
+\sin(\pi x) / (\pi x)$. The values at the multiples of $1/2$ (zeros,
+$\pm 1$, poles: NaN) and of `tan_pi`, `cot_pi` at the odd multiples of
+$1/4$ ($\pm 1$) are exact. The argument is reduced exactly, so there is
+no magnitude limit (tiny arguments are handled, for any exponent).
+:::
+
+::: function
+int arf_atan(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_atan2(arf_ptr res, arf_srcptr y, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_asin(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acos(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acot(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_asec(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acsc(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_atan_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_asin_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acos_pi(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+The inverse trigonometric functions, their reciprocal versions
+($\operatorname{acot} x = \operatorname{atan}(1/x)$ with
+$\operatorname{acot}(0) = \pi/2$, $\operatorname{asec} x =
+\operatorname{acos}(1/x)$, $\operatorname{acsc} x = \operatorname{asin}(1/x)$,
+NaN outside their domains), and the first three divided by $\pi$.
+`arf_atan2` follows the usual conventions, with $\operatorname{atan2}(0, x)
+= 0$ for $x \ge 0$ (including $+\infty$) and $\pi$ for $x < 0$,
+$\operatorname{atan2}(y, 0) = \pm \pi/2$, and the infinities as in C99.
+The exact cases are the zeros and the dyadic multiples of $\pi$ of the
+functions divided by $\pi$ (e.g. $\operatorname{atan\_pi}(\pm 1) = \pm 1/4$).
+
+::: details
+`atan` and `atan2` are the kernels `_mp_real_atan_fp` and
+`_mp_real_atan2_fp` (the arctangent of the ratio of the mantissas, in
+the octant given by the signs and magnitudes). The others are composed
+of `atan2`, `sqrt` and the arithmetic of `arf` at a working precision
+with a bound on the accumulated relative error (`arf/elem_misc.c`),
+retried at a higher precision until the rounding is decided; at up to
+two limbs of precision and mantissa the same compositions run in
+registers (`arf/elem_arc_fast.c`, shared with `nfloat`), the rounding
+certified from their fixed-point result like the kernels'. The values
+near $\pm 1$ and for huge arguments, where a result is a dyadic number
+times $1 + \delta$ with a tiny $\delta$, are rounded directly.
+:::
+:::
+
+::: function
+int arf_sinh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_cosh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sinh_cosh(arf_ptr res1, arf_ptr res2, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_tanh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_coth(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_sech(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_csch(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+The hyperbolic functions and their reciprocals, from $e^{|x|}$ and one
+approximate reciprocal in fixed point (`_mp_real_sinh_cosh_fp`,
+`_mp_real_tanh_fp`). Exact at $x = 0$ and at $\pm\infty$ (`sinh`:
+$\pm\infty$, `cosh`: $+\infty$, `tanh`, `coth`: $\pm 1$, `sech`, `csch`:
+0); the poles of `coth` and `csch` at zero give NaN. `sinh`, `cosh`,
+`sech` and `csch` give NaN beyond $2^{\max(128, 2 \, \mathit{prec})}$,
+like `exp`.
+:::
+
+::: function
+int arf_asinh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acosh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_atanh(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acoth(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_asech(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+int arf_acsch(arf_ptr res, arf_srcptr x, slong prec, arf_rnd_t rnd)
+
+The inverse hyperbolic functions and their reciprocal versions,
+composed of `log1p`, `sqrt` and the arithmetic of `arf` like the inverse
+trigonometric functions. NaN outside the domains (`acosh` below 1,
+`atanh` outside $[-1, 1]$ with $\pm\infty$ at $\pm 1$, `acoth` inside
+$(-1, 1)$ with $\pm\infty$ at $\pm 1$, `asech` outside $(0, 1]$ with
+$+\infty$ at 0, `acsch` at 0).
+:::
+
+::: function
+int arf_pow(arf_ptr res, arf_srcptr x, arf_srcptr y, slong prec, arf_rnd_t rnd)
+
+Sets `res` to $x^y = e^{y \log |x|}$ with the sign of $x$ for an odd
+integer $y$ (a negative $x$ with a non-integer $y$ gives NaN). The
+conventions for the special values are those of C99 (`pow`): $x^0 = 1$
+and $1^y = 1$ for any $x$ resp. $y$, $0^y = 0$ or $+\infty$, and so on.
+The result is exact, and reported so, whenever it is a dyadic number
+(powers of two, integer powers, roots of perfect powers, $y = \pm 1/2$);
+the inexact cases are decided by the retries. NaN when $|y \log |x||$
+reaches the limit of `exp`.
+
+::: details
+The kernel `_mp_real_pow_fp` computes $\log |x|$ in fixed point to as
+many more bits as the magnitude of $t = y \log |x|$ asks for, multiplies
+by the mantissa of $y$ exactly, and evaluates $e^t$ (the huge
+exponential beyond $2^{\mathtt{FLINT\_BITS} - 3}$); at up to two limbs
+of precision and mantissas the same runs in registers (`arf/elem.h`,
+shared with `nfloat`), which the relaxed modes try before the exact
+cases. An exact result
+$N^n 2^k$ with $N^n$ longer than `prec` has its lowest bit set (so no
+tie), but a shorter one is a tie or exact: those are computed exactly
+(`_arf_pow_exact`, with the $2^f$-th roots of the mantissa for a dyadic
+$y = n / 2^f$).
+:::
+:::
+
+::: function
+int arf_const_pi(arf_ptr res, slong prec, arf_rnd_t rnd)
+int arf_const_pi_mul_2exp(arf_ptr res, slong k, int neg, slong prec, arf_rnd_t rnd)
+
+Sets `res` to $\pi$, resp. $(-1)^{\mathit{neg}} \pi 2^k$, correctly
+rounded (from the tabulated $\pi/4$ of `mp_real`).
+:::
+
 ## Sums and dot products {#sums}
 
 ::: function

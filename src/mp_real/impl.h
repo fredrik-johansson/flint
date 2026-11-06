@@ -653,8 +653,10 @@ _mp_real_series_sin_cos(nn_ptr ysin, nn_ptr yg, nn_srcptr x, slong n, flint_bitc
 {
     if (n < MP_REAL_SERIES_RS_MIN_SIN_COS && (slong) r >= MP_REAL_SERIES_SIN_RMIN)
     {
-        _mp_real_series_tapered(ysin, x, n, r, MP_REAL_SERIES_SIN);
-        _mp_real_series_tapered(yg, x, n, r, MP_REAL_SERIES_COS);
+        if (ysin != NULL)
+            _mp_real_series_tapered(ysin, x, n, r, MP_REAL_SERIES_SIN);
+        if (yg != NULL)
+            _mp_real_series_tapered(yg, x, n, r, MP_REAL_SERIES_COS);
     }
     else
         _mp_real_series_rs_sin_cos(ysin, yg, x, n, r, 0);
@@ -967,6 +969,23 @@ _mp_real_machin_entry(const _mp_real_tab_struct * T, slong j, slong nv)
    such values into nc-limb cache entries (0 if undetermined) */
 void _mp_real_log_primes_vec(mp_real_struct * res, slong num, slong n);
 void _mp_real_atan_gauss_vec(mp_real_struct * res, slong num, slong n);
+
+/* the first 13 logarithms of primes and arguments of nonreal Gaussian
+   primes to 4608 bits, as fixed-point floors (log_p_tab.c,
+   atan_gauss_tab.c; the exponents in machin_bsplit.c), the initial
+   caches; FLINT_DLL for the tests */
+#define MP_REAL_LOG_P_TAB_NUM 13
+#define MP_REAL_LOG_P_TAB_BITS 4608
+#define MP_REAL_LOG_P_TAB_LIMBS (MP_REAL_LOG_P_TAB_BITS / FLINT_BITS)
+FLINT_DLL extern const ulong _mp_real_log_p_tab[MP_REAL_LOG_P_TAB_NUM][MP_REAL_LOG_P_TAB_LIMBS];
+FLINT_DLL extern const ulong _mp_real_atan_gauss_tab[MP_REAL_LOG_P_TAB_NUM][MP_REAL_LOG_P_TAB_LIMBS];
+
+/* short integer relations sum_j c_j alpha_j = eps by lattice reduction
+   (precompute_reductions.c), the source of the tables of rel_tab_data.c:
+   rel receives the coefficient rows (terminated by
+   MP_REAL_REL_TERMINATOR) and eps the values, for eps decreasing
+   roughly by the factor C, up to max_rel rows */
+void _mp_real_precompute_reductions(short * rel, double * eps, arb_srcptr alpha, slong n, slong max_rel, double C);
 void _mp_real_log_ratio_zuniga(mp_real_t res, const fmpz_t u, const fmpz_t v, slong n);
 void _mp_real_atan_ratio_zuniga(mp_real_t res, const fmpz_t d, const fmpz_t t, slong n);
 int _mp_real_store_floors(nn_ptr e, slong nc, mp_real_struct * v, slong num);
@@ -1038,7 +1057,7 @@ void _mp_real_phase_end(mp_real_phase_t * ph);
    atan.c) ******************************************************************/
 
 /* (ys, n + 1), (yc, n + 1) = sin v, cos v for v in [0, 1) at n fraction
-   limbs, both outputs required, by the kernel mp_real_sin_cos_bits
+   limbs (either output may be NULL), by the kernel mp_real_sin_cos_bits
    uses (per-size, bitwise, diophantine or notab by n, or a reduced
    series for small v); err <= 6r + 128 with r <= 768 the bitwise
    parameter, at most 128 for the others (sin_cos.c) */
@@ -1735,6 +1754,87 @@ _mp_real_elem_frame(nn_ptr buf, slong n, const mp_real_t x,
     }
     *trunc = _mp_real_elem_copy(buf, n, n, x);
     return buf;
+}
+
+/* Sets (v, vn) to floor(|x| B^fn) mod B^vn for the floating-point
+   mantissa |x| = (d, n) 2^(e - FLINT_BITS n) (the caller ensures
+   |x| < B^(vn - fn) when the value matters in full); returns 1 if
+   nonzero bits of |x| B^fn were dropped below the unit, otherwise 0. */
+FLINT_FORCE_INLINE int
+_mp_real_fp_get_fixed(nn_ptr v, slong vn, slong fn, nn_srcptr d, slong n, slong e)
+{
+    slong s = e + FLINT_BITS * (fn - n);
+    slong ls, j;
+    unsigned int bs;
+    int inexact;
+
+    if (s >= 0)
+    {
+        ls = s / FLINT_BITS;
+        bs = s % FLINT_BITS;
+
+        /* (explicit helpers: the compiler would turn plain loops into
+           calls to memset and memcpy, expensive for a few limbs) */
+        _flint_mpn_zero_small(v, FLINT_MIN(ls, vn));
+
+        if (ls < vn)
+        {
+            slong m = FLINT_MIN(n, vn - ls);
+
+            if (bs == 0)
+            {
+                _flint_mpn_copy_small(v + ls, d, m);
+                _flint_mpn_zero_small(v + ls + m, vn - ls - m);
+            }
+            else
+            {
+                v[ls] = d[0] << bs;
+                for (j = 1; j < m; j++)
+                    v[ls + j] = (d[j] << bs) | (d[j - 1] >> (FLINT_BITS - bs));
+                if (ls + m < vn)
+                {
+                    v[ls + m] = d[m - 1] >> (FLINT_BITS - bs);
+                    _flint_mpn_zero_small(v + ls + m + 1, vn - ls - m - 1);
+                }
+            }
+        }
+
+        return 0;
+    }
+    else
+    {
+        s = -s;
+        ls = s / FLINT_BITS;
+        bs = s % FLINT_BITS;
+
+        if (ls >= n)
+        {
+            _flint_mpn_zero_small(v, vn);
+            return 1;
+        }
+
+        inexact = 0;
+        for (j = 0; j < ls; j++)
+            inexact |= (d[j] != 0);
+
+        if (bs == 0)
+        {
+            for (j = 0; j < vn; j++)
+                v[j] = (ls + j < n) ? d[ls + j] : 0;
+        }
+        else
+        {
+            inexact |= ((d[ls] << (FLINT_BITS - bs)) != 0);
+            for (j = 0; j < vn; j++)
+            {
+                ulong lo = (ls + j < n) ? d[ls + j] : 0;
+                ulong hi = (ls + j + 1 < n) ? d[ls + j + 1] : 0;
+                v[j] = (lo >> bs) | (hi << (FLINT_BITS - bs));
+            }
+        }
+
+        return inexact;
+    }
 }
 
 /* leading zero bits of the fraction (v, n), WORD_MAX if zero */
