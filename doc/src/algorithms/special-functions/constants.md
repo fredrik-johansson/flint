@@ -1,7 +1,7 @@
 ---
 title: Mathematical constants
 summary: The formulas and algorithms behind arb_const_pi, arb_const_e, arb_const_log2, arb_const_log10, arb_const_euler, arb_const_catalan, arb_const_apery, arb_const_zeta5, arb_const_khinchin, arb_const_glaisher and arb_const_reciprocal_fibonacci, with their error bounds, and how the values are cached.
-complexity: $O(M(n) \log^2 n)$ for the hypergeometric constants by binary splitting and $O(M(n) \sqrt{n} \log n)$ for the reciprocal Fibonacci constant; Khinchin's constant is computed in $O(n^3/\log^3 n)$ by sums of zeta values, and Glaisher's constant (below about $10^5$ to $3.5 \cdot 10^5$ bits, depending on the number of threads) uses sums of many full-precision terms and is much slower; Glaisher's constant at higher precision costs $\tilde O(n^{1.5})$.
+complexity: $O(M(n) \log^2 n)$ for the hypergeometric constants by binary splitting and $O(M(n) \sqrt{n} \log n)$ for the reciprocal Fibonacci constant; Khinchin's constant is computed in $O(n^3/\log^3 n)$ by sums of zeta values (in $O(\sqrt n M(n) \log^2 n)$ by a theta splitting at very high precision), and Glaisher's constant (below about $10^5$ to $3.5 \cdot 10^5$ bits, depending on the number of threads) uses sums of many full-precision terms and is much slower; Glaisher's constant at higher precision costs $\tilde O(n^{1.5})$.
 order: 20
 ---
 
@@ -191,7 +191,11 @@ each product of logarithms is negative. `arb_const_khinchin` calls
 finite sum as a quadratic form in the logarithms of the primes up to
 $N$, and computes the $\zeta(2n, N)$ by direct summation with recycled
 powers for large $n$ and from exact Bernoulli numbers for small $n$;
-see [](algorithms/floating-point/constants#khinchin).
+see [](algorithms/floating-point/constants#khinchin). From about
+$1.5 \cdot 10^6$ digits it instead splits the dilogarithm series of
+[@BBC1997] by a theta transformation, which needs $O(\sqrt n)$ binary
+splittings
+([](algorithms/floating-point/constants#khinchin-afe)).
 
 ::: proposition Truncation error {#prop-khinchin}
 If the series over $n$ is truncated after $n = M$, the error inside the
